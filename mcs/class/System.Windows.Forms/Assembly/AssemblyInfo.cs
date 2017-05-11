@@ -32,7 +32,7 @@ using System.Diagnostics;
 [assembly: NeutralResourcesLanguage ("en-US")]
 
 [assembly: ComVisible (false)]
-[assembly: AllowPartiallyTrustedCallers]
+//[assembly: AllowPartiallyTrustedCallers]
 
 [assembly: AssemblyDelaySign (true)]
 

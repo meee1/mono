@@ -120,7 +120,14 @@ namespace System.Drawing
 		private Icon (IntPtr handle)
 		{
 			this.handle = handle;
-			bitmap = Bitmap.FromHicon (handle);
+            try
+            {
+                bitmap = Bitmap.FromHicon(handle);
+            }
+            catch
+            {
+                return;
+            }
 			iconSize = new Size (bitmap.Width, bitmap.Height);
 			if (GDIPlus.RunningOnUnix ()) {
 				bitmap = Bitmap.FromHicon (handle);

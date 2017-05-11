@@ -202,7 +202,7 @@ namespace System.Windows.Forms {
 		}
 
 		internal void Initialize () {
-			if (Marshal.SizeOf<IntPtr> () == 8){
+			if (Marshal.SizeOf(typeof(IntPtr)) == 8){
 				Console.Error.WriteLine ("WARNING: The Carbon driver has not been ported to 64bits, and very few parts of Windows.Forms will work properly, or at all");
 			}
 			// Initialize the event handlers	

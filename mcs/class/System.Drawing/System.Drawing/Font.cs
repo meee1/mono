@@ -654,7 +654,7 @@ namespace System.Drawing
 					// anyway there's no issue in downcasting the result into an int32
 					CharSetOffset = (int) Marshal.OffsetOf (lf, "lfCharSet");
 				}
-
+                /*
 				// note: Marshal.WriteByte(object,*) methods are unimplemented on Mono
 				GCHandle gch = GCHandle.Alloc (logFont, GCHandleType.Pinned);
 				try {
@@ -667,7 +667,7 @@ namespace System.Drawing
 				}
 				finally {
 					gch.Free ();
-				}
+				}*/
 
 				// now we can throw, if required
 				GDIPlus.CheckStatus (status);

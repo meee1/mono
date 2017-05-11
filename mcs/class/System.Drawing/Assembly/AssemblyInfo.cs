@@ -52,7 +52,7 @@ using System.Runtime.InteropServices;
 
 [assembly: ComVisible (false)]
 [assembly: ComCompatibleVersion (1, 0, 3300, 0)]
-[assembly: AllowPartiallyTrustedCallers]
+//[assembly: AllowPartiallyTrustedCallers]
 
 [assembly: CLSCompliant (true)]
 [assembly: AssemblyDelaySign (true)]
