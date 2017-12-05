@@ -422,12 +422,12 @@ namespace System.Windows.Forms {
 
 				assembly = new AssemblyName();
 				assembly.Name = "XplatUIWin32.FuncPtrInterface";
-				assembly_builder = AppDomain.CurrentDomain.DefineDynamicAssembly(assembly, AssemblyBuilderAccess.Run);
+				//assembly_builder = AppDomain.CurrentDomain.DefineDynamicAssembly(assembly, AssemblyBuilderAccess.Run);
 
 				MethodArguments = new object[6];
-				GetDataMethod = CreateFuncPtrInterface(assembly_builder, "GetData", typeof(uint), 3);
+				//GetDataMethod = CreateFuncPtrInterface(assembly_builder, "GetData", typeof(uint), 3);
 				//GetDataHereMethod = CreateFuncPtrInterface(assembly_builder, "GetDataHere", typeof(uint), 3);
-				QueryGetDataMethod = CreateFuncPtrInterface(assembly_builder, "QueryGetData", typeof(uint), 2);
+				//QueryGetDataMethod = CreateFuncPtrInterface(assembly_builder, "QueryGetData", typeof(uint), 2);
 				//GetCanonicalFormatEtcMethod = CreateFuncPtrInterface(assembly_builder, "GetCanonicalFormatEtc", typeof(uint), 3);
 				//SetDataMethod = CreateFuncPtrInterface(assembly_builder, "SetData", typeof(uint), 4);
 				//EnumFormatEtcMethod = CreateFuncPtrInterface(assembly_builder, "EnumFormatEtc", typeof(uint), 3);
@@ -889,7 +889,7 @@ namespace System.Windows.Forms {
 					string_buffer_size = (int)XplatUIWin32.Win32GlobalSize(string_buffer);
 
 					// Write DROPFILES structure
-					hmem = XplatUIWin32.Win32GlobalAlloc(XplatUIWin32.GAllocFlags.GMEM_MOVEABLE | XplatUIWin32.GAllocFlags.GMEM_DDESHARE, 0x14 + string_buffer_size);
+					hmem = XplatUIWin32.Win32GlobalAlloc(GAllocFlags.GMEM_MOVEABLE | GAllocFlags.GMEM_DDESHARE, 0x14 + string_buffer_size);
 					hmem_ptr = XplatUIWin32.Win32GlobalLock(hmem);
 					Marshal.WriteInt32(hmem_ptr, 0x14);					// pFiles
 					Marshal.WriteInt32(hmem_ptr, 1 * Marshal.SizeOf(typeof(uint)), 0);	// point.x
@@ -1044,10 +1044,10 @@ namespace System.Windows.Forms {
 			if (param_count > 1) ig.Emit (OpCodes.Ldarg_2);
 			if (param_count > 0) ig.Emit (OpCodes.Ldarg_1);
 			ig.Emit (OpCodes.Ldarg_0);
-			ig.EmitCalli (OpCodes.Calli, CallingConvention.StdCall, ret_type, param_types);
+		    ig.EmitCalli(OpCodes.Calli, System.Reflection.CallingConventions.Standard, ret_type, param_types, null);
 			ig.Emit (OpCodes.Ret);
 
-			Type t = tb.CreateType ();
+			Type t = tb.CreateTypeInfo ();
 			MethodInfo m = t.GetMethod (MethodName);
 
 			return m;

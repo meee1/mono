@@ -71,7 +71,7 @@ namespace System.Windows.Forms {
 		private Form			owner;
 		private Form.ControlCollection	owned_forms;
 		private MdiClient		mdi_container;
-		internal InternalWindowManager	window_manager;
+		public InternalWindowManager	window_manager;
 		private Form			mdi_parent;
 		private bool			key_preview;
 		private MainMenu		menu;
@@ -111,7 +111,7 @@ namespace System.Windows.Forms {
 			default_icon = ResourceImageLoader.GetIcon ("mono.ico");
 		}
 
-		internal bool IsLoaded {
+		public bool IsLoaded {
 			get { return is_loaded; }
 		}
 
@@ -2393,7 +2393,13 @@ namespace System.Windows.Forms {
 			base.UpdateDefaultButton ();
 		}
 
-		[EditorBrowsable(EditorBrowsableState.Advanced)]
+        public  void WndProcDOIT(Message m)
+        {
+            WndProc(ref m);
+        }
+
+
+        [EditorBrowsable(EditorBrowsableState.Advanced)]
 		protected override void WndProc(ref Message m) {
 #if debug
 			Console.WriteLine(DateTime.Now.ToLongTimeString () + " Form {0} ({2}) received message {1}", window.Handle == IntPtr.Zero ? this.Text : XplatUI.Window(window.Handle), m.ToString (), Text);
@@ -2764,10 +2770,10 @@ namespace System.Windows.Forms {
 		
 		private void WmNcCalcSize (ref Message m)
 		{
-			XplatUIWin32.NCCALCSIZE_PARAMS ncp;
+			NCCALCSIZE_PARAMS ncp;
 
 			if ((ActiveMenu != null) && (m.WParam == (IntPtr)1)) {
-				ncp = (XplatUIWin32.NCCALCSIZE_PARAMS)Marshal.PtrToStructure (m.LParam, typeof (XplatUIWin32.NCCALCSIZE_PARAMS));
+				ncp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure (m.LParam, typeof (NCCALCSIZE_PARAMS));
 
 				// Adjust for menu
 				ncp.rgrc1.top += ThemeEngine.Current.CalcMenuBarSize (DeviceContext, ActiveMenu, ClientSize.Width);
