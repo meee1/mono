@@ -44,7 +44,7 @@ namespace System.Windows.Forms {
 		private object	param;
 		private IntPtr	parent;
 		internal Menu	menu;
-		internal Control	control;
+		public Control	control;
 		#endregion 	// Local variables
 
 		#region Public Constructors
@@ -114,7 +114,7 @@ namespace System.Windows.Forms {
 			return (this.style & (int) Style) == (int) Style;
 		}
 		
-		internal bool IsSet (WindowExStyles ExStyle) {
+		public bool IsSet (WindowExStyles ExStyle) {
 			return (this.ex_style & (int) ExStyle) == (int) ExStyle;
 		}
 		
@@ -139,7 +139,7 @@ namespace System.Windows.Forms {
 				return form.window_manager != null;
 			}
 		}
-		internal WindowExStyles WindowExStyle {
+        public WindowExStyles WindowExStyle {
 			get {
 				return (WindowExStyles) ex_style;
 			}
@@ -148,8 +148,8 @@ namespace System.Windows.Forms {
 				ex_style = (int)value;
 			}
 		}
-		
-		internal WindowStyles WindowStyle {
+
+        public WindowStyles WindowStyle {
 			get {
 				return (WindowStyles) style;
 			}

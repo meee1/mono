@@ -32,12 +32,12 @@ using System.Collections;
 
 namespace System.Windows.Forms {
 
-	internal class XEventQueue {
+	public class XEventQueue {
 
 		private XQueue		xqueue;
 		private XQueue		lqueue;	// Events inserted from threads other then the main X thread
 		private PaintQueue	paint;	// Paint-only queue
-		internal ArrayList	timer_list;
+		public ArrayList	timer_list;
 		private Thread		thread;
 		private bool            dispatch_idle;
 

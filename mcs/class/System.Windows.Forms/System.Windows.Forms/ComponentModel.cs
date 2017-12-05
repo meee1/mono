@@ -47,8 +47,8 @@ namespace System.Windows.Forms.ComponentModel.Com2Interop {
 		void DropDownDone();
 		bool EnsurePendingChangesCommitted();
 		void HandleF4();
-		void LoadState(Microsoft.Win32.RegistryKey key);
-		void SaveState(Microsoft.Win32.RegistryKey key);
+		//void LoadState(Microsoft.Win32.RegistryKey key);
+		//void SaveState(Microsoft.Win32.RegistryKey key);
 		event ComponentRenameEventHandler ComComponentNameChanged;
 	}
 }

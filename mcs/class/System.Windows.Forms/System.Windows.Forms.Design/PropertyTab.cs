@@ -45,7 +45,7 @@ namespace System.Windows.Forms.Design
 			get {
 				if (bitmap == null) {
 					Type t = base.GetType();
-					bitmap = new Bitmap (t, t.Name + ".bmp");
+				//	bitmap = new Bitmap (t, t.Name + ".bmp");
 				}
 				return bitmap;
 			}

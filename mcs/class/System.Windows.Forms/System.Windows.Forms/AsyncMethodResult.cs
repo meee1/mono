@@ -28,7 +28,7 @@ using System.Threading;
 
 namespace System.Windows.Forms {
 
-	internal class AsyncMethodResult : IAsyncResult {
+	public class AsyncMethodResult : IAsyncResult {
 
 		private ManualResetEvent handle;
 		private object state;
