@@ -278,7 +278,7 @@ namespace System.Windows.Forms
 
 		[Browsable(false)]
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public override System.Drawing.Image BackgroundImage {
+		public override Image BackgroundImage {
 			get {
 				return base.BackgroundImage;
 			}

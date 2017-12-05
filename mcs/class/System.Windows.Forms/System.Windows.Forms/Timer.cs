@@ -37,8 +37,8 @@ namespace System.Windows.Forms {
 		private bool enabled;
 		private int interval = 100;
 		private long expires;
-		internal Thread thread;
-		internal bool Busy;
+		public Thread thread;
+		public bool Busy;
 		internal IntPtr window;
 		object control_tag;
 
@@ -131,7 +131,7 @@ namespace System.Windows.Forms {
 			Enabled = false;
 		}
 
-		internal long Expires {
+		public DateTime Expires {
 			get {
 				return expires;
 			}
@@ -144,12 +144,12 @@ namespace System.Windows.Forms {
 			return base.ToString () + ", Interval: " + Interval;
 		}
 
-		internal void Update (long update)
+		public void Update (DateTime update)
 		{
 			expires = update + (interval > Minimum ? interval : Minimum);
 		}
 
-		internal void FireTick ()
+		public void FireTick ()
 		{
 			OnTick (EventArgs.Empty);
 		}
