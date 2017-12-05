@@ -1759,7 +1759,7 @@ namespace System.Windows.Forms
 				OnVisibleChanged(EventArgs.Empty);
 			}
 
-			if (pre_font != Font) {
+			if (pre_font.FontFamily != Font.FontFamily && pre_font.SizeInPoints != Font.SizeInPoints) {
 				OnFontChanged(EventArgs.Empty);
 			}
 
