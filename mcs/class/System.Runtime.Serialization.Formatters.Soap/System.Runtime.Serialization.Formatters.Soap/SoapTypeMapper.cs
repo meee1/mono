@@ -344,10 +344,10 @@ namespace System.Runtime.Serialization.Formatters.Soap {
 			RegisterType (typeof(object), "anyType", XmlSchema.Namespace);
 			RegisterType (typeof(DateTime), "dateTime", XmlSchema.Namespace);
 			RegisterType (typeof(TimeSpan), "duration", XmlSchema.Namespace);
-			RegisterType (typeof(SoapFault), "Fault", SoapEnvelopeNamespace);
+			//RegisterType (typeof(SoapFault), "Fault", SoapEnvelopeNamespace);
 			RegisterType (typeof(byte[]), "base64", SoapEncodingNamespace);
 			RegisterType (typeof(MethodSignature), "methodSignature", SoapEncodingNamespace);
-			RegisterType (typeof(SoapAnyUri));
+			/*RegisterType (typeof(SoapAnyUri));
 			RegisterType (typeof(SoapEntity));
 			RegisterType (typeof(SoapMonth));
 			RegisterType (typeof(SoapNonNegativeInteger));
@@ -375,7 +375,7 @@ namespace System.Runtime.Serialization.Formatters.Soap {
 			RegisterType (typeof(SoapEntities));
 			RegisterType (typeof(SoapLanguage));
 			RegisterType (typeof(SoapNmtokens));
-			RegisterType (typeof(SoapTime));
+			RegisterType (typeof(SoapTime));*/
 		}
 		
 		public static string GetXsdValue (object value)

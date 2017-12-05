@@ -244,7 +244,7 @@ namespace System.Windows.Forms
 		}
 
 		protected virtual void OnRenderItemText (ToolStripItemTextRenderEventArgs e)
-		{
+		{/*
 			if (e.TextDirection == ToolStripTextDirection.Vertical90) {
 				GraphicsState gs = e.Graphics.Save ();
 				PointF p = new PointF (e.Graphics.Transform.OffsetX, e.Graphics.Transform.OffsetY);
@@ -281,6 +281,7 @@ namespace System.Windows.Forms
 			ToolStripItemTextRenderEventHandler eh = (ToolStripItemTextRenderEventHandler)Events[RenderItemTextEvent];
 			if (eh != null)
 				eh (this, e);
+                */
 		}
 
 		protected virtual void OnRenderLabelBackground (ToolStripItemRenderEventArgs e)
