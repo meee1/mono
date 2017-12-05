@@ -610,4 +610,12 @@ namespace System.Windows.Forms
 		}
 		#endregion
 	}
+
+    public class ToolboxBitmapAttribute : Attribute
+    {
+        public ToolboxBitmapAttribute(string empty)
+        {
+           
+        }
+    }
 }

@@ -519,7 +519,7 @@ namespace System.Windows.Forms
 				new VisualStyleRenderer (VisualStyleElement.Header.Item.Normal).DrawBackground (bitmap_g, bitmap_rectangle);
 			renderer.DrawBackground (bitmap_g, bitmap_rectangle);
 			bitmap_g.Dispose ();
-			g.Transform = new Matrix(0, 1, 1, 0, 0, 0);
+			//g.Transform = new Matrix(0, 1, 1, 0, 0, 0);
 			g.DrawImage (bitmap, bounds.Y, bounds.X);
 			bitmap.Dispose ();
 			g.ResetTransform ();

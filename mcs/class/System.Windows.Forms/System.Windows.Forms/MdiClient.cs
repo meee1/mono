@@ -214,7 +214,7 @@ namespace System.Windows.Forms {
 
 		#region Public Instance Properties
 		[Localizable(true)]
-		public override System.Drawing.Image BackgroundImage {
+		public override Image BackgroundImage {
 			get {
 				return base.BackgroundImage;
 			}

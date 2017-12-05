@@ -107,7 +107,9 @@ namespace System.Windows.Forms.VisualStyles
 		}
  
 		public static bool IsSupportedByOS {
-			get {
+			get
+            {
+                return false;
 				return VisualStyles.VisualStyleInformationIsSupportedByOS;
 			}
 		}

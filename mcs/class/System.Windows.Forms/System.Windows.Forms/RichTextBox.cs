@@ -32,11 +32,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Text;
 using System.Runtime.InteropServices;
-using RTF=System.Windows.Forms.RTF;
 
 namespace System.Windows.Forms {
 	[ClassInterface (ClassInterfaceType.AutoDispatch)]
@@ -200,7 +198,7 @@ namespace System.Windows.Forms {
 
 		[Browsable(false)]
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public override System.Drawing.Image BackgroundImage {
+		public override Image BackgroundImage {
 			get { return base.BackgroundImage; }
 			set { base.BackgroundImage = value; }
 		}

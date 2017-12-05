@@ -29,7 +29,7 @@ using System.Threading;
 
 namespace System.Windows.Forms {
 
-	internal class AsyncMethodData {
+	public class AsyncMethodData {
 		public IntPtr Handle;
 		public Delegate Method;
 		public object [] Args;
