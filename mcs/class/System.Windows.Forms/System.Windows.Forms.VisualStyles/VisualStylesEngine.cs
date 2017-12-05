@@ -39,13 +39,14 @@ namespace System.Windows.Forms.VisualStyles
 			string environment_variable = Environment.GetEnvironmentVariable("MONO_VISUAL_STYLES");
 			if (environment_variable != null)
 				environment_variable = environment_variable.ToLower ();
-			if (
+			//if (
 #if !VISUAL_STYLES_USE_GTKPLUS_ON_WINDOWS
-				environment_variable == "gtkplus" &&
+			//	environment_variable == "gtkplus" &&
 #endif
-				VisualStylesGtkPlus.Initialize ())
-				return new VisualStylesGtkPlus ();
-			return new VisualStylesNative ();
-		}
+				//VisualStylesGtkPlus.Initialize ())
+				//return new VisualStylesGtkPlus ();
+			//return new VisualStylesNative ();
+            return null;
+        }
 	}
 }

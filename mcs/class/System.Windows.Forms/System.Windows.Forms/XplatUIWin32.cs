@@ -71,772 +71,20 @@ namespace System.Windows.Forms {
 		private static RECT		clipped_cursor_rect;
 		private Hashtable		registered_classes;
 
-		#endregion	// Local Variables
+        #endregion    // Local Variables
 
-		#region Private Structs
-		[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
-		private struct WNDCLASS {
-			internal int		style;
-			internal WndProc	lpfnWndProc;
-			internal int		cbClsExtra;
-			internal int		cbWndExtra;
-			internal IntPtr		hInstance;
-			internal IntPtr		hIcon;
-			internal IntPtr		hCursor;
-			internal IntPtr		hbrBackground;
-			[MarshalAs(UnmanagedType.LPWStr)]
-			internal string		lpszMenuName;
-			[MarshalAs(UnmanagedType.LPWStr)]
-			internal string		lpszClassName;
-		}
+        internal enum HatchStyle : int
+        {
+            HS_HORIZONTAL = 0,
+            HS_VERTICAL = 1,
+            HS_FDIAGONAL = 2,
+            HS_BDIAGONAL = 3,
+            HS_CROSS = 4,
+            HS_DIAGCROSS = 5
+        }
 
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct RECT {
-			internal int		left;
-			internal int		top;
-			internal int		right;
-			internal int		bottom;
-
-			public RECT (int left, int top, int right, int bottom)
-			{
-				this.left = left;
-				this.top = top;
-				this.right = right;
-				this.bottom = bottom;
-			}
-
-			#region Instance Properties
-			public int Height { get { return bottom - top; } }
-			public int Width { get { return right - left; } }
-			public Size Size { get { return new Size (Width, Height); } }
-			public Point Location { get { return new Point (left, top); } }
-			#endregion
-
-			#region Instance Methods
-			public Rectangle ToRectangle ()
-			{
-				return Rectangle.FromLTRB (left, top, right, bottom);
-			}
-
-			public static RECT FromRectangle (Rectangle rectangle)
-			{
-				return new RECT (rectangle.Left, rectangle.Top, rectangle.Right, rectangle.Bottom);
-			}
-
-			public override int GetHashCode ()
-			{
-				return left ^ ((top << 13) | (top >> 0x13))
-				  ^ ((Width << 0x1a) | (Width >> 6))
-				  ^ ((Height << 7) | (Height >> 0x19));
-			}
-			
-			public override string ToString ()
-			{
-				return String.Format("RECT left={0}, top={1}, right={2}, bottom={3}, width={4}, height={5}", left, top, right, bottom, right-left, bottom-top);
-			}
-			#endregion
-
-			#region Operator overloads
-			public static implicit operator Rectangle (RECT rect)
-			{
-				return Rectangle.FromLTRB (rect.left, rect.top, rect.right, rect.bottom);
-			}
-
-			public static implicit operator RECT (Rectangle rect)
-			{
-				return new RECT (rect.Left, rect.Top, rect.Right, rect.Bottom);
-			}
-			#endregion
-		}
-
-		internal enum SPIAction {
-			SPI_GETACTIVEWINDOWTRACKING = 0x1000,
-			SPI_GETACTIVEWNDTRKTIMEOUT = 0x2002,
-			SPI_GETANIMATION = 0x0048,
-			SPI_GETCARETWIDTH = 0x2006,
-			SPI_GETCOMBOBOXANIMATION = 0x1004,
-			SPI_GETDRAGFULLWINDOWS	= 0x0026,
-			SPI_GETDROPSHADOW = 0x1024,
-			SPI_GETFONTSMOOTHING = 0x004A,
-			SPI_GETFONTSMOOTHINGCONTRAST = 0x200C,
-			SPI_GETFONTSMOOTHINGTYPE = 0x200A,
-			SPI_GETGRADIENTCAPTIONS = 0x1008,
-			SPI_GETHOTTRACKING = 0x100E,
-			SPI_GETICONTITLEWRAP = 0x0019,
-			SPI_GETKEYBOARDSPEED = 0x000A,
-			SPI_GETKEYBOARDDELAY	= 0x0016,
-			SPI_GETKEYBOARDCUES		= 0x100A,
-			SPI_GETKEYBOARDPREF = 0x0044,
-			SPI_GETLISTBOXSMOOTHSCROLLING = 0x1006,
-			SPI_GETMENUANIMATION = 0x1002,
-			SPI_GETMENUDROPALIGNMENT = 0x001B,
-			SPI_GETMENUFADE = 0x1012,
-			SPI_GETMENUSHOWDELAY = 0x006A,
-			SPI_GETMOUSESPEED = 0x0070,
-			SPI_GETSELECTIONFADE = 0x1014,
-			SPI_GETSNAPTODEFBUTTON = 0x005F,
-			SPI_GETTOOLTIPANIMATION = 0x1016,
-			SPI_GETWORKAREA = 0x0030,
-			SPI_GETMOUSEHOVERWIDTH	= 0x0062,
-			SPI_GETMOUSEHOVERHEIGHT	= 0x0064,
-			SPI_GETMOUSEHOVERTIME	= 0x0066,
-			SPI_GETUIEFFECTS = 0x103E,
-			SPI_GETWHEELSCROLLLINES = 0x0068
-		}
-
-		internal enum WindowPlacementFlags {
-			SW_HIDE			= 0,
-			SW_SHOWNORMAL       	= 1,
-			SW_NORMAL           	= 1,
-			SW_SHOWMINIMIZED    	= 2,
-			SW_SHOWMAXIMIZED    	= 3,
-			SW_MAXIMIZE         	= 3,
-			SW_SHOWNOACTIVATE   	= 4,
-			SW_SHOW             	= 5,
-			SW_MINIMIZE         	= 6,
-			SW_SHOWMINNOACTIVE  	= 7,
-			SW_SHOWNA           	= 8,
-			SW_RESTORE          	= 9,
-			SW_SHOWDEFAULT      	= 10,
-			SW_FORCEMINIMIZE    	= 11,
-			SW_MAX              	= 11
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		private struct WINDOWPLACEMENT {
-			internal uint			length;
-			internal uint			flags;
-			internal WindowPlacementFlags	showCmd;
-			internal POINT			ptMinPosition;
-			internal POINT			ptMaxPosition;
-			internal RECT			rcNormalPosition;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct NCCALCSIZE_PARAMS {
-			internal RECT		rgrc1;
-			internal RECT		rgrc2;
-			internal RECT		rgrc3;
-			internal IntPtr		lppos;
-		}
-
-		[Flags]
-		private enum TMEFlags {
-			TME_HOVER		= 0x00000001,
-			TME_LEAVE		= 0x00000002,
-			TME_NONCLIENT		= 0x00000010,
-			TME_QUERY		= unchecked((int)0x40000000),
-			TME_CANCEL		= unchecked((int)0x80000000)
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		private struct TRACKMOUSEEVENT {
-			internal int		size;
-			internal TMEFlags	dwFlags;
-			internal IntPtr		hWnd;
-			internal int		dwHoverTime;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		private struct PAINTSTRUCT {
-			internal IntPtr		hdc;
-			internal int		fErase;
-			internal RECT		rcPaint;
-			internal int		fRestore;
-			internal int		fIncUpdate;
-			internal int		Reserved1;
-			internal int		Reserved2;
-			internal int		Reserved3;
-			internal int		Reserved4;
-			internal int		Reserved5;
-			internal int		Reserved6;
-			internal int		Reserved7;
-			internal int		Reserved8;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct KEYBDINPUT {
-			internal short wVk;
-			internal short wScan;
-			internal Int32 dwFlags;
-			internal Int32 time;
-			internal UIntPtr dwExtraInfo;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct MOUSEINPUT {
-			internal Int32 dx;
-			internal Int32 dy;
-			internal Int32 mouseData;
-			internal Int32 dwFlags;
-			internal Int32 time;
-			internal UIntPtr dwExtraInfo;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct HARDWAREINPUT {
-			internal Int32 uMsg;
-			internal short wParamL;
-			internal short wParamH;
-		}
-
-		[StructLayout (LayoutKind.Sequential)]
-		internal struct ICONINFO {
-			internal bool fIcon;
-			internal Int32 xHotspot;
-			internal Int32 yHotspot;
-			internal IntPtr hbmMask;
-			internal IntPtr hbmColor;
-		}    
-		
-		[StructLayout(LayoutKind.Explicit)]
-		internal struct INPUT {
-			[FieldOffset(0)]
-			internal Int32 type;
-
-			[FieldOffset(4)]
-			internal MOUSEINPUT mi;
-
-			[FieldOffset(4)]
-			internal KEYBDINPUT ki;
-
-			[FieldOffset(4)]
-			internal HARDWAREINPUT hi;
-		}
-
-		[StructLayout (LayoutKind.Sequential)]
-		public struct ANIMATIONINFO {
-			internal uint cbSize;
-			internal int iMinAnimate;
-		}
-		
-		internal enum InputFlags {
-			KEYEVENTF_EXTENDEDKEY	= 0x0001,
-			KEYEVENTF_KEYUP			= 0x0002,
-			KEYEVENTF_SCANCODE		= 0x0003,
-			KEYEVENTF_UNICODE		= 0x0004,
-		}
-
-		internal enum ClassStyle {
-			CS_VREDRAW			= 0x00000001,
-			CS_HREDRAW			= 0x00000002,
-			CS_KEYCVTWINDOW			= 0x00000004,
-			CS_DBLCLKS			= 0x00000008,
-			CS_OWNDC			= 0x00000020,
-			CS_CLASSDC			= 0x00000040,
-			CS_PARENTDC			= 0x00000080,
-			CS_NOKEYCVT			= 0x00000100,
-			CS_NOCLOSE			= 0x00000200,
-			CS_SAVEBITS			= 0x00000800,
-			CS_BYTEALIGNCLIENT		= 0x00001000,
-			CS_BYTEALIGNWINDOW		= 0x00002000,
-			CS_GLOBALCLASS			= 0x00004000,
-			CS_IME				= 0x00010000,
-			// Windows XP+
-			CS_DROPSHADOW			= 0x00020000
-		}
-
-		internal enum SetWindowPosZOrder {
-			HWND_TOP			= 0,
-			HWND_BOTTOM			= 1,
-			HWND_TOPMOST			= -1,
-			HWND_NOTOPMOST			= -2
-		}
-
-		[Flags]
-		internal enum SetWindowPosFlags {
-			SWP_ASYNCWINDOWPOS		= 0x4000, 
-			SWP_DEFERERASE			= 0x2000,
-			SWP_DRAWFRAME			= 0x0020,
-			SWP_FRAMECHANGED		= 0x0020,
-			SWP_HIDEWINDOW			= 0x0080,
-			SWP_NOACTIVATE			= 0x0010,
-			SWP_NOCOPYBITS			= 0x0100,
-			SWP_NOMOVE			= 0x0002,
-			SWP_NOOWNERZORDER		= 0x0200,
-			SWP_NOREDRAW			= 0x0008,
-			SWP_NOREPOSITION		= 0x0200,
-			SWP_NOENDSCHANGING		= 0x0400,
-			SWP_NOSIZE			= 0x0001,
-			SWP_NOZORDER			= 0x0004,
-			SWP_SHOWWINDOW			= 0x0040
-		}
-
-		internal enum GetSysColorIndex {
-			COLOR_SCROLLBAR			= 0,
-			COLOR_BACKGROUND		= 1,
-			COLOR_ACTIVECAPTION		= 2,
-			COLOR_INACTIVECAPTION		= 3,
-			COLOR_MENU			= 4,
-			COLOR_WINDOW			= 5,
-			COLOR_WINDOWFRAME		= 6,
-			COLOR_MENUTEXT			= 7,
-			COLOR_WINDOWTEXT		= 8,
-			COLOR_CAPTIONTEXT		= 9,
-			COLOR_ACTIVEBORDER		= 10,
-			COLOR_INACTIVEBORDER		= 11,
-			COLOR_APPWORKSPACE		= 12,
-			COLOR_HIGHLIGHT			= 13,
-			COLOR_HIGHLIGHTTEXT		= 14,
-			COLOR_BTNFACE			= 15,
-			COLOR_BTNSHADOW			= 16,
-			COLOR_GRAYTEXT			= 17,
-			COLOR_BTNTEXT			= 18,
-			COLOR_INACTIVECAPTIONTEXT	= 19,
-			COLOR_BTNHIGHLIGHT		= 20,
-			COLOR_3DDKSHADOW		= 21,
-			COLOR_3DLIGHT			= 22,
-			COLOR_INFOTEXT			= 23,
-			COLOR_INFOBK			= 24,
-			
-			COLOR_HOTLIGHT			= 26,
-			COLOR_GRADIENTACTIVECAPTION	= 27,
-			COLOR_GRADIENTINACTIVECAPTION	= 28,
-			COLOR_MENUHIGHLIGHT		= 29,
-			COLOR_MENUBAR			= 30,
-
-			COLOR_DESKTOP			= 1,
-			COLOR_3DFACE			= 16,
-			COLOR_3DSHADOW			= 16,
-			COLOR_3DHIGHLIGHT		= 20,
-			COLOR_3DHILIGHT			= 20,
-			COLOR_BTNHILIGHT		= 20,
-			COLOR_MAXVALUE			= 24,/* Maximum value */
-		}       
-
-		private enum LoadCursorType {
-			First				= 32512,
-			IDC_ARROW			= 32512,
-			IDC_IBEAM			= 32513,
-			IDC_WAIT			= 32514,
-			IDC_CROSS			= 32515,
-			IDC_UPARROW			= 32516,
-			IDC_SIZE			= 32640,
-			IDC_ICON			= 32641,
-			IDC_SIZENWSE			= 32642,
-			IDC_SIZENESW			= 32643,
-			IDC_SIZEWE			= 32644,
-			IDC_SIZENS			= 32645,
-			IDC_SIZEALL			= 32646,
-			IDC_NO				= 32648,
-			IDC_HAND			= 32649,
-			IDC_APPSTARTING			= 32650,
-			IDC_HELP			= 32651,
-			Last				= 32651
-		}
-
-		private enum AncestorType {
-			GA_PARENT = 1,
-			GA_ROOT = 2, 
-			GA_ROOTOWNER = 3
-		}
-
-		[Flags]
-		private enum WindowLong {
-			GWL_WNDPROC     		= -4,
-			GWL_HINSTANCE			= -6,
-			GWL_HWNDPARENT      		= -8,
-			GWL_STYLE           		= -16,
-			GWL_EXSTYLE         		= -20,
-			GWL_USERDATA			= -21,
-			GWL_ID				= -12
-		}
-
-		[Flags]
-		private enum LogBrushStyle {
-			BS_SOLID			= 0,
-			BS_NULL             		= 1,
-			BS_HATCHED          		= 2,
-			BS_PATTERN          		= 3,
-			BS_INDEXED          		= 4,
-			BS_DIBPATTERN       		= 5,
-			BS_DIBPATTERNPT     		= 6,
-			BS_PATTERN8X8       		= 7,
-			BS_DIBPATTERN8X8    		= 8,
-			BS_MONOPATTERN      		= 9
-		}
-
-		[Flags]
-		private enum LogBrushHatch {
-			HS_HORIZONTAL			= 0,       /* ----- */
-			HS_VERTICAL         		= 1,       /* ||||| */
-			HS_FDIAGONAL        		= 2,       /* \\\\\ */
-			HS_BDIAGONAL        		= 3,       /* ///// */
-			HS_CROSS            		= 4,       /* +++++ */
-			HS_DIAGCROSS        		= 5,       /* xxxxx */
-		}
-
-		internal struct COLORREF {
-			internal byte			R;
-			internal byte			G;
-			internal byte			B;
-			internal byte			A;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		private struct LOGBRUSH {
-			internal LogBrushStyle		lbStyle;
-			internal COLORREF		lbColor;
-			internal LogBrushHatch		lbHatch;
-		}
-
-		[StructLayout(LayoutKind.Sequential)]
-		internal struct TEXTMETRIC { 
-			internal int			tmHeight;
-			internal int			tmAscent;
-			internal int			tmDescent;
-			internal int			tmInternalLeading;
-			internal int			tmExternalLeading;
-			internal int			tmAveCharWidth;
-			internal int			tmMaxCharWidth;
-			internal int			tmWeight;
-			internal int			tmOverhang;
-			internal int			tmDigitizedAspectX;
-			internal int			tmDigitizedAspectY;
-			internal short			tmFirstChar; 
-			internal short			tmLastChar; 
-			internal short			tmDefaultChar; 
-			internal short			tmBreakChar; 
-			internal byte			tmItalic; 
-			internal byte			tmUnderlined; 
-			internal byte			tmStruckOut; 
-			internal byte			tmPitchAndFamily; 
-			internal byte			tmCharSet; 
-		}
-
-		public enum TernaryRasterOperations : uint
-		{
-			SRCCOPY = 0x00CC0020,
-			SRCPAINT = 0x00EE0086,
-			SRCAND = 0x008800C6,
-			SRCINVERT = 0x00660046,
-			SRCERASE = 0x00440328,
-			NOTSRCCOPY = 0x00330008,
-			NOTSRCERASE = 0x001100A6,
-			MERGECOPY = 0x00C000CA,
-			MERGEPAINT = 0x00BB0226,
-			PATCOPY = 0x00F00021,
-			PATPAINT = 0x00FB0A09,
-			PATINVERT = 0x005A0049,
-			DSTINVERT = 0x00550009,
-			BLACKNESS = 0x00000042,
-			WHITENESS = 0x00FF0062
-		}
-
-		[Flags]
-		private enum ScrollWindowExFlags {
-			SW_NONE				= 0x0000,
-			SW_SCROLLCHILDREN		= 0x0001,
-			SW_INVALIDATE			= 0x0002,
-			SW_ERASE			= 0x0004,
-			SW_SMOOTHSCROLL			= 0x0010
-		}
-
-		internal enum SystemMetrics {
-			SM_CXSCREEN			= 0,
-			SM_CYSCREEN             	= 1,
-			SM_CXVSCROLL            	= 2,
-			SM_CYHSCROLL            	= 3,
-			SM_CYCAPTION            	= 4,
-			SM_CXBORDER             	= 5,
-			SM_CYBORDER             	= 6,
-			SM_CXDLGFRAME           	= 7,
-			SM_CYDLGFRAME           	= 8,
-			SM_CYVTHUMB             	= 9,
-			SM_CXHTHUMB             	= 10,
-			SM_CXICON               	= 11,
-			SM_CYICON               	= 12,
-			SM_CXCURSOR             	= 13,
-			SM_CYCURSOR             	= 14,
-			SM_CYMENU               	= 15,
-			SM_CXFULLSCREEN         	= 16,
-			SM_CYFULLSCREEN         	= 17,
-			SM_CYKANJIWINDOW        	= 18,
-			SM_MOUSEPRESENT         	= 19,
-			SM_CYVSCROLL            	= 20,
-			SM_CXHSCROLL            	= 21,
-			SM_DEBUG                	= 22,
-			SM_SWAPBUTTON           	= 23,
-			SM_RESERVED1            	= 24,
-			SM_RESERVED2            	= 25,
-			SM_RESERVED3            	= 26,
-			SM_RESERVED4            	= 27,
-			SM_CXMIN                	= 28,
-			SM_CYMIN                	= 29,
-			SM_CXSIZE               	= 30,
-			SM_CYSIZE               	= 31,
-			SM_CXFRAME              	= 32,
-			SM_CYFRAME              	= 33,
-			SM_CXMINTRACK			= 34,
-			SM_CYMINTRACK           	= 35,
-			SM_CXDOUBLECLK          	= 36,
-			SM_CYDOUBLECLK          	= 37,
-			SM_CXICONSPACING        	= 38,
-			SM_CYICONSPACING        	= 39,
-			SM_MENUDROPALIGNMENT    	= 40,
-			SM_PENWINDOWS           	= 41,
-			SM_DBCSENABLED          	= 42,
-			SM_CMOUSEBUTTONS        	= 43,
-			SM_CXFIXEDFRAME			= SM_CXDLGFRAME,
-			SM_CYFIXEDFRAME			= SM_CYDLGFRAME,
-			SM_CXSIZEFRAME			= SM_CXFRAME,
-			SM_CYSIZEFRAME			= SM_CYFRAME,
-			SM_SECURE               	= 44,
-			SM_CXEDGE               	= 45,
-			SM_CYEDGE               	= 46,
-			SM_CXMINSPACING         	= 47,
-			SM_CYMINSPACING         	= 48,
-			SM_CXSMICON             	= 49,
-			SM_CYSMICON             	= 50,
-			SM_CYSMCAPTION          	= 51,
-			SM_CXSMSIZE             	= 52,
-			SM_CYSMSIZE             	= 53,
-			SM_CXMENUSIZE           	= 54,
-			SM_CYMENUSIZE           	= 55,
-			SM_ARRANGE              	= 56,
-			SM_CXMINIMIZED          	= 57,
-			SM_CYMINIMIZED          	= 58,
-			SM_CXMAXTRACK           	= 59,
-			SM_CYMAXTRACK           	= 60,
-			SM_CXMAXIMIZED          	= 61,
-			SM_CYMAXIMIZED          	= 62,
-			SM_NETWORK              	= 63,
-			SM_CLEANBOOT            	= 67,
-			SM_CXDRAG               	= 68,
-			SM_CYDRAG               	= 69,
-			SM_SHOWSOUNDS           	= 70,
-			SM_CXMENUCHECK          	= 71,
-			SM_CYMENUCHECK          	= 72,
-			SM_SLOWMACHINE          	= 73,
-			SM_MIDEASTENABLED       	= 74,
-			SM_MOUSEWHEELPRESENT    	= 75,
-			SM_XVIRTUALSCREEN       	= 76,
-			SM_YVIRTUALSCREEN       	= 77,
-			SM_CXVIRTUALSCREEN      	= 78,
-			SM_CYVIRTUALSCREEN      	= 79,
-			SM_CMONITORS            	= 80,
-			SM_SAMEDISPLAYFORMAT    	= 81,
-			SM_IMMENABLED           	= 82,
-			SM_CXFOCUSBORDER        	= 83,
-			SM_CYFOCUSBORDER        	= 84,
-			SM_TABLETPC             	= 86,
-			SM_MEDIACENTER          	= 87,
-			SM_CMETRICS             	= 88
-		}
-
-		// We'll only support _WIN32_IE < 0x0500 for now
-		internal enum NotifyIconMessage {
-			NIM_ADD				= 0x00000000,
-			NIM_MODIFY			= 0x00000001,
-			NIM_DELETE			= 0x00000002,
-		}
-
-		[Flags]
-		internal enum NotifyIconFlags {
-			NIF_MESSAGE			= 0x00000001,
-			NIF_ICON			= 0x00000002,
-			NIF_TIP				= 0x00000004,
-			NIF_STATE			= 0x00000008,
-			NIF_INFO			= 0x00000010			
-		}
-
-		[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
-		internal struct NOTIFYICONDATA {
-			internal uint				cbSize;
-			internal IntPtr				hWnd;
-			internal uint				uID;
-			internal NotifyIconFlags	uFlags;
-			internal uint				uCallbackMessage;
-			internal IntPtr				hIcon;
-			[MarshalAs(UnmanagedType.ByValTStr, SizeConst=128)]
-			internal string				szTip;
-			internal int				dwState;
-			internal int				dwStateMask;
-			[MarshalAs(UnmanagedType.ByValTStr, SizeConst=256)]
-			internal string				szInfo;
-			internal int				uTimeoutOrVersion;
-			[MarshalAs(UnmanagedType.ByValTStr, SizeConst=64)]
-			internal string				szInfoTitle;
-			internal ToolTipIcon		dwInfoFlags;
-		}
-
-		[Flags]
-		internal enum DCExFlags {
-			DCX_WINDOW			= 0x00000001,
-			DCX_CACHE			= 0x00000002,
-			DCX_NORESETATTRS     		= 0x00000004,
-			DCX_CLIPCHILDREN     		= 0x00000008,
-			DCX_CLIPSIBLINGS     		= 0x00000010,
-			DCX_PARENTCLIP       		= 0x00000020,
-			DCX_EXCLUDERGN       		= 0x00000040,
-			DCX_INTERSECTRGN     		= 0x00000080,
-			DCX_EXCLUDEUPDATE    		= 0x00000100,
-			DCX_INTERSECTUPDATE  		= 0x00000200,
-			DCX_LOCKWINDOWUPDATE 		= 0x00000400,
-			DCX_USESTYLE			= 0x00010000,
-			DCX_VALIDATE         		= 0x00200000
-		}
-
-		[StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
-		internal struct CLIENTCREATESTRUCT {
-			internal IntPtr			hWindowMenu;
-			internal uint			idFirstChild;
-		}
-
-		private enum ClassLong : int {
-			GCL_MENUNAME			= -8,
-			GCL_HBRBACKGROUND		= -10,
-			GCL_HCURSOR         		= -12,
-			GCL_HICON            		= -14,
-			GCL_HMODULE          		= -16,
-			GCL_CBWNDEXTRA       		= -18,
-			GCL_CBCLSEXTRA       		= -20,
-			GCL_WNDPROC          		= -24,
-			GCL_STYLE            		= -26,
-			GCW_ATOM             		= -32,
-			GCL_HICONSM			= -34
-		}
-
-		[Flags]
-		internal enum GAllocFlags : uint {
-			GMEM_FIXED			= 0x0000,
-			GMEM_MOVEABLE			= 0x0002,
-			GMEM_NOCOMPACT			= 0x0010,
-			GMEM_NODISCARD			= 0x0020,
-			GMEM_ZEROINIT			= 0x0040,
-			GMEM_MODIFY			= 0x0080,
-			GMEM_DISCARDABLE		= 0x0100,
-			GMEM_NOT_BANKED			= 0x1000,
-			GMEM_SHARE          		= 0x2000,
-			GMEM_DDESHARE			= 0x2000,
-			GMEM_NOTIFY			= 0x4000,
-			GMEM_LOWER			= GMEM_NOT_BANKED,
-			GMEM_VALID_FLAGS		= 0x7F72,
-			GMEM_INVALID_HANDLE 		= 0x8000,
-			GHND                		= (GMEM_MOVEABLE | GMEM_ZEROINIT),
-			GPTR                		= (GMEM_FIXED | GMEM_ZEROINIT)
-		}
-
-		internal enum ROP2DrawMode : int {
-			R2_BLACK			= 1,
-			R2_NOTMERGEPEN      		= 2,
-			R2_MASKNOTPEN       		= 3,
-			R2_NOTCOPYPEN       		= 4,
-			R2_MASKPENNOT       		= 5,
-			R2_NOT              		= 6,
-			R2_XORPEN           		= 7,
-			R2_NOTMASKPEN       		= 8,
-			R2_MASKPEN          		= 9,
-			R2_NOTXORPEN        		= 10,
-			R2_NOP              		= 11,
-			R2_MERGENOTPEN      		= 12,
-			R2_COPYPEN          		= 13,
-			R2_MERGEPENNOT      		= 14,
-			R2_MERGEPEN         		= 15,
-			R2_WHITE            		= 16,
-			R2_LAST             		= 16
-		}
-
-		internal enum PenStyle : int {
-			PS_SOLID			= 0,
-			PS_DASH             		= 1,
-			PS_DOT              		= 2,
-			PS_DASHDOT          		= 3,
-			PS_DASHDOTDOT       		= 4,
-			PS_NULL             		= 5,
-			PS_INSIDEFRAME      		= 6,
-			PS_USERSTYLE        		= 7,
-			PS_ALTERNATE        		= 8
-		}
-
-		internal enum PatBltRop : int {
-			PATCOPY   = 0xf00021,
-			PATINVERT = 0x5a0049,
-			DSTINVERT = 0x550009,
-			BLACKNESS = 0x000042,
-			WHITENESS = 0xff0062,
-		}
-
-		internal enum StockObject : int {
-			WHITE_BRUSH			= 0,
-			LTGRAY_BRUSH        		= 1,
-			GRAY_BRUSH          		= 2,
-			DKGRAY_BRUSH        		= 3,
-			BLACK_BRUSH         		= 4,
-			NULL_BRUSH          		= 5,
-			HOLLOW_BRUSH        		= NULL_BRUSH,
-			WHITE_PEN   			= 6,
-			BLACK_PEN           		= 7,
-			NULL_PEN            		= 8,
-			OEM_FIXED_FONT      		= 10,
-			ANSI_FIXED_FONT     		= 11,
-			ANSI_VAR_FONT       		= 12,
-			SYSTEM_FONT         		= 13,
-			DEVICE_DEFAULT_FONT 		= 14,
-			DEFAULT_PALETTE     		= 15,
-			SYSTEM_FIXED_FONT  		= 16
-		}
-
-		internal enum HatchStyle : int {
-			HS_HORIZONTAL			= 0,
-			HS_VERTICAL         		= 1,
-			HS_FDIAGONAL        		= 2,
-			HS_BDIAGONAL        		= 3,
-			HS_CROSS            		= 4,
-			HS_DIAGCROSS        		= 5
-		}
-
-		[Flags]
-		internal enum SndFlags : int {
-			SND_SYNC			= 0x0000,
-			SND_ASYNC			= 0x0001,
-			SND_NODEFAULT			= 0x0002,
-			SND_MEMORY			= 0x0004,
-			SND_LOOP			= 0x0008,
-			SND_NOSTOP			= 0x0010,
-			SND_NOWAIT     			= 0x00002000,
-			SND_ALIAS			= 0x00010000,
-			SND_ALIAS_ID			= 0x00110000,
-			SND_FILENAME			= 0x00020000,
-			SND_RESOURCE			= 0x00040004,
-			SND_PURGE			= 0x0040,
-			SND_APPLICATION			= 0x0080,
-		}
-
-		[Flags]
-		internal enum LayeredWindowAttributes : int {
-			LWA_COLORKEY		= 0x1,
-			LWA_ALPHA			= 0x2,
-		}
-
-		public enum ACLineStatus : byte {
-			Offline = 0,
-			Online = 1,
-			Unknown = 255
-		}
-
-		public enum BatteryFlag : byte {
-			High = 1,
-			Low = 2,
-			Critical = 4,
-			Charging = 8,
-			NoSystemBattery = 128,
-			Unknown = 255
-		}
-
-		[StructLayout (LayoutKind.Sequential)]
-		public class SYSTEMPOWERSTATUS {
-			public ACLineStatus _ACLineStatus;
-			public BatteryFlag _BatteryFlag;
-			public Byte _BatteryLifePercent;
-			public Byte _Reserved1;
-			public Int32 _BatteryLifeTime;
-			public Int32 _BatteryFullLifeTime;
-		}
-		#endregion
-
-		#region Constructor & Destructor
-		private XplatUIWin32() {
+        #region Constructor & Destructor
+        private XplatUIWin32() {
 			// Handle singleton stuff first
 			ref_count=0;
 
@@ -1084,11 +332,11 @@ namespace System.Windows.Forms {
 		#endregion	// Private Support Methods
 
 		#region Static Properties
-		internal override int ActiveWindowTrackingDelay {
+		public override int ActiveWindowTrackingDelay {
 			get { return GetSystemParametersInfoInt (SPIAction.SPI_GETACTIVEWNDTRKTIMEOUT); }
 		}
 
-		internal override int CaretWidth {
+		public override int CaretWidth {
 			get { 
 				// Supported on 2k, XP, 2k3 +
 				if (Environment.OSVersion.Version.Major < 5)
@@ -1098,7 +346,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int FontSmoothingContrast {
+		public override int FontSmoothingContrast {
 			get {
 				// Supported on XP, 2k3 +
 				if (Environment.OSVersion.Version.Major < 5 || (Environment.OSVersion.Version.Major == 5 && Environment.OSVersion.Version.Minor == 0))
@@ -1108,7 +356,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int FontSmoothingType {
+		public override int FontSmoothingType {
 			get {
 				// Supported on XP, 2k3 +
 				if (Environment.OSVersion.Version.Major < 5 || (Environment.OSVersion.Version.Major == 5 && Environment.OSVersion.Version.Minor == 0))
@@ -1118,19 +366,19 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int HorizontalResizeBorderThickness {
+		public override int HorizontalResizeBorderThickness {
 			get { return Win32GetSystemMetrics (SystemMetrics.SM_CXSIZEFRAME); }
 		}
 
-		internal override bool IsActiveWindowTrackingEnabled {
+		public override bool IsActiveWindowTrackingEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETACTIVEWINDOWTRACKING); }
 		}
 
-		internal override bool IsComboBoxAnimationEnabled {
+		public override bool IsComboBoxAnimationEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETCOMBOBOXANIMATION); }
 		}
 
-		internal override bool IsDropShadowEnabled {
+		public override bool IsDropShadowEnabled {
 			get {
 				// Supported on XP, 2k3 +
 				if (Environment.OSVersion.Version.Major < 5 || (Environment.OSVersion.Version.Major == 5 && Environment.OSVersion.Version.Minor == 0))
@@ -1140,35 +388,35 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override bool IsFontSmoothingEnabled {
+		public override bool IsFontSmoothingEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETFONTSMOOTHING); }
 		}
 
-		internal override bool IsHotTrackingEnabled {
+		public override bool IsHotTrackingEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETHOTTRACKING); }
 		}
 
-		internal override bool IsIconTitleWrappingEnabled {
+		public override bool IsIconTitleWrappingEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETICONTITLEWRAP); }
 		}
 
-		internal override bool IsKeyboardPreferred {
+		public override bool IsKeyboardPreferred {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETKEYBOARDPREF); }
 		}
 
-		internal override bool IsListBoxSmoothScrollingEnabled {
+		public override bool IsListBoxSmoothScrollingEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETLISTBOXSMOOTHSCROLLING); }
 		}
 
-		internal override bool IsMenuAnimationEnabled {
+		public override bool IsMenuAnimationEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETMENUANIMATION); }
 		}
 
-		internal override bool IsMenuFadeEnabled {
+		public override bool IsMenuFadeEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETMENUFADE); }
 		}
 
-		internal override bool IsMinimizeRestoreAnimationEnabled {
+		public override bool IsMinimizeRestoreAnimationEnabled {
 			get {
 				ANIMATIONINFO ai = new ANIMATIONINFO ();
 				ai.cbSize = (uint)Marshal.SizeOf (ai);
@@ -1178,23 +426,23 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override bool IsSelectionFadeEnabled {
+		public override bool IsSelectionFadeEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETSELECTIONFADE); }
 		}
 
-		internal override bool IsSnapToDefaultEnabled {
+		public override bool IsSnapToDefaultEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETSNAPTODEFBUTTON); }
 		}
 
-		internal override bool IsTitleBarGradientEnabled {
+		public override bool IsTitleBarGradientEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETGRADIENTCAPTIONS); }
 		}
 
-		internal override bool IsToolTipAnimationEnabled {
+		public override bool IsToolTipAnimationEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETTOOLTIPANIMATION); }
 		}
 
-		internal override Size MenuBarButtonSize {
+		public override Size MenuBarButtonSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXMENUSIZE),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYMENUSIZE));
@@ -1209,19 +457,19 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int MenuShowDelay {
+		public override int MenuShowDelay {
 			get { return GetSystemParametersInfoInt (SPIAction.SPI_GETMENUSHOWDELAY); }
 		}
 
-		internal override int MouseSpeed {
+		public override int MouseSpeed {
 			get { return GetSystemParametersInfoInt (SPIAction.SPI_GETMOUSESPEED); }
 		}
 
-		internal override LeftRightAlignment PopupMenuAlignment {
+		public override LeftRightAlignment PopupMenuAlignment {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETMENUDROPALIGNMENT) == true ? LeftRightAlignment.Left : LeftRightAlignment.Right; }
 		}
 
-		internal override PowerStatus PowerStatus {
+		public override PowerStatus PowerStatus {
 			get {
 				SYSTEMPOWERSTATUS p = new SYSTEMPOWERSTATUS ();
 				
@@ -1233,32 +481,32 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int SizingBorderWidth {
+		public override int SizingBorderWidth {
 			get { return Win32GetSystemMetrics (SystemMetrics.SM_CXSIZEFRAME); }
 		}
 
-		internal override Size SmallCaptionButtonSize {
+		public override Size SmallCaptionButtonSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXSMSIZE),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYSMSIZE));
 			}
 		}
 
-		internal override bool UIEffectsEnabled {
+		public override bool UIEffectsEnabled {
 			get { return GetSystemParametersInfoBool (SPIAction.SPI_GETUIEFFECTS); }
 		}
 
-		internal override int VerticalResizeBorderThickness {
+		public override int VerticalResizeBorderThickness {
 			get { return Win32GetSystemMetrics (SystemMetrics.SM_CYSIZEFRAME); }
 		}
 
-		internal override void RaiseIdle (EventArgs e)
+		public override void RaiseIdle (EventArgs e)
 		{
 			if (Idle != null)
 				Idle (this, e);
 		}
 
-		internal override Keys ModifierKeys {
+		public override Keys ModifierKeys {
 			get {
 				short	state;
 				Keys	key_state;
@@ -1283,19 +531,19 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override MouseButtons MouseButtons {
+		public override MouseButtons MouseButtons {
 			get {
 				return mouse_state;
 			}
 		}
 
-		internal override Point MousePosition {
+		public override Point MousePosition {
 			get {
 				return mouse_position;
 			}
 		}
 
-		internal override Size MouseHoverSize {
+		public override Size MouseHoverSize {
 			get {
 				int	width = 4;
 				int	height = 4;
@@ -1306,7 +554,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int MouseHoverTime {
+		public override int MouseHoverTime {
 			get {
 				int time = 500;
 
@@ -1315,7 +563,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int MouseWheelScrollDelta {
+		public override int MouseWheelScrollDelta {
 			get {
 				int delta = 120;
 				Win32SystemParametersInfo(SPIAction.SPI_GETWHEELSCROLLLINES, 0, ref delta, 0);
@@ -1323,46 +571,46 @@ namespace System.Windows.Forms {
 			}
 		}
 		
-		internal override int HorizontalScrollBarHeight {
+		public override int HorizontalScrollBarHeight {
 			get {
 				return scroll_height;
 			}
 		}
 
-		internal override bool UserClipWontExposeParent {
+		public override bool UserClipWontExposeParent {
 			get {
 				return false;
 			}
 		}
 
 
-		internal override int VerticalScrollBarWidth {
+		public override int VerticalScrollBarWidth {
 			get {
 				return scroll_width;
 			}
 		}
 
-		internal override int MenuHeight {
+		public override int MenuHeight {
 			get {
 				return Win32GetSystemMetrics(SystemMetrics.SM_CYMENU);
 			}
 		}
 
-		internal override Size Border3DSize {
+		public override Size Border3DSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXEDGE),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYEDGE));
 			}
 		}
 
-		internal override Size BorderSize {
+		public override Size BorderSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXBORDER),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYBORDER));
 			}
 		}
 
-		internal override bool DropTarget {
+		public override bool DropTarget {
 			get {
 				return false;
 			}
@@ -1374,26 +622,26 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override Size CaptionButtonSize {
+		public override Size CaptionButtonSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXSIZE),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYSIZE));
 			}
 		}
 
-		internal override int CaptionHeight {
+		public override int CaptionHeight {
 			get {
 				return Win32GetSystemMetrics(SystemMetrics.SM_CYCAPTION);
 			}
 		}
 
-		internal override Size CursorSize {
+		public override Size CursorSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXCURSOR), Win32GetSystemMetrics(SystemMetrics.SM_CYCURSOR));
 			}
 		}
 
-		internal override bool DragFullWindows {
+		public override bool DragFullWindows {
 			get {
 				int full = 0;
 				Win32SystemParametersInfo (SPIAction.SPI_GETDRAGFULLWINDOWS, 0, ref full, 0);
@@ -1401,51 +649,51 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override Size DragSize {
+		public override Size DragSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXDRAG), Win32GetSystemMetrics(SystemMetrics.SM_CYDRAG));
 			}
 		}
 
-		internal override Size DoubleClickSize {
+		public override Size DoubleClickSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXDOUBLECLK),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYDOUBLECLK));
 			}
 		}
 
-		internal override int DoubleClickTime {
+		public override int DoubleClickTime {
 			get {
 				return Win32GetDoubleClickTime ();
 			}
 		}
 
-		internal override Size FixedFrameBorderSize {
+		public override Size FixedFrameBorderSize {
 			get {
 				return new Size (Win32GetSystemMetrics (SystemMetrics.SM_CXFIXEDFRAME),
 					Win32GetSystemMetrics (SystemMetrics.SM_CYFIXEDFRAME));
 			}
 		}
 
-		internal override Size FrameBorderSize { 
+		public override Size FrameBorderSize { 
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXFRAME), Win32GetSystemMetrics(SystemMetrics.SM_CYFRAME));
 			}
 		}
 
-		internal override Size IconSize {
+		public override Size IconSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXICON), Win32GetSystemMetrics(SystemMetrics.SM_CYICON));
 			}
 		}
 
-		internal override Size MaxWindowTrackSize {
+		public override Size MaxWindowTrackSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXMAXTRACK), Win32GetSystemMetrics(SystemMetrics.SM_CYMAXTRACK));
 			}
 		}
 
-		internal override bool MenuAccessKeysUnderlined {
+		public override bool MenuAccessKeysUnderlined {
 			get {
 				int underlined = 0;
 				Win32SystemParametersInfo (SPIAction.SPI_GETKEYBOARDCUES, 0, ref underlined, 0);
@@ -1453,62 +701,62 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override Size MinimizedWindowSize {
+		public override Size MinimizedWindowSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXMINIMIZED), Win32GetSystemMetrics(SystemMetrics.SM_CYMINIMIZED));
 			}
 		}
 
-		internal override Size MinimizedWindowSpacingSize {
+		public override Size MinimizedWindowSpacingSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXMINSPACING), Win32GetSystemMetrics(SystemMetrics.SM_CYMINSPACING));
 			}
 		}
 
-		internal override Size MinimumWindowSize {
+		public override Size MinimumWindowSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXMIN), Win32GetSystemMetrics(SystemMetrics.SM_CYMIN));
 			}
 		}
 
-		internal override Size MinWindowTrackSize {
+		public override Size MinWindowTrackSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXMINTRACK), Win32GetSystemMetrics(SystemMetrics.SM_CYMINTRACK));
 			}
 		}
 
-		internal override Size SmallIconSize {
+		public override Size SmallIconSize {
 			get {
 				return new Size(Win32GetSystemMetrics(SystemMetrics.SM_CXSMICON), Win32GetSystemMetrics(SystemMetrics.SM_CYSMICON));
 			}
 		}
 
-		internal override int MouseButtonCount {
+		public override int MouseButtonCount {
 			get {
 				return Win32GetSystemMetrics(SystemMetrics.SM_CMOUSEBUTTONS);
 			}
 		}
 
-		internal override bool MouseButtonsSwapped {
+		public override bool MouseButtonsSwapped {
 			get {
 				return Win32GetSystemMetrics(SystemMetrics.SM_SWAPBUTTON) != 0;
 			}
 		}
 
-		internal override bool MouseWheelPresent {
+		public override bool MouseWheelPresent {
 			get {
 				return Win32GetSystemMetrics(SystemMetrics.SM_MOUSEWHEELPRESENT) != 0;
 			}
 		}
 
-		internal override Rectangle VirtualScreen {
+		public override Rectangle VirtualScreen {
 			get {
 				return new Rectangle(	Win32GetSystemMetrics(SystemMetrics.SM_XVIRTUALSCREEN), Win32GetSystemMetrics(SystemMetrics.SM_YVIRTUALSCREEN),
 							Win32GetSystemMetrics(SystemMetrics.SM_CXVIRTUALSCREEN), Win32GetSystemMetrics(SystemMetrics.SM_CYVIRTUALSCREEN));
 			}
 		}
 
-		internal override Rectangle WorkingArea {
+		public override Rectangle WorkingArea {
 			get {
 				RECT	rect;
 
@@ -1520,20 +768,20 @@ namespace System.Windows.Forms {
 		}
 
 		[MonoTODO]
-		internal override Screen[] AllScreens {
+		public override Screen[] AllScreens {
 			get {
 				// To support multiples, we need to use GetMonitorInfo API on Win32
 				return null;
 			}
 		}
 
-		internal override bool ThemesEnabled {
+		public override bool ThemesEnabled {
 			get {
 				return XplatUIWin32.themes_enabled;
 			}
 		}
 
-		internal override bool RequiresPositiveClientAreaSize {
+		public override bool RequiresPositiveClientAreaSize {
 			get {
 				return false;
 			}
@@ -1571,11 +819,11 @@ namespace System.Windows.Forms {
 		#endregion
 
 		#region Public Static Methods
-		internal override IntPtr InitializeDriver() {
+		public override IntPtr InitializeDriver() {
 			return IntPtr.Zero;
 		}
 
-		internal override void ShutdownDriver(IntPtr token) {
+		public override void ShutdownDriver(IntPtr token) {
 			Console.WriteLine("XplatUIWin32 ShutdownDriver called");
 		}
 
@@ -1600,14 +848,14 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override void AudibleAlert(AlertType alert) {
+		public override void AudibleAlert(AlertType alert) {
 			Win32PlaySound(GetSoundAlias (alert), IntPtr.Zero, SndFlags.SND_ALIAS_ID | SndFlags.SND_ASYNC | SndFlags.SND_NOSTOP | SndFlags.SND_NOWAIT);
 		}
 
-		internal override void BeginMoveResize (IntPtr handle) {
+		public override void BeginMoveResize (IntPtr handle) {
 		}
 
-		internal override void GetDisplaySize(out Size size) {
+		public override void GetDisplaySize(out Size size) {
 			RECT	rect;
 
 			Win32GetWindowRect(Win32GetDesktopWindow(), out rect);
@@ -1615,11 +863,11 @@ namespace System.Windows.Forms {
 			size = new Size(rect.right - rect.left, rect.bottom - rect.top);
 		}
 
-		internal override void EnableThemes() {
+		public override void EnableThemes() {
 			themes_enabled=true;
 		}
 
-		internal override IntPtr CreateWindow(CreateParams cp) {
+		public override IntPtr CreateWindow(CreateParams cp) {
 			IntPtr	WindowHandle;
 			IntPtr	ParentHandle;
 
@@ -1663,7 +911,7 @@ namespace System.Windows.Forms {
 			return WindowHandle;
 		}
 
-		internal override IntPtr CreateWindow(IntPtr Parent, int X, int Y, int Width, int Height) {
+		public override IntPtr CreateWindow(IntPtr Parent, int X, int Y, int Width, int Height) {
 			CreateParams create_params = new CreateParams();
 
 			create_params.Caption = "";
@@ -1681,16 +929,16 @@ namespace System.Windows.Forms {
 			return CreateWindow(create_params);
 		}
 
-		internal override void DestroyWindow(IntPtr handle) {
+		public override void DestroyWindow(IntPtr handle) {
 			Win32DestroyWindow(handle);
 		}
 
-		internal override void SetWindowMinMax(IntPtr handle, Rectangle maximized, Size min, Size max) {
+		public override void SetWindowMinMax(IntPtr handle, Rectangle maximized, Size min, Size max) {
 			// We do nothing, Form has to handle WM_GETMINMAXINFO
 		}
 
 
-		internal override FormWindowState GetWindowState(IntPtr handle) {
+		public override FormWindowState GetWindowState(IntPtr handle) {
 			uint style;
 
 			style = Win32GetWindowLong(handle, WindowLong.GWL_STYLE);
@@ -1702,7 +950,7 @@ namespace System.Windows.Forms {
 			return FormWindowState.Normal;
 		}
 
-		internal override void SetWindowState(IntPtr hwnd, FormWindowState state) {
+		public override void SetWindowState(IntPtr hwnd, FormWindowState state) {
 			switch(state) {
 				case FormWindowState.Normal: {
 					Win32ShowWindow(hwnd, WindowPlacementFlags.SW_RESTORE);
@@ -1721,7 +969,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override void SetWindowStyle(IntPtr handle, CreateParams cp) {
+		public override void SetWindowStyle(IntPtr handle, CreateParams cp) {
 
 			Win32SetWindowLong(handle, WindowLong.GWL_STYLE, (uint)cp.Style);
 			Win32SetWindowLong(handle, WindowLong.GWL_EXSTYLE, (uint)cp.ExStyle);
@@ -1735,7 +983,7 @@ namespace System.Windows.Forms {
 				XplatUI.RequestNCRecalc (handle);
 		}
 
-		internal override double GetWindowTransparency(IntPtr handle)
+		public override double GetWindowTransparency(IntPtr handle)
 		{
 			LayeredWindowAttributes lwa;
 			COLORREF clrRef;
@@ -1747,7 +995,7 @@ namespace System.Windows.Forms {
 			return ((double)alpha) / 255.0;
 		}
 
-		internal override void SetWindowTransparency(IntPtr handle, double transparency, Color key) {
+		public override void SetWindowTransparency(IntPtr handle, double transparency, Color key) {
 			LayeredWindowAttributes lwa = LayeredWindowAttributes.LWA_ALPHA;
 			byte opacity = (byte)(transparency*255);
 			COLORREF clrRef = new COLORREF();
@@ -1765,7 +1013,7 @@ namespace System.Windows.Forms {
 
 		TransparencySupport support;
 		bool queried_transparency_support;
-		internal override TransparencySupport SupportsTransparency() {
+		public override TransparencySupport SupportsTransparency() {
 			if (queried_transparency_support)
 				return support;
 
@@ -1798,7 +1046,7 @@ namespace System.Windows.Forms {
 			return support;
 		}
 
-		internal override void UpdateWindow(IntPtr handle) {
+		public override void UpdateWindow(IntPtr handle) {
 			Win32UpdateWindow(handle);
 		}
 
@@ -1813,7 +1061,7 @@ namespace System.Windows.Forms {
 			public object Context { get; private set; }
 		}
 
-		internal override PaintEventArgs PaintEventStart(ref Message msg, IntPtr handle, bool client) {
+		public override PaintEventArgs PaintEventStart(ref Message msg, IntPtr handle, bool client) {
 			IntPtr		hdc;
 			PAINTSTRUCT	ps;
 			PaintEventArgs	paint_event;
@@ -1865,7 +1113,7 @@ namespace System.Windows.Forms {
 			return paint_event;
 		}
 
-		internal override void PaintEventEnd(ref Message m, IntPtr handle, bool client, PaintEventArgs pevent) {
+		public override void PaintEventEnd(ref Message m, IntPtr handle, bool client, PaintEventArgs pevent) {
 			if (pevent.Graphics != null)
 				pevent.Graphics.Dispose ();
  
@@ -1880,12 +1128,12 @@ namespace System.Windows.Forms {
 		}
 
 
-		internal override void SetWindowPos(IntPtr handle, int x, int y, int width, int height) {
+		public override void SetWindowPos(IntPtr handle, int x, int y, int width, int height) {
 			Win32MoveWindow(handle, x, y, width, height, true);
 			return;
 		}
 
-		internal override void GetWindowPos(IntPtr handle, bool is_toplevel, out int x, out int y, out int width, out int height, out int client_width, out int client_height) {
+		public override void GetWindowPos(IntPtr handle, bool is_toplevel, out int x, out int y, out int width, out int height, out int client_width, out int client_height) {
 			IntPtr	parent;
 			RECT	rect;
 			POINT	pt;
@@ -1910,7 +1158,7 @@ namespace System.Windows.Forms {
 			return;
 		}
 
-		internal override void Activate(IntPtr handle) {
+		public override void Activate(IntPtr handle) {
 			Win32SetActiveWindow(handle);
 			// delayed timer enabled
 			lock (timer_list) {
@@ -1924,7 +1172,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override void Invalidate(IntPtr handle, Rectangle rc, bool clear) {
+		public override void Invalidate(IntPtr handle, Rectangle rc, bool clear) {
 			RECT rect;
 
 			rect.left=rc.Left;
@@ -1935,7 +1183,7 @@ namespace System.Windows.Forms {
 		}
 
 
-		internal override void InvalidateNC (IntPtr handle)
+		public override void InvalidateNC (IntPtr handle)
 		{
 			// found this gem at
 			// http://www.dotnet247.com/247reference/msgs/58/292037.aspx
@@ -1954,18 +1202,18 @@ namespace System.Windows.Forms {
 			return NativeWindow.WndProc (hWnd, msg, wParam, lParam);
 		}
 
-		internal override IntPtr DefWndProc(ref Message msg) {
+		public override IntPtr DefWndProc(ref Message msg) {
 			msg.Result=Win32DefWindowProc(msg.HWnd, (Msg)msg.Msg, msg.WParam, msg.LParam);
 			return msg.Result;
 		}
 
-		internal override void HandleException(Exception e) {
+		public override void HandleException(Exception e) {
 			StackTrace st = new StackTrace(e);
 			Win32MessageBox(IntPtr.Zero, e.Message+st.ToString(), "Exception", 0);
 			Console.WriteLine("{0}{1}", e.Message, st.ToString());
 		}
 
-		internal override void DoEvents() {
+		public override void DoEvents() {
 			MSG msg = new MSG();
 
 			while (GetMessage(ref msg, IntPtr.Zero, 0, 0, false)) {
@@ -1979,15 +1227,15 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override bool PeekMessage(Object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax, uint flags) {
+		public override bool PeekMessage(Object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax, uint flags) {
 			return Win32PeekMessage(ref msg, hWnd, wFilterMin, wFilterMax, flags);
 		}
 
-		internal override void PostQuitMessage(int exitCode) {
+		public override void PostQuitMessage(int exitCode) {
 			Win32PostQuitMessage(exitCode);
 		}
 
-		internal override void RequestAdditionalWM_NCMessages(IntPtr hwnd, bool hover, bool leave)
+		public override void RequestAdditionalWM_NCMessages(IntPtr hwnd, bool hover, bool leave)
 		{
 			if (wm_nc_registered == null)
 				wm_nc_registered = new Hashtable ();
@@ -2011,11 +1259,11 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override void RequestNCRecalc(IntPtr handle) {
+		public override void RequestNCRecalc(IntPtr handle) {
 			Win32SetWindowPos(handle, IntPtr.Zero, 0, 0, 0, 0, SetWindowPosFlags.SWP_FRAMECHANGED | SetWindowPosFlags.SWP_NOOWNERZORDER | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOMOVE | SetWindowPosFlags.SWP_NOZORDER | SetWindowPosFlags.SWP_NOACTIVATE);
 		}
 
-		internal override void ResetMouseHover(IntPtr handle) {
+		public override void ResetMouseHover(IntPtr handle) {
 			TRACKMOUSEEVENT	tme;
 
 			tme = new TRACKMOUSEEVENT();
@@ -2026,7 +1274,7 @@ namespace System.Windows.Forms {
 		}
 
 
-		internal override bool GetMessage(Object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax) {
+		public override bool GetMessage(Object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax) {
 			return GetMessage(ref msg, hWnd, wFilterMin, wFilterMax, true);
 		}
 
@@ -2146,15 +1394,15 @@ namespace System.Windows.Forms {
 			return result;
 		}
 
-		internal override bool TranslateMessage(ref MSG msg) {
+		public override bool TranslateMessage(ref MSG msg) {
 			return Win32TranslateMessage(ref msg);
 		}
 
-		internal override IntPtr DispatchMessage(ref MSG msg) {
+		public override IntPtr DispatchMessage(ref MSG msg) {
 			return Win32DispatchMessage(ref msg);
 		}
 
-		internal override bool SetZOrder(IntPtr hWnd, IntPtr AfterhWnd, bool Top, bool Bottom) {
+		public override bool SetZOrder(IntPtr hWnd, IntPtr AfterhWnd, bool Top, bool Bottom) {
 			if (Top) {
 				Win32SetWindowPos(hWnd, SetWindowPosZOrder.HWND_TOP, 0, 0, 0, 0, SetWindowPosFlags.SWP_NOMOVE | SetWindowPosFlags.SWP_NOSIZE);
 				return true;
@@ -2167,7 +1415,7 @@ namespace System.Windows.Forms {
 			return false;
 		}
 
-		internal override bool SetTopmost(IntPtr hWnd, bool Enabled) {
+		public override bool SetTopmost(IntPtr hWnd, bool Enabled) {
 			if (Enabled) {
 				Win32SetWindowPos(hWnd, SetWindowPosZOrder.HWND_TOPMOST, 0, 0, 0, 0, SetWindowPosFlags.SWP_NOMOVE | SetWindowPosFlags.SWP_NOSIZE | SetWindowPosFlags.SWP_NOACTIVATE);
 				return true;
@@ -2177,17 +1425,17 @@ namespace System.Windows.Forms {
 			}
 		}
 		
-		internal override bool SetOwner(IntPtr hWnd, IntPtr hWndOwner) {
+		public override bool SetOwner(IntPtr hWnd, IntPtr hWndOwner) {
 			Win32SetWindowLong(hWnd, WindowLong.GWL_HWNDPARENT, (uint) hWndOwner);
 			return true;
 		}
 
-		internal override bool Text(IntPtr handle, string text) {
+		public override bool Text(IntPtr handle, string text) {
 			Win32SetWindowText(handle, text);
 			return true;
 		}
 
-		internal override bool GetText(IntPtr handle, out string text) {
+		public override bool GetText(IntPtr handle, out string text) {
 			StringBuilder sb;
 
 			sb = new StringBuilder(256);
@@ -2196,7 +1444,7 @@ namespace System.Windows.Forms {
 			return true;
 		}
 
-		internal override bool SetVisible (IntPtr handle, bool visible, bool activate)
+		public override bool SetVisible (IntPtr handle, bool visible, bool activate)
 		{
 			if (visible) {
 				Control c = Control.FromHandle (handle);
@@ -2229,20 +1477,20 @@ namespace System.Windows.Forms {
 			return true;
 		}
 
-		internal override bool IsEnabled(IntPtr handle) {
+		public override bool IsEnabled(IntPtr handle) {
 			return IsWindowEnabled (handle);
 		}
 
-		internal override bool IsKeyLocked (VirtualKeys key)
+		public override bool IsKeyLocked (VirtualKeys key)
 		{
 			return (Win32GetKeyState (key) & 1) == 1;
 		}
 		
-		internal override bool IsVisible(IntPtr handle) {
+		public override bool IsVisible(IntPtr handle) {
 			return IsWindowVisible (handle);
 		}
 
-		internal override IntPtr SetParent(IntPtr handle, IntPtr parent) {
+		public override IntPtr SetParent(IntPtr handle, IntPtr parent) {
 			Control c = Control.FromHandle (handle);
 			if (parent == IntPtr.Zero) {
 				if (!(c is Form)) {
@@ -2284,7 +1532,7 @@ namespace System.Windows.Forms {
 		}
 
 		// If we ever start using this, we should probably replace FosterParent with IntPtr.Zero
-		internal override IntPtr GetParent(IntPtr handle, bool with_owner) {
+		public override IntPtr GetParent(IntPtr handle, bool with_owner) {
 			if (with_owner) {
 				return Win32GetParent(handle);
 			} else {
@@ -2293,11 +1541,11 @@ namespace System.Windows.Forms {
 		}
 
 		// This is a nop on win32 and x11
-		internal override IntPtr GetPreviousWindow(IntPtr handle) {
+		public override IntPtr GetPreviousWindow(IntPtr handle) {
 			return handle;
 		}
 
-		internal override void GrabWindow(IntPtr hWnd, IntPtr ConfineToHwnd) {
+		public override void GrabWindow(IntPtr hWnd, IntPtr ConfineToHwnd) {
 			grab_hwnd = hWnd;
 			Win32SetCapture(hWnd);
 			
@@ -2309,13 +1557,13 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override void GrabInfo(out IntPtr hWnd, out bool GrabConfined, out Rectangle GrabArea) {
+		public override void GrabInfo(out IntPtr hWnd, out bool GrabConfined, out Rectangle GrabArea) {
 			hWnd = grab_hwnd;
 			GrabConfined = grab_confined;
 			GrabArea = grab_area;
 		}
 
-		internal override void UngrabWindow(IntPtr hWnd) {
+		public override void UngrabWindow(IntPtr hWnd) {
 			if (!(clipped_cursor_rect.top == 0 && clipped_cursor_rect.bottom == 0 && clipped_cursor_rect.left == 0 && clipped_cursor_rect.right == 0)) {
 				Win32ClipCursor (ref clipped_cursor_rect);
 				clipped_cursor_rect = new RECT ();
@@ -2325,7 +1573,7 @@ namespace System.Windows.Forms {
 			grab_hwnd = IntPtr.Zero;
 		}
 
-		internal override bool CalculateWindowRect(ref Rectangle ClientRect, CreateParams cp, Menu menu, out Rectangle WindowRect) {
+		public override bool CalculateWindowRect(ref Rectangle ClientRect, CreateParams cp, Menu menu, out Rectangle WindowRect) {
 			RECT	rect;
 
 			rect.left=ClientRect.Left;
@@ -2342,20 +1590,20 @@ namespace System.Windows.Forms {
 			return true;
 		}
 
-		internal override void SetCursor(IntPtr window, IntPtr cursor) {
+		public override void SetCursor(IntPtr window, IntPtr cursor) {
 			Win32SetCursor(cursor);
 			return;
 		}
 
-		internal override void ShowCursor(bool show) {
+		public override void ShowCursor(bool show) {
 			Win32ShowCursor(show);
 		}
 
-		internal override void OverrideCursor(IntPtr cursor) {
+		public override void OverrideCursor(IntPtr cursor) {
 			Win32SetCursor(cursor);
 		}
 
-		internal override IntPtr DefineCursor(Bitmap bitmap, Bitmap mask, Color cursor_pixel, Color mask_pixel, int xHotSpot, int yHotSpot) {
+		public override IntPtr DefineCursor(Bitmap bitmap, Bitmap mask, Color cursor_pixel, Color mask_pixel, int xHotSpot, int yHotSpot) {
 			IntPtr	cursor;
 			Bitmap	cursor_bitmap;
 			Bitmap	cursor_mask;
@@ -2401,7 +1649,7 @@ namespace System.Windows.Forms {
 			return cursor;
 		}
 
-		internal override Bitmap DefineStdCursorBitmap (StdCursor id)
+		public override Bitmap DefineStdCursorBitmap (StdCursor id)
 		{
 			// We load the cursor, create a bitmap, draw the cursor onto the bitmap and return the bitmap.
 			IntPtr cursor = DefineStdCursor (id);
@@ -2418,7 +1666,7 @@ namespace System.Windows.Forms {
 		}
 
 		[MonoTODO("Define the missing cursors")]
-		internal override IntPtr DefineStdCursor(StdCursor id) {
+		public override IntPtr DefineStdCursor(StdCursor id) {
 			switch(id) {
 				case StdCursor.AppStarting:	return Win32LoadCursor(IntPtr.Zero, LoadCursorType.IDC_APPSTARTING);
 				case StdCursor.Arrow:		return Win32LoadCursor(IntPtr.Zero, LoadCursorType.IDC_ARROW);
@@ -2452,14 +1700,14 @@ namespace System.Windows.Forms {
 			throw new NotImplementedException ();
 		}
 
-		internal override void DestroyCursor(IntPtr cursor) {
+		public override void DestroyCursor(IntPtr cursor) {
 			if ((cursor.ToInt32() < (int)LoadCursorType.First) || (cursor.ToInt32() > (int)LoadCursorType.Last)) {
 				Win32DestroyCursor(cursor);
 			}
 		}
 
 		[MonoTODO]
-		internal override void GetCursorInfo(IntPtr cursor, out int width, out int height, out int hotspot_x, out int hotspot_y) {
+		public override void GetCursorInfo(IntPtr cursor, out int width, out int height, out int hotspot_x, out int hotspot_y) {
 			ICONINFO ii = new ICONINFO ();
 			
 			if (!Win32GetIconInfo (cursor, out ii))
@@ -2471,11 +1719,11 @@ namespace System.Windows.Forms {
 			hotspot_y = ii.yHotspot;
 		}
 
-		internal override void SetCursorPos(IntPtr handle, int x, int y) {
+		public override void SetCursorPos(IntPtr handle, int x, int y) {
 			Win32SetCursorPos(x, y);
 		}
 
-		internal override Region GetClipRegion(IntPtr hwnd) {
+		public override Region GetClipRegion(IntPtr hwnd) {
 			Region region;
 
 			region = new Region();
@@ -2485,30 +1733,30 @@ namespace System.Windows.Forms {
 			return region;
 		}
 
-		internal override void SetClipRegion(IntPtr hwnd, Region region) {
+		public override void SetClipRegion(IntPtr hwnd, Region region) {
 			if (region == null)
 				Win32SetWindowRgn (hwnd, IntPtr.Zero, true);
 			else
 				Win32SetWindowRgn(hwnd, region.GetHrgn(Graphics.FromHwnd(hwnd)), true);
 		}
 
-		internal override void EnableWindow(IntPtr handle, bool Enable) {
+		public override void EnableWindow(IntPtr handle, bool Enable) {
 			Win32EnableWindow(handle, Enable);
 		}
 
-		internal override void EndLoop(System.Threading.Thread thread) {
+		public override void EndLoop(System.Threading.Thread thread) {
 			// Nothing to do
 		}
 
-		internal override object StartLoop(System.Threading.Thread thread) {
+		public override object StartLoop(System.Threading.Thread thread) {
 			return null;
 		}
 
-		internal override void SetModal(IntPtr handle, bool Modal) {
+		public override void SetModal(IntPtr handle, bool Modal) {
 			// we do nothing on Win32
 		}
 
-		internal override void GetCursorPos(IntPtr handle, out int x, out int y) {
+		public override void GetCursorPos(IntPtr handle, out int x, out int y) {
 			POINT	pt;
 
 			Win32GetCursorPos(out pt);
@@ -2521,7 +1769,7 @@ namespace System.Windows.Forms {
 			y=pt.y;
 		}
 
-		internal override void ScreenToClient(IntPtr handle, ref int x, ref int y)
+		public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 		{
 			POINT pnt = new POINT();			
 
@@ -2533,7 +1781,7 @@ namespace System.Windows.Forms {
 			y = pnt.y;
 		}
 
-		internal override void ClientToScreen(IntPtr handle, ref int x, ref int y) {			
+		public override void ClientToScreen(IntPtr handle, ref int x, ref int y) {			
 			POINT	pnt = new POINT();			
 
 			pnt.x = x;
@@ -2545,7 +1793,7 @@ namespace System.Windows.Forms {
 			y = pnt.y;
 		}
 
-  		internal override void ScreenToMenu(IntPtr handle, ref int x, ref int y) {
+  		public override void ScreenToMenu(IntPtr handle, ref int x, ref int y) {
  			RECT	rect;
  
  			Win32GetWindowRect(handle, out rect);
@@ -2558,7 +1806,7 @@ namespace System.Windows.Forms {
  			}
   		}
   
-  		internal override void MenuToScreen(IntPtr handle, ref int x, ref int y) {			
+  		public override void MenuToScreen(IntPtr handle, ref int x, ref int y) {			
  			RECT	rect;
  
  			Win32GetWindowRect(handle, out rect);
@@ -2567,12 +1815,12 @@ namespace System.Windows.Forms {
  			return;
   		}
 
-		internal override void SendAsyncMethod (AsyncMethodData method)
+		public override void SendAsyncMethod (AsyncMethodData method)
 		{
 			Win32PostMessage(GetFosterParent(), Msg.WM_ASYNC_MESSAGE, IntPtr.Zero, (IntPtr)GCHandle.Alloc (method));
 		}
 
-		internal override void SetTimer (Timer timer)
+		public override void SetTimer (Timer timer)
 		{
 			IntPtr	FosterParent=GetFosterParent();
 			int	index;
@@ -2589,7 +1837,7 @@ namespace System.Windows.Forms {
 				timer.window = IntPtr.Zero;
 		}
 
-		internal override void KillTimer (Timer timer)
+		public override void KillTimer (Timer timer)
 		{
 			int	index;
 
@@ -2602,20 +1850,20 @@ namespace System.Windows.Forms {
 			}
 		}
 		
-		internal override void CreateCaret(IntPtr hwnd, int width, int height) {
+		public override void CreateCaret(IntPtr hwnd, int width, int height) {
 			Win32CreateCaret(hwnd, IntPtr.Zero, width, height);
 			caret_visible = false;
 		}
 
-		internal override void DestroyCaret(IntPtr hwnd) {
+		public override void DestroyCaret(IntPtr hwnd) {
 			Win32DestroyCaret();
 		}
 
-		internal override void SetCaretPos(IntPtr hwnd, int x, int y) {
+		public override void SetCaretPos(IntPtr hwnd, int x, int y) {
 			Win32SetCaretPos(x, y);
 		}
 
-		internal override void CaretVisible(IntPtr hwnd, bool visible) {
+		public override void CaretVisible(IntPtr hwnd, bool visible) {
 			if (visible) {
 				if (!caret_visible) {
 					Win32ShowCaret(hwnd);
@@ -2629,19 +1877,19 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override IntPtr GetFocus() {
+		public override IntPtr GetFocus() {
 			return Win32GetFocus();
 		}
 
-		internal override void SetFocus(IntPtr hwnd) {
+		public override void SetFocus(IntPtr hwnd) {
 			Win32SetFocus(hwnd);
 		}
 
-		internal override IntPtr GetActive() {
+		public override IntPtr GetActive() {
 			return Win32GetActiveWindow();
 		}
 
-		internal override bool GetFontMetrics(Graphics g, Font font, out int ascent, out int descent) {
+		public override bool GetFontMetrics(Graphics g, Font font, out int ascent, out int descent) {
 			IntPtr		dc;
 			IntPtr		prevobj;
 			TEXTMETRIC	tm;
@@ -2669,7 +1917,7 @@ namespace System.Windows.Forms {
 			return true;
 		}
 
-		internal override void ScrollWindow(IntPtr hwnd, Rectangle rectangle, int XAmount, int YAmount, bool with_children) {
+		public override void ScrollWindow(IntPtr hwnd, Rectangle rectangle, int XAmount, int YAmount, bool with_children) {
 			RECT	rect;
 
 			rect = new RECT();
@@ -2682,11 +1930,11 @@ namespace System.Windows.Forms {
 			Win32UpdateWindow(hwnd);
 		}
 
-		internal override void ScrollWindow(IntPtr hwnd, int XAmount, int YAmount, bool with_children) {
+		public override void ScrollWindow(IntPtr hwnd, int XAmount, int YAmount, bool with_children) {
 			Win32ScrollWindowEx(hwnd, XAmount, YAmount, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, ScrollWindowExFlags.SW_INVALIDATE | ScrollWindowExFlags.SW_ERASE | (with_children ? ScrollWindowExFlags.SW_SCROLLCHILDREN : ScrollWindowExFlags.SW_NONE));
 		}
 
-		internal override bool SystrayAdd(IntPtr hwnd, string tip, Icon icon, out ToolTip tt) {
+		public override bool SystrayAdd(IntPtr hwnd, string tip, Icon icon, out ToolTip tt) {
 			NOTIFYICONDATA	nid;
 
 			nid = new NOTIFYICONDATA();
@@ -2712,7 +1960,7 @@ namespace System.Windows.Forms {
 			return Win32Shell_NotifyIcon(NotifyIconMessage.NIM_ADD, ref nid);
 		}
 
-		internal override bool SystrayChange(IntPtr hwnd, string tip, Icon icon, ref ToolTip tt) {
+		public override bool SystrayChange(IntPtr hwnd, string tip, Icon icon, ref ToolTip tt) {
 			NOTIFYICONDATA	nid;
 
 			nid = new NOTIFYICONDATA();
@@ -2737,7 +1985,7 @@ namespace System.Windows.Forms {
 			return Win32Shell_NotifyIcon(NotifyIconMessage.NIM_MODIFY, ref nid);
 		}
 
-		internal override void SystrayRemove(IntPtr hwnd, ref ToolTip tt) {
+		public override void SystrayRemove(IntPtr hwnd, ref ToolTip tt) {
 			NOTIFYICONDATA	nid;
 
 			nid = new NOTIFYICONDATA();
@@ -2750,7 +1998,7 @@ namespace System.Windows.Forms {
 			Win32Shell_NotifyIcon(NotifyIconMessage.NIM_DELETE, ref nid);
 		}
 
-		internal override void SystrayBalloon(IntPtr hwnd, int timeout, string title, string text, ToolTipIcon icon)
+		public override void SystrayBalloon(IntPtr hwnd, int timeout, string title, string text, ToolTipIcon icon)
 		{
 			NOTIFYICONDATA	nid;
 
@@ -2768,16 +2016,16 @@ namespace System.Windows.Forms {
 			Win32Shell_NotifyIcon(NotifyIconMessage.NIM_MODIFY, ref nid);
 		}
 
-		internal override void SetBorderStyle(IntPtr handle, FormBorderStyle border_style) {
+		public override void SetBorderStyle(IntPtr handle, FormBorderStyle border_style) {
 			// Nothing to do on Win32
 		}
 
-		internal override void SetMenu(IntPtr handle, Menu menu) {
+		public override void SetMenu(IntPtr handle, Menu menu) {
 			// Trigger WM_NCCALC
 			Win32SetWindowPos(handle, IntPtr.Zero, 0, 0, 0, 0, SetWindowPosFlags.SWP_FRAMECHANGED | SetWindowPosFlags.SWP_NOMOVE | SetWindowPosFlags.SWP_NOSIZE);
 		}
 
-		internal override Point GetMenuOrigin(IntPtr handle) {
+		public override Point GetMenuOrigin(IntPtr handle) {
 			Form form = Control.FromHandle (handle) as Form;
 			
 			if (form != null) {
@@ -2795,18 +2043,18 @@ namespace System.Windows.Forms {
 			return new Point(SystemInformation.FrameBorderSize.Width, SystemInformation.FrameBorderSize.Height + ThemeEngine.Current.CaptionHeight);
 		}
 
-		internal override void SetIcon(IntPtr hwnd, Icon icon) {
+		public override void SetIcon(IntPtr hwnd, Icon icon) {
 			Win32SendMessage(hwnd, Msg.WM_SETICON, (IntPtr)1, icon == null ? IntPtr.Zero : icon.Handle);	// 1 = large icon (0 would be small)
 		}
 
-		internal override void ClipboardClose(IntPtr handle) {
+		public override void ClipboardClose(IntPtr handle) {
 			if (handle != clip_magic) {
 				throw new ArgumentException("handle is not a valid clipboard handle");
 			}
 			Win32CloseClipboard();
 		}
 
-		internal override int ClipboardGetID(IntPtr handle, string format) {
+		public override int ClipboardGetID(IntPtr handle, string format) {
 			if (handle != clip_magic) {
 				throw new ArgumentException("handle is not a valid clipboard handle");
 			}
@@ -2830,13 +2078,13 @@ namespace System.Windows.Forms {
 			return (int)Win32RegisterClipboardFormat(format);
 		}
 
-		internal override IntPtr ClipboardOpen(bool primary_selection) {
+		public override IntPtr ClipboardOpen(bool primary_selection) {
 			// Win32 does not have primary selection
 			Win32OpenClipboard(GetFosterParent());
 			return clip_magic;
 		}
 
-		internal override int[] ClipboardAvailableFormats(IntPtr handle) {
+		public override int[] ClipboardAvailableFormats(IntPtr handle) {
 			uint	format;
 			int[]	result;
 			int	count;
@@ -2870,7 +2118,7 @@ namespace System.Windows.Forms {
 		}
 
 
-		internal override object ClipboardRetrieve(IntPtr handle, int type, XplatUI.ClipboardToObject converter) {
+		public override object ClipboardRetrieve(IntPtr handle, int type, XplatUI.ClipboardToObject converter) {
 			IntPtr	hmem;
 			IntPtr	data;
 			object	obj;
@@ -2924,7 +2172,7 @@ namespace System.Windows.Forms {
 
 		}
 
-		internal override void ClipboardStore(IntPtr handle, object obj, int type, XplatUI.ObjectToClipboard converter, bool copy)
+		public override void ClipboardStore(IntPtr handle, object obj, int type, XplatUI.ObjectToClipboard converter, bool copy)
 		{
 			byte[]	data = null;
 
@@ -3048,7 +2296,7 @@ namespace System.Windows.Forms {
 		}
 
 
-		internal override void SetAllowDrop(IntPtr hwnd, bool allowed) {
+		public override void SetAllowDrop(IntPtr hwnd, bool allowed) {
 			if (allowed) {
 				Win32DnD.RegisterDropTarget(hwnd);
 			} else {
@@ -3056,13 +2304,13 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override DragDropEffects StartDrag(IntPtr hwnd, object data, DragDropEffects allowedEffects) {
+		public override DragDropEffects StartDrag(IntPtr hwnd, object data, DragDropEffects allowedEffects) {
 			return Win32DnD.StartDrag(hwnd, data, allowedEffects);
 		}
 
 		// XXX this doesn't work at all for FrameStyle.Dashed - it draws like Thick, and in the Thick case
 		// the corners are drawn incorrectly.
-		internal override void DrawReversibleFrame (Rectangle rectangle, Color backColor, FrameStyle style) {
+		public override void DrawReversibleFrame (Rectangle rectangle, Color backColor, FrameStyle style) {
 			IntPtr		hdc;
 			IntPtr		pen;
 			IntPtr		oldpen;
@@ -3103,7 +2351,7 @@ namespace System.Windows.Forms {
 			Win32ReleaseDC(IntPtr.Zero, hdc);
 		}
 
-		internal override void DrawReversibleLine(Point start, Point end, Color backColor) {
+		public override void DrawReversibleLine(Point start, Point end, Color backColor) {
 			IntPtr		hdc;
 			IntPtr		pen;
 			IntPtr		oldpen;
@@ -3138,7 +2386,7 @@ namespace System.Windows.Forms {
 			Win32ReleaseDC(IntPtr.Zero, hdc);
 		}
 
-		internal override void FillReversibleRectangle (Rectangle rectangle, Color backColor)
+		public override void FillReversibleRectangle (Rectangle rectangle, Color backColor)
 		{
 			RECT	rect;
 
@@ -3171,7 +2419,7 @@ namespace System.Windows.Forms {
 			Win32ReleaseDC(IntPtr.Zero, hdc);
 		}
 
-		internal override void DrawReversibleRectangle(IntPtr handle, Rectangle rect, int line_width) {
+		public override void DrawReversibleRectangle(IntPtr handle, Rectangle rect, int line_width) {
 			IntPtr		hdc;
 			IntPtr		pen;
 			IntPtr		oldpen;
@@ -3222,7 +2470,7 @@ namespace System.Windows.Forms {
 			Win32ReleaseDC(IntPtr.Zero, hdc);
 		}
 
-		internal override SizeF GetAutoScaleSize(Font font) {
+		public override SizeF GetAutoScaleSize(Font font) {
 			float		width;
 			string		magic_string = "The quick brown fox jumped over the lazy dog.";
 			double		magic_number = 44.549996948242189;
@@ -3234,15 +2482,15 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override IntPtr SendMessage (IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam) {
+		public override IntPtr SendMessage (IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam) {
 			return Win32SendMessage(hwnd, message, wParam, lParam);
 		}
 
-		internal override bool PostMessage (IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam) {
+		public override bool PostMessage (IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam) {
 			return Win32PostMessage(hwnd, message, wParam, lParam);
 		}
 
-		internal override int SendInput (IntPtr hwnd, Queue keys) {
+		public override int SendInput (IntPtr hwnd, Queue keys) {
 			INPUT[] inputs = new INPUT[keys.Count];
 			const Int32 INPUT_KEYBOARD = 1;
 			uint returns = 0;
@@ -3263,7 +2511,7 @@ namespace System.Windows.Forms {
 			return (int) returns;
 		}
 
-		internal override int KeyboardSpeed {
+		public override int KeyboardSpeed {
 			get {
 				int speed = 0;
 				Win32SystemParametersInfo(SPIAction.SPI_GETKEYBOARDSPEED, 0, ref speed, 0);
@@ -3274,7 +2522,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override int KeyboardDelay {
+		public override int KeyboardDelay {
 			get {
 				int delay = 1;
 				Win32SystemParametersInfo(SPIAction.SPI_GETKEYBOARDDELAY, 0, ref delay, 0);
@@ -3298,7 +2546,7 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		internal override void CreateOffscreenDrawable (IntPtr handle, int width, int height, out object offscreen_drawable)
+		public override void CreateOffscreenDrawable (IntPtr handle, int width, int height, out object offscreen_drawable)
 		{
 			Graphics destG = Graphics.FromHwnd (handle);
 			IntPtr destHdc = destG.GetHdc ();
@@ -3312,12 +2560,12 @@ namespace System.Windows.Forms {
 			destG.ReleaseHdc (destHdc);
 		}
 
-		internal override Graphics GetOffscreenGraphics (object offscreen_drawable)
+		public override Graphics GetOffscreenGraphics (object offscreen_drawable)
 		{
 			return Graphics.FromHdc (((WinBuffer)offscreen_drawable).hdc);
 		}
 
-		internal override void BlitFromOffscreen (IntPtr dest_handle, Graphics dest_dc, object offscreen_drawable, Graphics offscreen_dc, Rectangle r)
+		public override void BlitFromOffscreen (IntPtr dest_handle, Graphics dest_dc, object offscreen_drawable, Graphics offscreen_dc, Rectangle r)
 		{
 			WinBuffer wb = (WinBuffer)offscreen_drawable;
 
@@ -3326,7 +2574,7 @@ namespace System.Windows.Forms {
 			dest_dc.ReleaseHdc (destHdc);
 		}
 
-		internal override void DestroyOffscreenDrawable (object offscreen_drawable)
+		public override void DestroyOffscreenDrawable (object offscreen_drawable)
 		{
 			WinBuffer wb = (WinBuffer)offscreen_drawable;
 
@@ -3334,12 +2582,12 @@ namespace System.Windows.Forms {
 			Win32DeleteDC (wb.hdc);
 		}
 
-		internal override void SetForegroundWindow (IntPtr handle)
+		public override void SetForegroundWindow (IntPtr handle)
 		{
 			Win32SetForegroundWindow(handle);
 		}
 
-		internal override event EventHandler Idle;
+		public override event EventHandler Idle;
 		#endregion	// Public Static Methods
 
 		#region Win32 Imports

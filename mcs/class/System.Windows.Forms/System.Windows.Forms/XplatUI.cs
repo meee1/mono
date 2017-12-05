@@ -25,11 +25,11 @@
 // NOT COMPLETE
 
 // define to log API calls to stdout
-#undef DriverDebug
-#undef DriverDebugPaint
-#undef DriverDebugCreate
-#undef DriverDebugDestroy
-#undef DriverDebugState
+//#undef DriverDebug
+//#undef DriverDebugPaint
+//#undef DriverDebugCreate
+//#undef DriverDebugDestroy
+//#undef DriverDebugState
 
 using System;
 using System.Drawing;
@@ -39,10 +39,11 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 
+
 namespace System.Windows.Forms {
-	internal class XplatUI {
+	public class XplatUI {
 		#region Local Variables
-		static XplatUIDriver		driver;
+		public static XplatUIDriver		driver;
 //		static String			default_class_name;
 		internal static ArrayList key_filters = new ArrayList ();
 		#endregion	// Local Variables
@@ -57,7 +58,8 @@ namespace System.Windows.Forms {
 		static void DriverDebug (string format, params object [] args)
 		{
 			Console.WriteLine (String.Format (format, args));
-		}
+            System.Diagnostics.Debug.WriteLine(String.Format(format, args));
+        }
 		
 		#endregion	// Private Methods
 
@@ -92,8 +94,8 @@ namespace System.Windows.Forms {
 			// and try to register same class name we fail.
 //			default_class_name = "SWFClass" + System.Threading.Thread.GetDomainID ().ToString ();
 
-			if (RunningOnUnix) {
-				//if (Environment.GetEnvironmentVariable ("not_supported_MONO_MWF_USE_NEW_X11_BACKEND") != null) {
+		//	if (RunningOnUnix) {
+/*				//if (Environment.GetEnvironmentVariable ("not_supported_MONO_MWF_USE_NEW_X11_BACKEND") != null) {
 				//        driver=XplatUIX11_new.GetInstance ();
 				//} else
 				var loadable = Environment.GetEnvironmentVariable ("MONO_MWF_DRIVER");
@@ -120,10 +122,12 @@ namespace System.Windows.Forms {
 						}
 						Marshal.FreeHGlobal (buf);
 					}
-				}
-			} else {
+				}*/
+		//	} else 
+            {
 				driver=XplatUIWin32.GetInstance ();
 			}
+            
 
 			driver.InitializeDriver ();
 
@@ -154,7 +158,7 @@ namespace System.Windows.Forms {
 		// Compose name with current domain id because on Win32 we register class name
 		// and name must be unique to process. If we load MWF into multiple appdomains
 		// and try to register same class name we fail.
-		internal static string GetDefaultClassName (Type type)
+		public static string GetDefaultClassName (Type type)
 		{
 			return "SWFClass" + Thread.GetDomainID ().ToString () + "." + type.ToString ();
 		}
