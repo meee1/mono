@@ -85,7 +85,7 @@ namespace System.Windows.Forms {
 		private int firstDisplayedScrollingColumnHiddenWidth;
 		private int firstDisplayedScrollingColumnIndex;
 		private int firstDisplayedScrollingRowIndex;
-		private Color gridColor = Color.FromKnownColor(KnownColor.ControlDark);
+		private Color gridColor = Color.Black;
 		private int horizontalScrollingOffset;
 		private DataGridViewCell hover_cell = null;
 		private bool isCurrentCellDirty;

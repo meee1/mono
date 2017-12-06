@@ -48,10 +48,13 @@ namespace System.Resources {
 			this.Table = new Hashtable();
 			this.ReadResources();
 		}
-		#endregion	// Public Constructors
 
-		#region Public Instance Methods
-		public override Type GetDefaultReader() {
+        public ResXResourceReader Reader { get; private set; }
+        public Hashtable Table { get; private set; }
+        #endregion   // Public Constructors
+
+        #region Public Instance Methods
+        public override Type GetDefaultReader() {
 			return typeof(ResXResourceReader);
 		}
 
