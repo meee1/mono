@@ -31,7 +31,7 @@ using System.Windows.Forms.VisualStyles;
 
 namespace System.Windows.Forms
 {
-	public class ProfessionalColorTable
+    public class ProfessionalColorTable
 	{
 		#region Private Variables
 		private bool use_system_colors = false;
@@ -170,7 +170,7 @@ namespace System.Windows.Forms
 
 		#region Private Methods
 		private void CalculateColors ()
-		{
+		{/*
 			switch (GetCurrentStyle ()) {
 				case ColorSchemes.Classic:
 					button_checked_gradient_begin = Color.Empty;
@@ -609,6 +609,7 @@ namespace System.Windows.Forms
 					tool_strip_panel_gradient_end = Color.FromArgb (253, 253, 253);
 					break;
 			}
+            */
 		}
 		
 		private ColorSchemes GetCurrentStyle ()

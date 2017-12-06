@@ -197,7 +197,7 @@ namespace System.Windows.Forms
 		{
 		}
 
-		private void SetSystemColors (KnownColor kc, Color value)
+        private void SetSystemColors (KnownColor kc, Color value)
 		{
 			if (update == null) {
 				Type known_colors = Type.GetType ("System.Drawing.KnownColors, " + Consts.AssemblySystem_Drawing);
