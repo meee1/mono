@@ -4,7 +4,7 @@ namespace System.Drawing
 {
     /// <summary>Specifies the known system colors.</summary>
     /// <filterpriority>2</filterpriority>
-    public enum KnownColor
+    internal enum KnownColor
     {
         /// <summary>The system-defined color of the active window's border.</summary>
         ActiveBorder = 1,
