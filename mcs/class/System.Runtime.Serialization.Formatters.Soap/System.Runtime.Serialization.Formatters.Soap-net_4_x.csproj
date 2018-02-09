@@ -16,7 +16,9 @@
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <NoStdLib>false</NoStdLib>
      <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <NoConfig>True</NoConfig>
+    <NoConfig>True</NoConfig>  <SignAssembly>true</SignAssembly>
+   <DelaySign>false</DelaySign>
+   <PublicSign>true</PublicSign>
     
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>
@@ -87,7 +89,8 @@
     <Compile Include="System.Runtime.Serialization.Formatters.Soap\SoapReader.cs" />
     <Compile Include="System.Runtime.Serialization.Formatters.Soap\SoapServices.cs" />
     <Compile Include="System.Runtime.Serialization.Formatters.Soap\SoapTypeMapper.cs" />
-    <Compile Include="System.Runtime.Serialization.Formatters.Soap\SoapWriter.cs" />  </ItemGroup>
+    <Compile Include="System.Runtime.Serialization.Formatters.Soap\SoapWriter.cs" />
+  </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
@@ -108,6 +111,7 @@
     <PostBuildEvent Condition=" '$(OS)' == 'Windows_NT' ">
 
     </PostBuildEvent>
+    <AssemblyOriginatorKeyFile>mono.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>

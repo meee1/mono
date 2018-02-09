@@ -15,7 +15,9 @@
     <IntermediateOutputPath>obj-net_4_x-$(HostPlatform)</IntermediateOutputPath>
     <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
     <NoStdLib>false</NoStdLib> <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <NoConfig>True</NoConfig>
+    <NoConfig>True</NoConfig>  <SignAssembly>true</SignAssembly>
+   <DelaySign>false</DelaySign>
+   <PublicSign>true</PublicSign>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>
     </RootNamespace>
@@ -70,6 +72,7 @@
     </PostBuildEvent>
     <PostBuildEvent Condition=" '$(OS)' == 'Windows_NT' ">
     </PostBuildEvent>
+    <AssemblyOriginatorKeyFile>mono.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="Properties\" />
