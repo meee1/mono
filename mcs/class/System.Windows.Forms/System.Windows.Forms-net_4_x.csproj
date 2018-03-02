@@ -20,8 +20,7 @@
     <NoConfig>True</NoConfig> <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>
-    </RootNamespace>
+    <RootNamespace>System.Windows.Forms</RootNamespace>
     <AssemblyName>System.Windows.Forms</AssemblyName>
  <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <FileAlignment>512</FileAlignment>
@@ -32,15 +31,15 @@
     <DebugType>full</DebugType>
     <NoWarn>1699,618,612,809</NoWarn>
     <Optimize>false</Optimize>
-    <DefineConstants>TRACE;DEBUG;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;DriverDebug;NETSTANDARD2_0;NETSTANDARD2_0</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;DriverDebug;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;DriverDebug;NETSTANDARD2_0;NETSTANDARD2_0;NETSTANDARD2_0;NETSTANDARD2_0</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
+    <DebugType>full</DebugType>
     <NoWarn>1699,618,612,809</NoWarn>
-    <Optimize>true</Optimize>
-    <DefineConstants>NET_4_0;NET_4_5;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS</DefineConstants>
+    <Optimize>false</Optimize>
+    <DefineConstants>TRACE;DEBUG;DriverDebug;NET_4_0;NET_4_5;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;RELEASE;NETSTANDARD2_0;RELEASE;NETSTANDARD2_0</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -68,6 +67,23 @@
   <ItemGroup>
     <Compile Include="..\..\build\common\Consts.cs" />
     <Compile Include="..\..\build\common\MonoTODOAttribute.cs" />
+    <Compile Include="..\Accessibility\Accessibility\IAccessible.cs" Link="IAccessible.cs" />
+    <Compile Include="..\Accessibility\Accessibility\IAccessibleHandler.cs" Link="IAccessibleHandler.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\Header.cs" Link="Header.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\HeaderHandler.cs" Link="HeaderHandler.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\InternalRemotingServices.cs" Link="InternalRemotingServices.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\IRemotingFormatter.cs" Link="IRemotingFormatter.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\ISoapMessage.cs" Link="ISoapMessage.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\ISoapXsd.cs" Link="ISoapXsd.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapAttribute.cs" Link="SoapAttribute.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapDateTime.cs" Link="SoapDateTime.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapDuration.cs" Link="SoapDuration.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapFieldAttribute.cs" Link="SoapFieldAttribute.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapFormatter.cs" Link="SoapFormatter.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapReader.cs" Link="SoapReader.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapServices.cs" Link="SoapServices.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapTypeMapper.cs" Link="SoapTypeMapper.cs" />
+    <Compile Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap\SoapWriter.cs" Link="SoapWriter.cs" />
     <Compile Include="..\System\System\MonoToolsLocator.cs" />
     <Compile Include="Assembly\Locale.cs" />
     <Compile Include="System.Resources\AssemblyNamesTypeResolutionService.cs" />
@@ -816,9 +832,6 @@
     <Compile Include="System.Windows.Forms\OwnerDrawPropertyBag.cs" />
     <Compile Include="System.Windows.Forms\Padding.cs" />
     <Compile Include="System.Windows.Forms\PaddingConverter.cs" />
-    <Compile Include="System.Windows.Forms\PageSetupDialog.cs">
-      <SubType>Component</SubType>
-    </Compile>
     <Compile Include="System.Windows.Forms\PaintEventArgs.cs" />
     <Compile Include="System.Windows.Forms\PaintEventHandler.cs" />
     <Compile Include="System.Windows.Forms\Panel.cs">
@@ -836,16 +849,6 @@
     <Compile Include="System.Windows.Forms\PreProcessControlState.cs" />
     <Compile Include="System.Windows.Forms\PreviewKeyDownEventArgs.cs" />
     <Compile Include="System.Windows.Forms\PreviewKeyDownEventHandler.cs" />
-    <Compile Include="System.Windows.Forms\PrintControllerWithStatusDialog.cs" />
-    <Compile Include="System.Windows.Forms\PrintDialog.cs">
-      <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="System.Windows.Forms\PrintPreviewControl.cs">
-      <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="System.Windows.Forms\PrintPreviewDialog.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="System.Windows.Forms\ProfessionalColors.cs" />
     <Compile Include="System.Windows.Forms\ProfessionalColorTable.cs" />
     <Compile Include="System.Windows.Forms\ProgressBar.cs">
@@ -1247,7 +1250,13 @@
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>ecma.pub</AssemblyOriginatorKeyFile>
     <DelaySign>false</DelaySign>
-    <Version>4.0.0.1</Version>
+    <Version>4.0.0.2</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <ApplicationIcon />
+    <StartupObject />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|netstandard2.0|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <ItemGroup>
     <Folder Include="Properties\" />
@@ -1434,9 +1443,7 @@
       <Version>4.0.0</Version>
     </PackageReference>
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0-preview1-25914-04" />
-    <PackageReference Include="System.Drawing.Common">
-      <Version>4.5.0-preview1-25914-04</Version>
-    </PackageReference>
+    <PackageReference Include="System.Drawing.Common" Version="4.5.0-preview2-26225-02" />
     <PackageReference Include="System.Reflection" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
@@ -1445,7 +1452,25 @@
     <PackageReference Include="System.Security.Permissions" Version="4.5.0-preview1-25914-04" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Accessibility\Accessibility-net_4_x.csproj" />
-    <ProjectReference Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap-net_4_x.csproj" />
+    <Reference Include="OpenTK">
+      <HintPath>..\..\..\..\OpenTK.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenTK.GLControl">
+      <HintPath>..\..\..\..\OpenTK.GLControl.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="System.Windows.Forms\PageSetupDialog.cs">
+      <SubType>Component</SubType>
+    </None>
+    <None Update="System.Windows.Forms\PrintDialog.cs">
+      <SubType>Component</SubType>
+    </None>
+    <None Update="System.Windows.Forms\PrintPreviewControl.cs">
+      <SubType>Component</SubType>
+    </None>
+    <None Update="System.Windows.Forms\PrintPreviewDialog.cs">
+      <SubType>Form</SubType>
+    </None>
   </ItemGroup>
 </Project>

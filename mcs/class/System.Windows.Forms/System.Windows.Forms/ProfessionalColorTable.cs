@@ -170,30 +170,30 @@ namespace System.Windows.Forms
 
 		#region Private Methods
 		private void CalculateColors ()
-		{/*
+		{
 			switch (GetCurrentStyle ()) {
 				case ColorSchemes.Classic:
 					button_checked_gradient_begin = Color.Empty;
 					button_checked_gradient_end = Color.Empty;
 					button_checked_gradient_middle = Color.Empty;
 					button_checked_highlight = Color.FromArgb (184, 191, 211);
-					button_checked_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+                    button_checked_highlight_border = SystemColors.Highlight;
 
-					button_pressed_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_border = SystemColors.Highlight;
 					button_pressed_gradient_begin = Color.FromArgb (133, 146, 181);
 					button_pressed_gradient_end = Color.FromArgb (133, 146, 181);
 					button_pressed_gradient_middle = Color.FromArgb (133, 146, 181);
 					button_pressed_highlight = Color.FromArgb (131, 144, 179);
-					button_pressed_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_highlight_border = SystemColors.Highlight;
 
-					button_selected_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_selected_border = SystemColors.Highlight;
 					button_selected_gradient_begin = Color.FromArgb (182, 189, 210);
 					button_selected_gradient_end = Color.FromArgb (182, 189, 210);
 					button_selected_gradient_middle = Color.FromArgb (182, 189, 210);
 					button_selected_highlight = Color.FromArgb (184, 191, 211);
-					button_selected_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_selected_highlight_border = SystemColors.Highlight;
 
-					check_background = Color.FromKnownColor (KnownColor.Highlight);
+					check_background = SystemColors.Highlight;
 					check_pressed_background = Color.FromArgb (133, 146, 181);
 					check_selected_background = Color.FromArgb (133, 146, 181);
 
@@ -250,21 +250,21 @@ namespace System.Windows.Forms
 					button_checked_gradient_end = use_system_colors ? Color.Empty : Color.FromArgb (255, 166, 76);
 					button_checked_gradient_middle = use_system_colors ? Color.Empty : Color.FromArgb (255, 195, 116);
 					button_checked_highlight = Color.FromArgb (195, 211, 237);
-					button_checked_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
-					button_pressed_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (0, 0, 128);
+					button_checked_highlight_border = SystemColors.Highlight;
+					button_pressed_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (0, 0, 128);
 					button_pressed_gradient_begin = use_system_colors ? Color.FromArgb (152, 181, 226) : Color.FromArgb (254, 128, 62);
 					button_pressed_gradient_end = use_system_colors ? Color.FromArgb (152, 181, 226) : Color.FromArgb (255, 223, 154);
 					button_pressed_gradient_middle = use_system_colors ? Color.FromArgb (152, 181, 226) : Color.FromArgb (255, 177, 109);
 					button_pressed_highlight = use_system_colors ? Color.FromArgb (150, 179, 225) : Color.FromArgb (150, 179, 225);
-					button_pressed_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
-					button_selected_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (0, 0, 128);
+					button_pressed_highlight_border = SystemColors.Highlight;
+					button_selected_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (0, 0, 128);
 					button_selected_gradient_begin = use_system_colors ? Color.FromArgb (193, 210, 238) : Color.FromArgb (255, 255, 222);
 					button_selected_gradient_end = use_system_colors ? Color.FromArgb (193, 210, 238) : Color.FromArgb (255, 203, 136);
 					button_selected_gradient_middle = use_system_colors ? Color.FromArgb (193, 210, 238) : Color.FromArgb (255, 225, 172);
 					button_selected_highlight = use_system_colors ? Color.FromArgb (195, 211, 237) : Color.FromArgb (195, 211, 237);
-					button_selected_highlight_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (0, 0, 128);
+					button_selected_highlight_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (0, 0, 128);
 
-					check_background = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (255, 192, 111);
+					check_background = use_system_colors ? SystemColors.Highlight : Color.FromArgb (255, 192, 111);
 					check_pressed_background = use_system_colors ? Color.FromArgb (152, 181, 226) : Color.FromArgb (254, 128, 62);
 					check_selected_background = use_system_colors ? Color.FromArgb (152, 181, 226) : Color.FromArgb (254, 128, 62);
 
@@ -321,23 +321,23 @@ namespace System.Windows.Forms
 					button_checked_gradient_end = use_system_colors ? Color.Empty : Color.FromArgb (255, 166, 76);
 					button_checked_gradient_middle = use_system_colors ? Color.Empty : Color.FromArgb (255, 195, 116);
 					button_checked_highlight = Color.FromArgb (223, 227, 213);
-					button_checked_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_checked_highlight_border = SystemColors.Highlight;
 
-					button_pressed_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (63, 93, 56);
+					button_pressed_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (63, 93, 56);
 					button_pressed_gradient_begin = use_system_colors ? Color.FromArgb (201, 208, 184) : Color.FromArgb (254, 128, 62);
 					button_pressed_gradient_end = use_system_colors ? Color.FromArgb (201, 208, 184) : Color.FromArgb (255, 223, 154);
 					button_pressed_gradient_middle = use_system_colors ? Color.FromArgb (201, 208, 184) : Color.FromArgb (255, 177, 109);
 					button_pressed_highlight = use_system_colors ? Color.FromArgb (200, 206, 182) : Color.FromArgb (200, 206, 182);
-					button_pressed_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_highlight_border = SystemColors.Highlight;
 
-					button_selected_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (63, 93, 56);
+					button_selected_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (63, 93, 56);
 					button_selected_gradient_begin = use_system_colors ? Color.FromArgb (223, 227, 212) : Color.FromArgb (255, 255, 222);
 					button_selected_gradient_end = use_system_colors ? Color.FromArgb (223, 227, 212) : Color.FromArgb (255, 203, 136);
 					button_selected_gradient_middle = use_system_colors ? Color.FromArgb (223, 227, 212) : Color.FromArgb (255, 225, 172);
 					button_selected_highlight = use_system_colors ? Color.FromArgb (223, 227, 213) : Color.FromArgb (223, 227, 213);
-					button_selected_highlight_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (63, 93, 56);
+					button_selected_highlight_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (63, 93, 56);
 
-					check_background = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (255, 192, 111);
+					check_background = use_system_colors ? SystemColors.Highlight : Color.FromArgb (255, 192, 111);
 					check_pressed_background = use_system_colors ? Color.FromArgb (201, 208, 184) : Color.FromArgb (254, 128, 62);
 					check_selected_background = use_system_colors ? Color.FromArgb (201, 208, 184) : Color.FromArgb (254, 128, 62);
 
@@ -394,23 +394,23 @@ namespace System.Windows.Forms
 					button_checked_gradient_end = use_system_colors ? Color.Empty : Color.FromArgb (255, 166, 76);
 					button_checked_gradient_middle = use_system_colors ? Color.Empty : Color.FromArgb (255, 195, 116);
 					button_checked_highlight = Color.FromArgb (231, 232, 235);
-					button_checked_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_checked_highlight_border = SystemColors.Highlight;
 
-					button_pressed_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (75, 75, 111);
+					button_pressed_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (75, 75, 111);
 					button_pressed_gradient_begin = use_system_colors ? Color.FromArgb (217, 218, 223) : Color.FromArgb (254, 128, 62);
 					button_pressed_gradient_end = use_system_colors ? Color.FromArgb (217, 218, 223) : Color.FromArgb (255, 223, 154);
 					button_pressed_gradient_middle = use_system_colors ? Color.FromArgb (217, 218, 223) : Color.FromArgb (255, 177, 109);
 					button_pressed_highlight = use_system_colors ? Color.FromArgb (215, 216, 222) : Color.FromArgb (215, 216, 222);
-					button_pressed_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_highlight_border = SystemColors.Highlight;
 
-					button_selected_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (75, 75, 111);
+					button_selected_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (75, 75, 111);
 					button_selected_gradient_begin = use_system_colors ? Color.FromArgb (232, 233, 236) : Color.FromArgb (255, 255, 222);
 					button_selected_gradient_end = use_system_colors ? Color.FromArgb (232, 233, 236) : Color.FromArgb (255, 203, 136);
 					button_selected_gradient_middle = use_system_colors ? Color.FromArgb (232, 233, 236) : Color.FromArgb (255, 225, 172);
 					button_selected_highlight = use_system_colors ? Color.FromArgb (231, 232, 235) : Color.FromArgb (231, 232, 235);
-					button_selected_highlight_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (75, 75, 111);
+					button_selected_highlight_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (75, 75, 111);
 
-					check_background = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (255, 192, 111);
+					check_background = use_system_colors ? SystemColors.Highlight : Color.FromArgb (255, 192, 111);
 					check_pressed_background = use_system_colors ? Color.FromArgb (217, 218, 223) : Color.FromArgb (254, 128, 62);
 					check_selected_background = use_system_colors ? Color.FromArgb (217, 218, 223) : Color.FromArgb (254, 128, 62);
 
@@ -467,23 +467,23 @@ namespace System.Windows.Forms
 					button_checked_gradient_end = use_system_colors ? Color.Empty : Color.FromArgb (226, 229, 238);
 					button_checked_gradient_middle = use_system_colors ? Color.Empty : Color.FromArgb (226, 229, 238);
 					button_checked_highlight = Color.FromArgb (196, 208, 229);
-					button_checked_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_checked_highlight_border = SystemColors.Highlight;
 
-					button_pressed_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (51, 94, 168);
+					button_pressed_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (51, 94, 168);
 					button_pressed_gradient_begin = use_system_colors ? Color.FromArgb (153, 175, 212) : Color.FromArgb (153, 175, 212);
 					button_pressed_gradient_end = use_system_colors ? Color.FromArgb (153, 175, 212) : Color.FromArgb (153, 175, 212);
 					button_pressed_gradient_middle = use_system_colors ? Color.FromArgb (153, 175, 212) : Color.FromArgb (153, 175, 212);
 					button_pressed_highlight = use_system_colors ? Color.FromArgb (152, 173, 210) : Color.FromArgb (152, 173, 210);
-					button_pressed_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_highlight_border = SystemColors.Highlight;
 
-					button_selected_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (51, 94, 168);
+					button_selected_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (51, 94, 168);
 					button_selected_gradient_begin = use_system_colors ? Color.FromArgb (194, 207, 229) : Color.FromArgb (194, 207, 229);
 					button_selected_gradient_end = use_system_colors ? Color.FromArgb (194, 207, 229) : Color.FromArgb (194, 207, 229);
 					button_selected_gradient_middle = use_system_colors ? Color.FromArgb (194, 207, 229) : Color.FromArgb (194, 207, 229);
 					button_selected_highlight = use_system_colors ? Color.FromArgb (196, 208, 229) : Color.FromArgb (196, 208, 229);
-					button_selected_highlight_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (51, 94, 168);
+					button_selected_highlight_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (51, 94, 168);
 
-					check_background = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (226, 229, 238);
+					check_background = use_system_colors ? SystemColors.Highlight : Color.FromArgb (226, 229, 238);
 					check_pressed_background = use_system_colors ? Color.FromArgb (153, 175, 212) : Color.FromArgb (51, 94, 168);
 					check_selected_background = use_system_colors ? Color.FromArgb (153, 175, 212) : Color.FromArgb (51, 94, 168);
 
@@ -540,23 +540,23 @@ namespace System.Windows.Forms
 					button_checked_gradient_end = Color.Empty;
 					button_checked_gradient_middle = Color.Empty;
 					button_checked_highlight = Color.FromArgb (196, 225, 255);
-					button_checked_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_checked_highlight_border = SystemColors.Highlight;
 
-					button_pressed_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_border = SystemColors.Highlight;
 					button_pressed_gradient_begin = Color.FromArgb (153, 204, 255);
 					button_pressed_gradient_end = Color.FromArgb (153, 204, 255);
 					button_pressed_gradient_middle = Color.FromArgb (153, 204, 255);
 					button_pressed_highlight = Color.FromArgb (152, 203, 255);
-					button_pressed_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_pressed_highlight_border = SystemColors.Highlight;
 
-					button_selected_border = use_system_colors ? Color.FromKnownColor (KnownColor.Highlight) : Color.FromArgb (51, 94, 168);
+					button_selected_border = use_system_colors ? SystemColors.Highlight : Color.FromArgb (51, 94, 168);
 					button_selected_gradient_begin = Color.FromArgb (194, 224, 255);
 					button_selected_gradient_end = Color.FromArgb (194, 224, 255);
 					button_selected_gradient_middle = Color.FromArgb (194, 224, 255);
 					button_selected_highlight = Color.FromArgb (196, 225, 255);
-					button_selected_highlight_border = Color.FromKnownColor (KnownColor.Highlight);
+					button_selected_highlight_border = SystemColors.Highlight;
 
-					check_background = Color.FromKnownColor (KnownColor.Highlight);
+					check_background = SystemColors.Highlight;
 					check_pressed_background = Color.FromArgb (153, 204, 255);
 					check_selected_background = Color.FromArgb (153, 204, 255);
 
@@ -609,7 +609,6 @@ namespace System.Windows.Forms
 					tool_strip_panel_gradient_end = Color.FromArgb (253, 253, 253);
 					break;
 			}
-            */
 		}
 		
 		private ColorSchemes GetCurrentStyle ()
