@@ -26,7 +26,7 @@
 
 using System;
 using System.Threading;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.ComponentModel;
 using System.Collections;
 using System.Diagnostics;

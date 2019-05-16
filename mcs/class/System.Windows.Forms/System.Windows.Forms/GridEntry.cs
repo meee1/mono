@@ -28,7 +28,7 @@
 
 using System;
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Design;
 using System.Windows.Forms;
 using System.Windows.Forms.Design;

@@ -26,7 +26,7 @@
 
 using System;
 using System.Runtime.Serialization;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.ComponentModel;
 using System.Reflection;
 using System.ComponentModel.Design;

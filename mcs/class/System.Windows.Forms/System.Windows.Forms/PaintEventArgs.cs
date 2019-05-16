@@ -26,7 +26,8 @@
 
 // COMPLETE
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	public class PaintEventArgs : EventArgs, IDisposable {
@@ -68,7 +69,7 @@ namespace System.Windows.Forms {
 		#endregion	// Public Instance Methods
 
                 // Returns the previous graphics
-		internal Graphics SetGraphics (Graphics g)
+		public Graphics SetGraphics (Graphics g)
 		{
 			Graphics res = graphics;
 			graphics = g;
@@ -76,7 +77,7 @@ namespace System.Windows.Forms {
 			return res;
 		}
 
-		internal void SetClip (Rectangle clip)
+		public void SetClip (Rectangle clip)
 		{
 			clip_rectangle = clip;
 		}

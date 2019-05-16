@@ -25,7 +25,7 @@
 //
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 

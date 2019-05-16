@@ -31,9 +31,10 @@
 
 using System;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[ComVisible (true)]

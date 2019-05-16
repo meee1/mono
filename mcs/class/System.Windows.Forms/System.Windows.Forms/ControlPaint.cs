@@ -26,7 +26,7 @@
 
 // NOT COMPLETE
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 

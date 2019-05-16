@@ -26,7 +26,7 @@
 //
 
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Threading;
 
 namespace System.Windows.Forms {

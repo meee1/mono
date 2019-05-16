@@ -29,7 +29,7 @@
 using System;
 using System.ComponentModel;
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -42,12 +42,12 @@ namespace System.Windows.Forms {
 	//
 
 	[StructLayout(LayoutKind.Sequential)]
-	internal struct XAnyEvent {
-		internal XEventName	type;
+	public struct XAnyEvent {
+		public XEventName	type;
 		internal IntPtr		serial;
 		internal bool		send_event;
 		internal IntPtr		display;
-		internal IntPtr		window;
+		public IntPtr		window;
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
@@ -181,16 +181,16 @@ namespace System.Windows.Forms {
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	internal struct XExposeEvent {
+    public struct XExposeEvent {
 		internal XEventName	type;
 		internal IntPtr		serial;
 		internal bool		send_event;
 		internal IntPtr		display;
 		internal IntPtr		window;
-		internal int		x;
-		internal int		y;
-		internal int		width;
-		internal int		height;
+		public int		x;
+        public int		y;
+		public int		width;
+		public int		height;
 		internal int		count;
 	}
 
@@ -513,15 +513,15 @@ namespace System.Windows.Forms {
 	}
 
 	[StructLayout(LayoutKind.Explicit)]
-	internal struct XEvent {
-		[ FieldOffset(0) ] internal XEventName type;
-		[ FieldOffset(0) ] internal XAnyEvent AnyEvent;
+	public struct XEvent {
+		[ FieldOffset(0) ] public XEventName type;
+		[ FieldOffset(0) ] public XAnyEvent AnyEvent;
 		[ FieldOffset(0) ] internal XKeyEvent KeyEvent;
 		[ FieldOffset(0) ] internal XButtonEvent ButtonEvent;
 		[ FieldOffset(0) ] internal XMotionEvent MotionEvent;
 		[ FieldOffset(0) ] internal XCrossingEvent CrossingEvent;
 		[ FieldOffset(0) ] internal XFocusChangeEvent FocusChangeEvent;
-		[ FieldOffset(0) ] internal XExposeEvent ExposeEvent;
+		[ FieldOffset(0) ] public XExposeEvent ExposeEvent;
 		[ FieldOffset(0) ] internal XGraphicsExposeEvent GraphicsExposeEvent;
 		[ FieldOffset(0) ] internal XNoExposeEvent NoExposeEvent;
 		[ FieldOffset(0) ] internal XVisibilityEvent VisibilityEvent;
@@ -696,7 +696,7 @@ namespace System.Windows.Forms {
 		InputOnly	= 2
 	}
 
-	internal enum XEventName {
+	public enum XEventName {
 		KeyPress                = 2,
 		KeyRelease              = 3,
 		ButtonPress             = 4,

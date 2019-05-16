@@ -28,7 +28,9 @@
 //
 
 using HRESULT = System.Int32;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using MissionPlanner.Utilities.Drawing;
+
 namespace System.Windows.Forms.VisualStyles
 {
 	interface IVisualStyles

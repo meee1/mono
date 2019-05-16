@@ -26,7 +26,7 @@
 //	Jonathan Pobst (monkey@jpobst.com)
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
 using System.Windows.Forms.Layout;

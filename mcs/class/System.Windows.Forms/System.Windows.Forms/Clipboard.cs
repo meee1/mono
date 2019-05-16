@@ -27,7 +27,7 @@
 // COMPLETE
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;

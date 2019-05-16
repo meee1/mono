@@ -26,7 +26,7 @@
 //	Jonathan Pobst (monkey@jpobst.com)
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
 
@@ -306,7 +306,7 @@ namespace System.Windows.Forms
 				CreateParams cp = base.CreateParams;
 
 				cp.Style = unchecked ((int)(WindowStyles.WS_POPUP | WindowStyles.WS_CLIPCHILDREN));
-				cp.ClassStyle |= (int)XplatUIWin32.ClassStyle.CS_DROPSHADOW;
+				cp.ClassStyle |= (int)ClassStyle.CS_DROPSHADOW;
 				cp.ExStyle |= (int)(WindowExStyles.WS_EX_TOOLWINDOW | WindowExStyles.WS_EX_TOPMOST);
 
 				if (Opacity < 1.0 && allow_transparency)

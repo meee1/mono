@@ -31,7 +31,7 @@ using System.ComponentModel.Design;
 using System.ComponentModel.Design.Serialization;
 using System.Collections;
 using System.Diagnostics;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Printing;
 using System.Reflection;
 

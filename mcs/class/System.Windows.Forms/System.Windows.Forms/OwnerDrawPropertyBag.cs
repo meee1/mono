@@ -23,7 +23,7 @@
 //	Jackson Harper (jackson@ximian.com)
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.Serialization;
 
 namespace System.Windows.Forms {

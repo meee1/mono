@@ -33,7 +33,7 @@ using System;
 using System.Collections;
 using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.IO;
 using System.Resources;
 using System.Text;

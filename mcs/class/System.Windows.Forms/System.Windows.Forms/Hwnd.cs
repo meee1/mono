@@ -28,59 +28,60 @@
 
 using System;
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
+using SkiaSharp;
 
 // NOTE: Possible optimization:
 // Several properties calculate dimensions on the fly; instead; they can 
 // be stored in a field and only be recalculated when a style is changed (DefaultClientRect, for example)
 
 namespace System.Windows.Forms {
-	internal class Hwnd : IDisposable {
+	public class Hwnd : IDisposable {
 		#region Local Variables
 		private static Hashtable	windows	= new Hashtable(100, 0.5f);
 		//private const int	menu_height = 14;			// FIXME - Read this value from somewhere
 		
 		private IntPtr		handle;
-		internal IntPtr		client_window;
-		internal IntPtr		whole_window;
+		public IntPtr		client_window;
+        public IntPtr		whole_window;
 		internal IntPtr		cursor;
 		internal Menu		menu;
 		internal TitleStyle	title_style;
-		internal FormBorderStyle	border_style;
-		internal bool		border_static;
-		internal int		x;
-		internal int		y;
-		internal int		width;
-		internal int		height;
+		public FormBorderStyle	border_style;
+		public bool		border_static;
+        public int		x;
+        public int		y;
+        public int		width;
+        public int		height;
 		internal bool		allow_drop;
-		internal Hwnd		parent;
-		internal Hwnd		owner;
-		internal bool		visible;
-		internal bool		mapped;
+        public Hwnd		parent;
+        public bool		visible;
+		public bool		mapped;
 		internal uint		opacity;
-		internal bool		enabled;
+        public bool		enabled;
 		internal bool		zero_sized;
 		internal ArrayList	invalid_list;
-		internal Rectangle	nc_invalid;
-		internal bool		expose_pending;
-		internal bool		nc_expose_pending;
+		public Rectangle	nc_invalid;
+		public bool		expose_pending;
+		public bool		nc_expose_pending;
 		internal bool		configure_pending;
-		internal bool		resizing_or_moving; // Used by the X11 backend to track form resize/move
+		public bool		resizing_or_moving; // Used by the X11 backend to track form resize/move
 		internal bool		reparented;
+		public Stack          drawing_stack;
 		internal object		user_data;
 		internal Rectangle	client_rectangle;
 		internal int		caption_height;
 		internal int		tool_caption_height;
 		internal bool		whacky_wm;
 		internal bool		fixed_size;
-		internal bool		zombie; /* X11 only flag.  true if the X windows have been destroyed but we haven't been Disposed */
+		public bool		zombie; /* X11 only flag.  true if the X windows have been destroyed but we haven't been Disposed */
 		internal bool		topmost; /* X11 only. */
 		internal Region		user_clip;
-		internal XEventQueue	queue;
-		internal WindowExStyles	initial_ex_style;
-		internal WindowStyles	initial_style;
-		internal FormWindowState cached_window_state = (FormWindowState)(-1);  /* X11 only field */
+        public XEventQueue	queue;
+        public WindowExStyles	initial_ex_style;
+        public WindowStyles	initial_style;
+		public FormWindowState cached_window_state = (FormWindowState)(-1);  /* X11 only field */
 		internal Point		previous_child_startup_location = new Point (int.MinValue, int.MinValue);
 		static internal Point	previous_main_startup_location = new Point (int.MinValue, int.MinValue);
 		internal ArrayList children;
@@ -385,7 +386,7 @@ namespace System.Windows.Forms {
 		public static Graphics GraphicsContext {
 			get {
 				if (bmp_g == null) {
-					bmp = new Bitmap (1, 1, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+					bmp = new Bitmap (1, 1, SKColorType.Bgra8888);
 					bmp_g = Graphics.FromImage (bmp);
 				}
 			
@@ -539,7 +540,7 @@ namespace System.Windows.Forms {
 				queue = value;
 			}
 		}
-
+        
 		public bool Enabled {
 			get {
 				if (!enabled) {
@@ -844,7 +845,7 @@ namespace System.Windows.Forms {
 
 		#endregion	// Methods
 		
-		internal struct Borders
+		public struct Borders
 		{
 			public int top;
 			public int bottom;

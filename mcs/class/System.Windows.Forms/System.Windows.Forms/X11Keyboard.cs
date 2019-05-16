@@ -33,7 +33,7 @@
 using System;
 using System.Collections;
 using System.Diagnostics;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Text;
 using System.Globalization;
 using System.Runtime.InteropServices;

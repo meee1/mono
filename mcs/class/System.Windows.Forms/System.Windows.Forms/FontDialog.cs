@@ -27,7 +27,7 @@
 // NOT COMPLETE - work in progress
 
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Text.RegularExpressions;
 using System;
 using System.Collections;

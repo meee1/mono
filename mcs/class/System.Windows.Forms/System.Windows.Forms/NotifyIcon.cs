@@ -27,7 +27,7 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Text;
 
 namespace System.Windows.Forms {

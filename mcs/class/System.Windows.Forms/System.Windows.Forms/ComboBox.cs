@@ -29,11 +29,12 @@ using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.Design;
 using System.ComponentModel.Design.Serialization;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {

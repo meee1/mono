@@ -1,3 +1,6 @@
+﻿//
+// IBounds.cs
+//
 // Permission is hereby granted, free of charge, to any person obtaining
 // a copy of this software and associated documentation files (the
 // "Software"), to deal in the Software without restriction, including
@@ -17,33 +20,21 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
-// Copyright (c) 2004 Novell, Inc.
+// Copyright (c) 2008 Novell, Inc.
 //
 // Authors:
-//	Peter Bartok	pbartok@novell.com
+//	Jonathan Pobst (monkey@jpobst.com)
 //
 
-
-// COMPLETE
-
+using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Drawing; using MissionPlanner.Utilities.Drawing;
 
-namespace System.Windows.Forms {
-	public class InvalidateEventArgs : EventArgs {
-		private Rectangle	invalidated_rectangle;
-
-		#region Public Constructors
-		public InvalidateEventArgs(System.Drawing.Rectangle invalidRect) {
-			this.invalidated_rectangle=invalidRect;
-		}
-		#endregion	// Public Constructors
-
-		#region Public Instance Properties
-		public Rectangle InvalidRect {
-			get {
-				return this.invalidated_rectangle;
-			}
-		}
-		#endregion	// Public Instance Properties
+namespace System.Windows.Forms
+{
+	interface IBounds
+	{
+		Rectangle Bounds { get; }
 	}
 }

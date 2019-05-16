@@ -23,7 +23,7 @@
 //	Jonathan Pobst (monkey@jpobst.com)
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Drawing2D;
 
 namespace System.Windows.Forms.Theming.Default

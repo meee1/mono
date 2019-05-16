@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Security.Permissions;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Drawing.Design
 {

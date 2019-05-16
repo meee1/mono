@@ -26,7 +26,7 @@
 
 using System;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text;

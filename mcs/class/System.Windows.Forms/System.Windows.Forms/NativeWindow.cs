@@ -35,7 +35,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Collections;
 using System.Diagnostics;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {
@@ -211,7 +211,7 @@ namespace System.Windows.Forms
 			DefWndProc(ref m);
 		}
 
-		internal static IntPtr WndProc(IntPtr hWnd, Msg msg, IntPtr wParam, IntPtr lParam)
+		public static IntPtr WndProc(IntPtr hWnd, Msg msg, IntPtr wParam, IntPtr lParam)
 		{
 			IntPtr result = IntPtr.Zero;
 			Message	m = new Message();

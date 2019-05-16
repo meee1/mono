@@ -28,8 +28,9 @@
 
 using System.Collections;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[ComVisible (true)]
@@ -214,7 +215,7 @@ namespace System.Windows.Forms {
 
 		#region Public Instance Properties
 		[Localizable(true)]
-		public override System.Drawing.Image BackgroundImage {
+		public override Image BackgroundImage {
 			get {
 				return base.BackgroundImage;
 			}

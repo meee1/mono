@@ -32,7 +32,7 @@
     <DebugType>full</DebugType>
     <NoWarn>1699,618,612,809</NoWarn>
     <Optimize>false</Optimize>
-    <DefineConstants>TRACE;DEBUG;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;DriverDebug;NETSTANDARD2_0;NETSTANDARD2_0</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;DriverDebug;NETSTANDARD2_0;NETSTANDARD2_0;DriverDebug</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -84,20 +84,20 @@
     <Compile Include="System.Resources\ResXResourceWriter.cs" />
     <Compile Include="System.Resources\SerializedFromResXHandler.cs" />
     <Compile Include="System.Resources\TypeConverterFromResXHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\ApplicationHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\ControlHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\Cursor.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\Dnd.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\Enums.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\EventHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\EventHandlerBase.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\HIObjectHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\IEventHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\KeyboardHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\MouseHandler.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\Pasteboard.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\Structs.cs" />
-    <Compile Include="System.Windows.Forms.CarbonInternal\WindowHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\ApplicationHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\ControlHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\Cursor.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\Dnd.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\Enums.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\EventHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\EventHandlerBase.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\HIObjectHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\IEventHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\KeyboardHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\MouseHandler.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\Pasteboard.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\Structs.cs" />
+    <None Include="System.Windows.Forms.CarbonInternal\WindowHandler.cs" />
     <Compile Include="System.Windows.Forms.Design\ComponentEditorForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -173,7 +173,7 @@
     <Compile Include="System.Windows.Forms.VisualStyles\GlyphFontSizingType.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\GlyphType.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\GroupBoxState.cs" />
-    <Compile Include="System.Windows.Forms.VisualStyles\GtkPlus.cs" />
+    <None Include="System.Windows.Forms.VisualStyles\GtkPlus.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\HitTestCode.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\HitTestOptions.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\HorizontalAlign.cs" />
@@ -208,8 +208,8 @@
     <Compile Include="System.Windows.Forms.VisualStyles\VisualStyleInformation.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\VisualStyleRenderer.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\VisualStylesEngine.cs" />
-    <Compile Include="System.Windows.Forms.VisualStyles\VisualStylesGtkPlus.cs" />
-    <Compile Include="System.Windows.Forms.VisualStyles\VisualStylesNative.cs" />
+    <None Include="System.Windows.Forms.VisualStyles\VisualStylesGtkPlus.cs" />
+    <None Include="System.Windows.Forms.VisualStyles\VisualStylesNative.cs" />
     <Compile Include="System.Windows.Forms.VisualStyles\VisualStyleState.cs" />
     <Compile Include="System.Windows.Forms.WebBrowserDialogs\AlertCheck.cs">
       <SubType>Form</SubType>
@@ -565,9 +565,9 @@
     <Compile Include="System.Windows.Forms\FolderBrowserDialog.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="System.Windows.Forms\FontDialog.cs">
+    <None Include="System.Windows.Forms\FontDialog.cs">
       <SubType>Component</SubType>
-    </Compile>
+    </None>
     <Compile Include="System.Windows.Forms\Form.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -816,9 +816,9 @@
     <Compile Include="System.Windows.Forms\OwnerDrawPropertyBag.cs" />
     <Compile Include="System.Windows.Forms\Padding.cs" />
     <Compile Include="System.Windows.Forms\PaddingConverter.cs" />
-    <Compile Include="System.Windows.Forms\PageSetupDialog.cs">
+    <None Include="System.Windows.Forms\PageSetupDialog.cs">
       <SubType>Component</SubType>
-    </Compile>
+    </None>
     <Compile Include="System.Windows.Forms\PaintEventArgs.cs" />
     <Compile Include="System.Windows.Forms\PaintEventHandler.cs" />
     <Compile Include="System.Windows.Forms\Panel.cs">
@@ -836,16 +836,16 @@
     <Compile Include="System.Windows.Forms\PreProcessControlState.cs" />
     <Compile Include="System.Windows.Forms\PreviewKeyDownEventArgs.cs" />
     <Compile Include="System.Windows.Forms\PreviewKeyDownEventHandler.cs" />
-    <Compile Include="System.Windows.Forms\PrintControllerWithStatusDialog.cs" />
-    <Compile Include="System.Windows.Forms\PrintDialog.cs">
+    <None Include="System.Windows.Forms\PrintControllerWithStatusDialog.cs" />
+    <None Include="System.Windows.Forms\PrintDialog.cs">
       <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="System.Windows.Forms\PrintPreviewControl.cs">
+    </None>
+    <None Include="System.Windows.Forms\PrintPreviewControl.cs">
       <SubType>Component</SubType>
-    </Compile>
-    <Compile Include="System.Windows.Forms\PrintPreviewDialog.cs">
+    </None>
+    <None Include="System.Windows.Forms\PrintPreviewDialog.cs">
       <SubType>Form</SubType>
-    </Compile>
+    </None>
     <Compile Include="System.Windows.Forms\ProfessionalColors.cs" />
     <Compile Include="System.Windows.Forms\ProfessionalColorTable.cs" />
     <Compile Include="System.Windows.Forms\ProgressBar.cs">
@@ -1212,21 +1212,21 @@
     <None Include="System.Windows.Forms\WebBrowserReadyState.cs" />
     <None Include="System.Windows.Forms\WebBrowserRefreshOption.cs" />
     <None Include="System.Windows.Forms\WebBrowserSiteBase.cs" />
-    <Compile Include="System.Windows.Forms\Win32DnD.cs" />
+    <None Include="System.Windows.Forms\Win32DnD.cs" />
     <Compile Include="System.Windows.Forms\WindowsFormsSection.cs" />
     <Compile Include="System.Windows.Forms\WindowsFormsSynchronizationContext.cs" />
-    <Compile Include="System.Windows.Forms\X11Clipboard.cs" />
-    <Compile Include="System.Windows.Forms\X11DesktopColors.cs" />
-    <Compile Include="System.Windows.Forms\X11Dnd.cs" />
-    <Compile Include="System.Windows.Forms\X11Keyboard.cs" />
+    <None Include="System.Windows.Forms\X11Clipboard.cs" />
+    <None Include="System.Windows.Forms\X11DesktopColors.cs" />
+    <None Include="System.Windows.Forms\X11Dnd.cs" />
+    <None Include="System.Windows.Forms\X11Keyboard.cs" />
     <Compile Include="System.Windows.Forms\X11Structs.cs" />
     <Compile Include="System.Windows.Forms\XEventQueue.cs" />
     <Compile Include="System.Windows.Forms\XplatUI.cs" />
-    <Compile Include="System.Windows.Forms\XplatUICarbon.cs" />
+    <None Include="System.Windows.Forms\XplatUICarbon.cs" />
     <Compile Include="System.Windows.Forms\XplatUIDriver.cs" />
     <Compile Include="System.Windows.Forms\XplatUIStructs.cs" />
-    <Compile Include="System.Windows.Forms\XplatUIWin32.cs" />
-    <Compile Include="System.Windows.Forms\XplatUIX11.cs" />
+    <None Include="System.Windows.Forms\XplatUIWin32.cs" />
+    <None Include="System.Windows.Forms\XplatUIX11.cs" />
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
@@ -1429,22 +1429,17 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Win32.Registry" Version="4.4.0" />
-    <PackageReference Include="Mono.Posix">
-      <Version>4.0.0</Version>
-    </PackageReference>
-    <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0-preview1-25914-04" />
-    <PackageReference Include="System.Drawing.Common">
-      <Version>4.5.0-preview1-25914-04</Version>
-    </PackageReference>
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0" />
+    <PackageReference Include="System.Drawing.Primitives" Version="4.3.0" />
     <PackageReference Include="System.Reflection" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
     <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.3.0" />
     <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
-    <PackageReference Include="System.Security.Permissions" Version="4.5.0-preview1-25914-04" />
+    <PackageReference Include="System.Security.Permissions" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Utilities\MissionPlanner.Utilities.csproj" />
     <ProjectReference Include="..\Accessibility\Accessibility-net_4_x.csproj" />
     <ProjectReference Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap-net_4_x.csproj" />
   </ItemGroup>

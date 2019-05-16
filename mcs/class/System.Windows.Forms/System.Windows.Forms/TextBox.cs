@@ -30,7 +30,7 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 

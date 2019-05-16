@@ -29,7 +29,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Windows.Forms.Layout;
 using System.Collections.Generic;
 using System.ComponentModel.Design.Serialization;

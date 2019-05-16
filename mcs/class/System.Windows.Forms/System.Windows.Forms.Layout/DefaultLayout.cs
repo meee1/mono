@@ -28,7 +28,7 @@
 //
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Collections;
 
 namespace System.Windows.Forms.Layout

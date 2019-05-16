@@ -29,7 +29,7 @@ using System;
 using System.Text;
 using System.Runtime.Serialization;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {

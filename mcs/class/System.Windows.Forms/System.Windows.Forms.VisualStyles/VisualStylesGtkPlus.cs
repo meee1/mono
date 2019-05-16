@@ -26,7 +26,7 @@
 //	George Giolfan (georgegiolfan@yahoo.com)
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Collections.Generic;
 namespace System.Windows.Forms.VisualStyles
 {

@@ -22,7 +22,7 @@
 // Author:
 //	Pedro Martínez Juliá <pedromj@gmail.com>
 //
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.ComponentModel;
 
 namespace System.Windows.Forms {

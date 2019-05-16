@@ -24,7 +24,7 @@
 //	Everaldo Canuto  <ecanuto@novell.com>
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Reflection;
 
 namespace System.Windows.Forms.Theming

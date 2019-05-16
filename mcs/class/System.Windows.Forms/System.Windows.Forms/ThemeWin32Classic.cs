@@ -29,13 +29,17 @@
 
 using System.ComponentModel;
 using System.Data;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
-using System.Drawing.Printing;
-using System.Drawing.Text;
+
 using System.Text;
 using System.Windows.Forms.Theming;
+using MissionPlanner.Utilities.Drawing;
+using Color = System.Drawing.Color;
+using Rectangle = System.Drawing.Rectangle;
+using PointF = System.Drawing.PointF;
+using RectangleF = System.Drawing.RectangleF;
+using Point = System.Drawing.Point;
+using Size = System.Drawing.Size;
+using SizeF = System.Drawing.SizeF;
 
 namespace System.Windows.Forms
 {
@@ -395,39 +399,39 @@ namespace System.Windows.Forms
 					int image_width = image.Width;
 					
 					switch (button.ImageAlign) {
-						case System.Drawing.ContentAlignment.TopLeft:
+						case ContentAlignment.TopLeft:
 							image_x = 5;
 							image_y = 5;
 							break;
-						case System.Drawing.ContentAlignment.TopCenter:
+						case ContentAlignment.TopCenter:
 							image_x = (content_rect.Width - image_width) / 2;
 							image_y = 5;
 							break;
-						case System.Drawing.ContentAlignment.TopRight:
+						case ContentAlignment.TopRight:
 							image_x = content_rect.Width - image_width - 5;
 							image_y = 5;
 							break;
-						case System.Drawing.ContentAlignment.MiddleLeft:
+						case ContentAlignment.MiddleLeft:
 							image_x = 5;
 							image_y = (content_rect.Height - image_height) / 2;
 							break;
-						case System.Drawing.ContentAlignment.MiddleCenter:
+						case ContentAlignment.MiddleCenter:
 							image_x = (content_rect.Width - image_width) / 2;
 							image_y = (content_rect.Height - image_height) / 2;
 							break;
-						case System.Drawing.ContentAlignment.MiddleRight:
+						case ContentAlignment.MiddleRight:
 							image_x = content_rect.Width - image_width - 4;
 							image_y = (content_rect.Height - image_height) / 2;
 							break;
-						case System.Drawing.ContentAlignment.BottomLeft:
+						case ContentAlignment.BottomLeft:
 							image_x = 5;
 							image_y = content_rect.Height - image_height - 4;
 							break;
-						case System.Drawing.ContentAlignment.BottomCenter:
+						case ContentAlignment.BottomCenter:
 							image_x = (content_rect.Width - image_width) / 2;
 							image_y = content_rect.Height - image_height - 4;
 							break;
-						case System.Drawing.ContentAlignment.BottomRight:
+						case ContentAlignment.BottomRight:
 							image_x = content_rect.Width - image_width - 4;
 							image_y = content_rect.Height - image_height - 4;
 							break;
@@ -456,7 +460,7 @@ namespace System.Windows.Forms
 				textRectangle.Offset (1, 1);
 		}
 
-		private void LayoutTextBeforeOrAfterImage (Rectangle totalArea, bool textFirst, Size textSize, Size imageSize, System.Drawing.ContentAlignment textAlign, System.Drawing.ContentAlignment imageAlign, out Rectangle textRect, out Rectangle imageRect)
+		private void LayoutTextBeforeOrAfterImage (Rectangle totalArea, bool textFirst, Size textSize, Size imageSize, ContentAlignment textAlign, ContentAlignment imageAlign, out Rectangle textRect, out Rectangle imageRect)
 		{
 			int element_spacing = 0;	// Spacing between the Text and the Image
 			int total_width = textSize.Width + element_spacing + imageSize.Width;
@@ -501,7 +505,7 @@ namespace System.Windows.Forms
 			imageRect = final_image_rect;
 		}
 
-		private void LayoutTextAboveOrBelowImage (Rectangle totalArea, bool textFirst, Size textSize, Size imageSize, System.Drawing.ContentAlignment textAlign, System.Drawing.ContentAlignment imageAlign, bool displayEllipsis, out Rectangle textRect, out Rectangle imageRect)
+		private void LayoutTextAboveOrBelowImage (Rectangle totalArea, bool textFirst, Size textSize, Size imageSize, ContentAlignment textAlign, ContentAlignment imageAlign, bool displayEllipsis, out Rectangle textRect, out Rectangle imageRect)
 		{
 			int element_spacing = 0;	// Spacing between the Text and the Image
 			int total_height = textSize.Height + element_spacing + imageSize.Height;
@@ -563,20 +567,20 @@ namespace System.Windows.Forms
 			imageRect = final_image_rect;
 		}
 		
-		private HorizontalAlignment GetHorizontalAlignment (System.Drawing.ContentAlignment align)
+		private HorizontalAlignment GetHorizontalAlignment (ContentAlignment align)
 		{
 			switch (align) {
-				case System.Drawing.ContentAlignment.BottomLeft:
-				case System.Drawing.ContentAlignment.MiddleLeft:
-				case System.Drawing.ContentAlignment.TopLeft:
+				case ContentAlignment.BottomLeft:
+				case ContentAlignment.MiddleLeft:
+				case ContentAlignment.TopLeft:
 					return HorizontalAlignment.Left;
-				case System.Drawing.ContentAlignment.BottomCenter:
-				case System.Drawing.ContentAlignment.MiddleCenter:
-				case System.Drawing.ContentAlignment.TopCenter:
+				case ContentAlignment.BottomCenter:
+				case ContentAlignment.MiddleCenter:
+				case ContentAlignment.TopCenter:
 					return HorizontalAlignment.Center;
-				case System.Drawing.ContentAlignment.BottomRight:
-				case System.Drawing.ContentAlignment.MiddleRight:
-				case System.Drawing.ContentAlignment.TopRight:
+				case ContentAlignment.BottomRight:
+				case ContentAlignment.MiddleRight:
+				case ContentAlignment.TopRight:
 					return HorizontalAlignment.Right;
 			}
 
@@ -590,42 +594,42 @@ namespace System.Windows.Forms
 			Bottom = 2
 		}
 		
-		private VerticalAlignment GetVerticalAlignment (System.Drawing.ContentAlignment align)
+		private VerticalAlignment GetVerticalAlignment (ContentAlignment align)
 		{
 			switch (align) {
-				case System.Drawing.ContentAlignment.TopLeft:
-				case System.Drawing.ContentAlignment.TopCenter:
-				case System.Drawing.ContentAlignment.TopRight:
+				case ContentAlignment.TopLeft:
+				case ContentAlignment.TopCenter:
+				case ContentAlignment.TopRight:
 					return VerticalAlignment.Top;
-				case System.Drawing.ContentAlignment.MiddleLeft:
-				case System.Drawing.ContentAlignment.MiddleCenter:
-				case System.Drawing.ContentAlignment.MiddleRight:
+				case ContentAlignment.MiddleLeft:
+				case ContentAlignment.MiddleCenter:
+				case ContentAlignment.MiddleRight:
 					return VerticalAlignment.Center;
-				case System.Drawing.ContentAlignment.BottomLeft:
-				case System.Drawing.ContentAlignment.BottomCenter:
-				case System.Drawing.ContentAlignment.BottomRight:
+				case ContentAlignment.BottomLeft:
+				case ContentAlignment.BottomCenter:
+				case ContentAlignment.BottomRight:
 					return VerticalAlignment.Bottom;
 			}
 
 			return VerticalAlignment.Top;
 		}
 
-		internal Rectangle AlignInRectangle (Rectangle outer, Size inner, System.Drawing.ContentAlignment align)
+		internal Rectangle AlignInRectangle (Rectangle outer, Size inner, ContentAlignment align)
 		{
 			int x = 0;
 			int y = 0;
 
-			if (align == System.Drawing.ContentAlignment.BottomLeft || align == System.Drawing.ContentAlignment.MiddleLeft || align == System.Drawing.ContentAlignment.TopLeft)
+			if (align == ContentAlignment.BottomLeft || align == ContentAlignment.MiddleLeft || align == ContentAlignment.TopLeft)
 				x = outer.X;
-			else if (align == System.Drawing.ContentAlignment.BottomCenter || align == System.Drawing.ContentAlignment.MiddleCenter || align == System.Drawing.ContentAlignment.TopCenter)
+			else if (align == ContentAlignment.BottomCenter || align == ContentAlignment.MiddleCenter || align == ContentAlignment.TopCenter)
 				x = Math.Max (outer.X + ((outer.Width - inner.Width) / 2), outer.Left);
-			else if (align == System.Drawing.ContentAlignment.BottomRight || align == System.Drawing.ContentAlignment.MiddleRight || align == System.Drawing.ContentAlignment.TopRight)
+			else if (align == ContentAlignment.BottomRight || align == ContentAlignment.MiddleRight || align == ContentAlignment.TopRight)
 				x = outer.Right - inner.Width;
-			if (align == System.Drawing.ContentAlignment.TopCenter || align == System.Drawing.ContentAlignment.TopLeft || align == System.Drawing.ContentAlignment.TopRight)
+			if (align == ContentAlignment.TopCenter || align == ContentAlignment.TopLeft || align == ContentAlignment.TopRight)
 				y = outer.Y;
-			else if (align == System.Drawing.ContentAlignment.MiddleCenter || align == System.Drawing.ContentAlignment.MiddleLeft || align == System.Drawing.ContentAlignment.MiddleRight)
+			else if (align == ContentAlignment.MiddleCenter || align == ContentAlignment.MiddleLeft || align == ContentAlignment.MiddleRight)
 				y = outer.Y + (outer.Height - inner.Height) / 2;
-			else if (align == System.Drawing.ContentAlignment.BottomCenter || align == System.Drawing.ContentAlignment.BottomRight || align == System.Drawing.ContentAlignment.BottomLeft)
+			else if (align == ContentAlignment.BottomCenter || align == ContentAlignment.BottomRight || align == ContentAlignment.BottomLeft)
 				y = outer.Bottom - inner.Height;
 
 			return new Rectangle (x, y, Math.Min (inner.Width, outer.Width), Math.Min (inner.Height, outer.Height));
@@ -1060,39 +1064,39 @@ namespace System.Windows.Forms
 					int image_width = image.Width;
 
 					switch (button.ImageAlign) {
-						case System.Drawing.ContentAlignment.TopLeft:
+						case ContentAlignment.TopLeft:
 							image_x += 5;
 							image_y += 5;
 							break;
-						case System.Drawing.ContentAlignment.TopCenter:
+						case ContentAlignment.TopCenter:
 							image_x += (content_rect.Width - image_width) / 2;
 							image_y += 5;
 							break;
-						case System.Drawing.ContentAlignment.TopRight:
+						case ContentAlignment.TopRight:
 							image_x += content_rect.Width - image_width - 5;
 							image_y += 5;
 							break;
-						case System.Drawing.ContentAlignment.MiddleLeft:
+						case ContentAlignment.MiddleLeft:
 							image_x += 5;
 							image_y += (content_rect.Height - image_height) / 2;
 							break;
-						case System.Drawing.ContentAlignment.MiddleCenter:
+						case ContentAlignment.MiddleCenter:
 							image_x += (content_rect.Width - image_width) / 2;
 							image_y += (content_rect.Height - image_height) / 2;
 							break;
-						case System.Drawing.ContentAlignment.MiddleRight:
+						case ContentAlignment.MiddleRight:
 							image_x += content_rect.Width - image_width - 4;
 							image_y += (content_rect.Height - image_height) / 2;
 							break;
-						case System.Drawing.ContentAlignment.BottomLeft:
+						case ContentAlignment.BottomLeft:
 							image_x += 5;
 							image_y += content_rect.Height - image_height - 4;
 							break;
-						case System.Drawing.ContentAlignment.BottomCenter:
+						case ContentAlignment.BottomCenter:
 							image_x += (content_rect.Width - image_width) / 2;
 							image_y += content_rect.Height - image_height - 4;
 							break;
-						case System.Drawing.ContentAlignment.BottomRight:
+						case ContentAlignment.BottomRight:
 							image_x += content_rect.Width - image_width - 4;
 							image_y += content_rect.Height - image_height - 4;
 							break;
@@ -4150,88 +4154,8 @@ namespace System.Windows.Forms
 			}
 		}
 		#endregion	// PictureBox
-
-		#region PrintPreviewControl
-		public override int PrintPreviewControlPadding {
-			get { return 8; }
-		}
-
-		public override Size PrintPreviewControlGetPageSize (PrintPreviewControl preview)
-		{
-			int page_width, page_height;
-			int padding = PrintPreviewControlPadding;
-			PreviewPageInfo[] pis = preview.page_infos;
-
-			if (preview.AutoZoom) {
-				int height_available = preview.ClientRectangle.Height - (preview.Rows) * padding - 2 * padding;
-				int width_available = preview.ClientRectangle.Width - (preview.Columns - 1) * padding - 2 * padding;
-
-				float image_ratio = (float)pis[0].Image.Width / pis[0].Image.Height;
-
-				/* try to lay things out using the width to determine the size */
-				page_width = width_available / preview.Columns;
-				page_height = (int)(page_width / image_ratio);
-
-				/* does the height fit? */
-				if (page_height * (preview.Rows + 1) > height_available) {
-					/* no, lay things out via the height */
-					page_height = height_available / (preview.Rows + 1);
-					page_width = (int)(page_height * image_ratio);
-				}
-			}
-			else {
-				page_width = (int)(pis[0].Image.Width * preview.Zoom);
-				page_height = (int)(pis[0].Image.Height * preview.Zoom);
-			}
-
-			return new Size (page_width, page_height);
-		}
-
-		public override void PrintPreviewControlPaint (PaintEventArgs pe, PrintPreviewControl preview, Size page_size)
-		{
-			int padding = 8;
-			PreviewPageInfo[] pis = preview.page_infos;
-			if (pis == null)
-				return;
-
-			int page_x, page_y;
-
-			int width = page_size.Width * preview.Columns + padding * (preview.Columns - 1) + 2 * padding;
-			int height = page_size.Height * (preview.Rows + 1) + padding * preview.Rows + 2 * padding;
-
-			Rectangle viewport = preview.ViewPort;
-
-			pe.Graphics.Clip = new Region (viewport);
-
-			/* center things if we can */
-			int off_x = viewport.Width / 2 - width / 2;
-			if (off_x < 0) off_x = 0;
-			int off_y = viewport.Height / 2 - height / 2;
-			if (off_y < 0) off_y = 0;
-
-			page_y = off_y + padding - preview.vbar_value;
-
-			int p = preview.StartPage;
-			for (int py = 0; py < preview.Rows + 1; py ++) {
-				page_x = off_x + padding - preview.hbar_value;
-				for (int px = 0; px < preview.Columns; px ++) {
-					if (p >= pis.Length)
-						continue;
-					Image image = preview.image_cache[p];
-					if (image == null)
-						image = pis[p].Image;
-					Rectangle dest = new Rectangle (new Point (page_x, page_y), page_size);
-
-					pe.Graphics.DrawImage (image, dest, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel);
-
-					page_x += padding + page_size.Width;
-					p++;
-				}
-				page_y += padding + page_size.Height;
-			}
-		}
-		#endregion      // PrintPreviewControl
-
+        
+	
 		#region ProgressBar
 		public override void DrawProgressBar (Graphics dc, Rectangle clip_rect, ProgressBar ctrl) 
 		{
@@ -6327,7 +6251,7 @@ namespace System.Windows.Forms
 
 			// HACK: For now always draw the titlebar until we get updates better
 			if (tb.Width > 0 && tb.Height > 0) {
-				using (System.Drawing.Drawing2D.LinearGradientBrush gradient = new LinearGradientBrush (tb, color, color2, LinearGradientMode.Horizontal))
+				using (LinearGradientBrush gradient = new LinearGradientBrush (tb, color, color2, LinearGradientMode.Horizontal))
 				{
 					dc.FillRectangle (gradient, tb);
 				}	

@@ -22,7 +22,7 @@
 // Authors:
 //	George Giolfan (georgegiolfan@yahoo.com)
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Windows.Forms.VisualStyles;
 namespace System.Windows.Forms.Theming.VisualStyles
 {

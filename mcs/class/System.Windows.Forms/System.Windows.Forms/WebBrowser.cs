@@ -29,7 +29,7 @@ using System.Runtime.InteropServices;
 using System.Reflection;
 using System.Windows.Forms;
 using System.IO;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {

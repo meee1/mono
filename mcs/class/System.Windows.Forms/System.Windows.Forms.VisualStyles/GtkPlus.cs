@@ -70,7 +70,7 @@ using GtkAllocation = System.Windows.Forms.VisualStyles.GtkPlus.GdkRectangle;
 using GInitiallyUnowned = System.Windows.Forms.VisualStyles.GtkPlus.GObject;
 
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Imaging;
 using System.Reflection;
 using System.Reflection.Emit;

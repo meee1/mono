@@ -28,7 +28,7 @@
 //   Aleksey Ryabchuk (ryabchuk@yahoo.com)
 
 using System.IO;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Collections;
 using System.Drawing.Imaging;
 using System.Runtime.Serialization;

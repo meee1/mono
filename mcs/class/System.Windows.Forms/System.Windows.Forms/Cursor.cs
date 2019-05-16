@@ -24,7 +24,7 @@
 //
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.ComponentModel;
@@ -593,9 +593,10 @@ namespace System.Windows.Forms {
 				pal.Entries[0] = Color.FromArgb(0, 0, 0);
 				pal.Entries[1] = Color.FromArgb(unchecked((int)0xffffffffff));
 				bits = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height), ImageLockMode.WriteOnly, bmp.PixelFormat);
+                bytesPerLine = (int)((((cih.biWidth * cih.biBitCount) + 31) & ~31) >> 3);
 
-				for (int y = 0; y < biHeight; y++) {
-					Marshal.Copy(ci.cursorAND, bits.Stride * y, (IntPtr)(bits.Scan0.ToInt64() + bits.Stride * (biHeight - 1 - y)), bits.Stride);
+                for (int y = 0; y < biHeight; y++) {
+					Marshal.Copy(ci.cursorAND, bytesPerLine * y, (IntPtr)(bits.Scan0.ToInt64() + bits.Stride * (biHeight - 1 - y)), bytesPerLine);
 				}
 
 				bmp.UnlockBits(bits);

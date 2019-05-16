@@ -26,10 +26,11 @@
 
 using System;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[MonoTODO("Possibly implement this for Win32; find a way for Linux and Mac")]

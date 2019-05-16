@@ -34,7 +34,7 @@
 using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Collections.Generic;

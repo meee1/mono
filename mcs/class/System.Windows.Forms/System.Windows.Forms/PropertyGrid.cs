@@ -28,7 +28,7 @@
 
 using System;
 using System.IO;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Design;
 using System.ComponentModel;
 using System.Collections;
@@ -37,6 +37,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms.Design;
 using System.Windows.Forms.PropertyGridInternal;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms 
 {

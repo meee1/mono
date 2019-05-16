@@ -29,10 +29,11 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[DefaultBindingProperty("SelectionRange")]

@@ -24,7 +24,7 @@
 //      Chris Toshok <toshok@ximian.com>
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Diagnostics;

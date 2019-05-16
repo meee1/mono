@@ -31,7 +31,7 @@
 using System;
 using System.IO;
 using System.Text;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Threading;
 using System.Collections;
 using System.Runtime.Serialization;

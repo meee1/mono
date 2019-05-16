@@ -27,7 +27,7 @@
 // COMPLETE
 
 using System.Runtime.InteropServices;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[ComVisible(true)]
@@ -38,8 +38,12 @@ namespace System.Windows.Forms {
 		private int		x;
 		private int		y;
 
-		#region Public Constructors
-		public MouseEventArgs(MouseButtons button, int clicks, int x, int y, int delta) {
+        public MouseEventArgs()
+        {
+        }
+
+        #region Public Constructors
+        public MouseEventArgs(MouseButtons button, int clicks, int x, int y, int delta) {
 			this.buttons=button;
 			this.clicks=clicks;
 			this.delta=delta;
@@ -49,41 +53,55 @@ namespace System.Windows.Forms {
 		#endregion	// Public Constructors
 
 		#region Public Instance Properties
-		public MouseButtons Button {
-			get {
+		public MouseButtons Button
+        {
+            get {
 				return this.buttons;
 			}
-		}
 
-		public int Clicks {
-			get {
+            set => this.buttons = value;
+        }
+
+        public int Clicks
+        {
+            get {
 				return this.clicks;
 			}
-		}
+            set => this.clicks = value;
+        }
 
-		public int Delta {
-			get {
+        public int Delta
+        {
+            get {
 				return this.delta;
 			}
-		}
+            set => this.delta = value;
+        }
 
-		public int X {
-			get {
+        public int X
+        {
+            get {
 				return this.x;
 			}
-		}
+            set => this.x = value;
+        }
 
-		public int Y {
-			get {
+        public int Y
+        {
+            get {
 				return this.y;
 			}
-		}
+            set => this.y = value;
+        }
 
-		public Point Location {
-			get {
+        public Point Location
+        {
+            get {
 				return new Point (this.x, this.y);
 			}
-		}
-		#endregion	// Public Instance Properties
+    
+        }
+
+        #endregion	// Public Instance Properties
 	}
 }

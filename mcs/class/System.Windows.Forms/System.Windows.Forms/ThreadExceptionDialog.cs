@@ -28,7 +28,7 @@
 // COMPLETE - BUT DISABLED TEXTBOX
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Text;
 using System.Reflection;
 using System.ComponentModel;

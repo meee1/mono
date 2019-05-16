@@ -47,9 +47,10 @@
 
 using System;
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Text;
 using System.Text;
+using MissionPlanner.Utilities.Drawing;
 using RTF=System.Windows.Forms.RTF;
 
 namespace System.Windows.Forms {

@@ -28,11 +28,12 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.Net;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[DefaultProperty("Image")]
@@ -352,10 +353,10 @@ namespace System.Windows.Forms {
 
 			if (IsHandleCreated) {
 				UpdateSize ();
-				if (image != null && ImageAnimator.CanAnimate (image)) {
-					frame_handler = new EventHandler (OnAnimateImage);
-					ImageAnimator.Animate (image, frame_handler);
-				}
+				//if (image != null && ImageAnimator.CanAnimate (image)) {
+				//	frame_handler = new EventHandler (OnAnimateImage);
+				//	ImageAnimator.Animate (image, frame_handler);
+				//}
 				if (no_update == 0) {
 					Invalidate ();
 				}
@@ -366,7 +367,7 @@ namespace System.Windows.Forms {
 		{
 			if (frame_handler == null)
 				return;
-			ImageAnimator.StopAnimate (image, frame_handler);
+		//	ImageAnimator.StopAnimate (image, frame_handler);
 			frame_handler = null;
 		}
 
@@ -399,16 +400,16 @@ namespace System.Windows.Forms {
 			if (!IsHandleCreated)
 				return;
 				
-			ImageAnimator.UpdateFrames (image);
+		//	ImageAnimator.UpdateFrames (image);
 			Refresh ();
 		}
 
 		private void PictureBox_HandleCreated(object sender, EventArgs e) {
 			UpdateSize ();
-			if (image != null && ImageAnimator.CanAnimate (image)) {
-				frame_handler = new EventHandler (OnAnimateImage);
-				ImageAnimator.Animate (image, frame_handler);
-			}
+		//	if (image != null && ImageAnimator.CanAnimate (image)) {
+			//	frame_handler = new EventHandler (OnAnimateImage);
+		//		ImageAnimator.Animate (image, frame_handler);
+		//	}
 			if (no_update == 0) {
 				Invalidate ();
 			}

@@ -27,7 +27,7 @@
 // NOT COMPLETE
 
 using Accessibility;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;

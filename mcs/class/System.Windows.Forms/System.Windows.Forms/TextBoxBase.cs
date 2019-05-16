@@ -30,11 +30,12 @@
 
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Text;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Collections;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {
@@ -278,7 +279,7 @@ namespace System.Windows.Forms
 
 		[Browsable(false)]
 		[EditorBrowsable(EditorBrowsableState.Never)]
-		public override System.Drawing.Image BackgroundImage {
+		public override Image BackgroundImage {
 			get {
 				return base.BackgroundImage;
 			}

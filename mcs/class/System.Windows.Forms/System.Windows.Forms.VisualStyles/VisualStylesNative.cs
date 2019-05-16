@@ -27,7 +27,7 @@
 //	Jonathan Pobst (monkey@jpobst.com)
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Diagnostics;
 namespace System.Windows.Forms.VisualStyles
 {
@@ -40,7 +40,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeDrawThemeBackground (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle bounds)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
+			RECT BoundsRect = RECT.FromRectangle (bounds);
 
 			int result = UXTheme.DrawThemeBackground(hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, IntPtr.Zero);
 			dc.ReleaseHdc ();
@@ -48,8 +48,8 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeDrawThemeBackground (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle bounds, Rectangle clipRectangle)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
-			XplatUIWin32.RECT ClipRect = XplatUIWin32.RECT.FromRectangle (clipRectangle);
+			RECT BoundsRect = RECT.FromRectangle (bounds);
+			RECT ClipRect = RECT.FromRectangle (clipRectangle);
 
 			int result = UXTheme.DrawThemeBackground (hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, ref ClipRect);
 			dc.ReleaseHdc ();
@@ -57,8 +57,8 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeDrawThemeEdge (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle bounds, Edges edges, EdgeStyle style, EdgeEffects effects, out Rectangle result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
-			XplatUIWin32.RECT retval;
+			RECT BoundsRect = RECT.FromRectangle (bounds);
+			RECT retval;
 
 			int hresult = UXTheme.DrawThemeEdge (hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, (uint)style, (uint)edges + (uint)effects, out retval);
 			dc.ReleaseHdc ();
@@ -69,7 +69,7 @@ namespace System.Windows.Forms.VisualStyles
 		{
 			int result;
 
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
+			RECT BoundsRect = RECT.FromRectangle (bounds);
 
 			using (Graphics g = Graphics.FromHwnd (childControl.Handle)) {
 				IntPtr hdc = g.GetHdc ();
@@ -81,7 +81,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeDrawThemeText (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, string text, TextFormatFlags textFlags, Rectangle bounds)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
+			RECT BoundsRect = RECT.FromRectangle (bounds);
 
 			int result = UXTheme.DrawThemeText (hTheme, dc.GetHdc (), iPartId, iStateId, text, text.Length, (uint)textFlags, 0, ref BoundsRect);
 			dc.ReleaseHdc ();
@@ -89,8 +89,8 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemeBackgroundContentRect (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle bounds, out Rectangle result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
-			XplatUIWin32.RECT retval;
+			RECT BoundsRect = RECT.FromRectangle (bounds);
+			RECT retval;
 
 			int hresult = UXTheme.GetThemeBackgroundContentRect (hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, out retval);
 			dc.ReleaseHdc ();
@@ -100,8 +100,8 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemeBackgroundExtent (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle contentBounds, out Rectangle result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (contentBounds);
-			XplatUIWin32.RECT retval = new XplatUIWin32.RECT ();
+			RECT BoundsRect = RECT.FromRectangle (contentBounds);
+			RECT retval = new RECT ();
 
 			int hresult = UXTheme.GetThemeBackgroundExtent (hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, ref retval);
 			dc.ReleaseHdc ();
@@ -111,7 +111,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemeBackgroundRegion (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle bounds, out Region result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
+			RECT BoundsRect = RECT.FromRectangle (bounds);
 			IntPtr retval;
 
 			int hresult = UXTheme.GetThemeBackgroundRegion (hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, out retval);
@@ -164,7 +164,7 @@ namespace System.Windows.Forms.VisualStyles
 		public int UxThemeGetThemeMargins (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, MarginProperty prop, out Padding result)
 		{
 			UXTheme.MARGINS retval = new UXTheme.MARGINS ();
-			XplatUIWin32.RECT BoundsRect;
+			RECT BoundsRect;
 
 			int hresult = UXTheme.GetThemeMargins (hTheme, dc.GetHdc (), iPartId, iStateId, (int)prop, out BoundsRect, out retval);
 			dc.ReleaseHdc ();
@@ -174,7 +174,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemePartSize (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, Rectangle bounds, ThemeSizeType type, out Size result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
+			RECT BoundsRect = RECT.FromRectangle (bounds);
 			UXTheme.SIZE retval;
 
 			int hresult = UXTheme.GetThemePartSize (hTheme, dc.GetHdc (), iPartId, iStateId, ref BoundsRect, (int)type, out retval);
@@ -211,8 +211,8 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemeTextExtent (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, string textToDraw, TextFormatFlags flags, Rectangle bounds, out Rectangle result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (bounds);
-			XplatUIWin32.RECT retval;
+			RECT BoundsRect = RECT.FromRectangle (bounds);
+			RECT retval;
 			
 			int hresult = UXTheme.GetThemeTextExtent (hTheme, dc.GetHdc (), iPartId, iStateId, textToDraw, textToDraw.Length, (int)flags, ref BoundsRect, out retval);
 			dc.ReleaseHdc ();
@@ -222,7 +222,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemeTextExtent (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, string textToDraw, TextFormatFlags flags, out Rectangle result)
 		{
-			XplatUIWin32.RECT retval;
+			RECT retval;
 			
 			int hresult = UXTheme.GetThemeTextExtent (hTheme, dc.GetHdc (), iPartId, iStateId, textToDraw, textToDraw.Length, (int)flags, 0, out retval);
 			dc.ReleaseHdc ();
@@ -232,7 +232,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeGetThemeTextMetrics (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, out TextMetrics result)
 		{
-			XplatUIWin32.TEXTMETRIC metrics;
+			TEXTMETRIC metrics;
 			
 			int hresult = UXTheme.GetThemeTextMetrics (hTheme, dc.GetHdc (), iPartId, iStateId, out metrics);
 			dc.ReleaseHdc ();
@@ -264,7 +264,7 @@ namespace System.Windows.Forms.VisualStyles
 		}
 		public int UxThemeHitTestThemeBackground (IntPtr hTheme, IDeviceContext dc, int iPartId, int iStateId, HitTestOptions options, Rectangle backgroundRectangle, IntPtr hrgn, Point pt, out HitTestCode result)
 		{
-			XplatUIWin32.RECT BoundsRect = XplatUIWin32.RECT.FromRectangle (backgroundRectangle);
+			RECT BoundsRect = RECT.FromRectangle (backgroundRectangle);
 			int retval;
 
 			int hresult = UXTheme.HitTestThemeBackground (hTheme, dc.GetHdc (), iPartId, iStateId, (uint)options, ref BoundsRect, hrgn, new POINT(pt.X, pt.Y), out retval);
@@ -437,7 +437,7 @@ namespace System.Windows.Forms.VisualStyles
 		#region VisualStyleRenderer
 		public void VisualStyleRendererDrawBackgroundExcludingArea (IntPtr theme, IDeviceContext dc, int part, int state, Rectangle bounds, Rectangle excludedArea)
 		{
-			XplatUIWin32.RECT bounds_rect = XplatUIWin32.RECT.FromRectangle (bounds);
+			RECT bounds_rect = RECT.FromRectangle (bounds);
 			IntPtr hdc = dc.GetHdc ();
 			XplatUIWin32.Win32ExcludeClipRect (hdc, excludedArea.Left, excludedArea.Top, excludedArea.Right, excludedArea.Bottom);
 			UXTheme.DrawThemeBackground (theme, hdc, part, state, ref bounds_rect, IntPtr.Zero);

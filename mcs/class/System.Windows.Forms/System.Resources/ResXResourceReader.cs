@@ -39,7 +39,7 @@ using System.Resources;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Xml;
 using System.Reflection;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.Serialization;
 
 namespace System.Resources

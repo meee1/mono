@@ -27,9 +27,10 @@ using System;
 using System.Collections;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms {
 	[ComVisible (true)]

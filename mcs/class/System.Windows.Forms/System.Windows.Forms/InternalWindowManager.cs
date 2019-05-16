@@ -26,7 +26,7 @@
 
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
 
 
@@ -271,18 +271,18 @@ namespace System.Windows.Forms {
 
 		protected virtual bool HandleNCCalcSize (ref Message m)
 		{
-			XplatUIWin32.NCCALCSIZE_PARAMS ncp;
-			XplatUIWin32.RECT rect;
+			NCCALCSIZE_PARAMS ncp;
+			RECT rect;
 
 			if (m.WParam == (IntPtr)1) {
-				ncp = (XplatUIWin32.NCCALCSIZE_PARAMS)Marshal.PtrToStructure (m.LParam,
-						typeof (XplatUIWin32.NCCALCSIZE_PARAMS));
+				ncp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure (m.LParam,
+						typeof (NCCALCSIZE_PARAMS));
 				
 				ncp.rgrc1 = NCCalcSize (ncp.rgrc1);
 
 				Marshal.StructureToPtr (ncp, m.LParam, true);
 			} else {
-				rect = (XplatUIWin32.RECT) Marshal.PtrToStructure (m.LParam, typeof (XplatUIWin32.RECT));
+				rect = (RECT) Marshal.PtrToStructure (m.LParam, typeof (RECT));
 				
 				rect = NCCalcSize (rect);
 				
@@ -292,7 +292,7 @@ namespace System.Windows.Forms {
 			return true;
 		}
 
-		protected virtual XplatUIWin32.RECT NCCalcSize (XplatUIWin32.RECT proposed_window_rect)
+		protected virtual RECT NCCalcSize (RECT proposed_window_rect)
 		{
 			int bw = ThemeEngine.Current.ManagedWindowBorderWidth (this);
 

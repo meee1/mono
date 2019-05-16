@@ -25,7 +25,7 @@
 //
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
 using System.IO;
 using System;

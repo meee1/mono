@@ -29,7 +29,7 @@
 
 using System.Collections;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms.Layout;
 
@@ -610,4 +610,12 @@ namespace System.Windows.Forms
 		}
 		#endregion
 	}
+
+    public class ToolboxBitmapAttribute : Attribute
+    {
+        public ToolboxBitmapAttribute(string empty)
+        {
+           
+        }
+    }
 }

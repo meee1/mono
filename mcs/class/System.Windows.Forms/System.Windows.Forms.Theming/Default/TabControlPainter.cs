@@ -23,7 +23,7 @@
 //	Andreia Gaita (avidigal@novell.com)
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Text;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;

@@ -41,13 +41,13 @@ using System.ComponentModel.Design;
 using System.ComponentModel.Design.Serialization;
 using System.Collections;
 using System.Diagnostics;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Drawing2D;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
-using System.Windows.Forms.Layout;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {
@@ -161,7 +161,7 @@ namespace System.Windows.Forms
 
 		#region Private Classes
 		// This helper class allows us to dispatch messages to Control.WndProc
-		internal class ControlNativeWindow : NativeWindow {
+		public class ControlNativeWindow : NativeWindow {
 			private Control owner;
 
 			public ControlNativeWindow(Control control) : base() {
@@ -180,7 +180,7 @@ namespace System.Windows.Forms
 				this.owner.WindowTarget.OnHandleChange(this.owner.Handle);
 			}
 
-			static internal Control ControlFromHandle(IntPtr hWnd) {
+			static public  Control ControlFromHandle(IntPtr hWnd) {
 				ControlNativeWindow	window;
 
 				window = (ControlNativeWindow)NativeWindow.FromHandle (hWnd);
@@ -1340,7 +1340,7 @@ namespace System.Windows.Forms
 		internal virtual void PaintControlBackground (PaintEventArgs pevent) {
 
 			bool tbstyle_flat = ((CreateParams.Style & (int) ToolBarStyles.TBSTYLE_FLAT) != 0);
-
+            /*
 			// If we have transparent background
 			if (((BackColor.A != 0xff) && GetStyle(ControlStyles.SupportsTransparentBackColor)) || tbstyle_flat) {
 				if (parent != null) {
@@ -1402,7 +1402,7 @@ namespace System.Windows.Forms
 					}
 				}
 			}
-
+            */
 			if (background_image == null) {
 				if (!tbstyle_flat) {
 					Rectangle paintRect = pevent.ClipRectangle;
@@ -1819,7 +1819,7 @@ namespace System.Windows.Forms
 			return new Size (size.Width - (client_size.Width - size.Width), size.Height - (client_size.Height - size.Height));
 		}
 		
-		internal CreateParams GetCreateParams ()
+		public CreateParams GetCreateParams ()
 		{
 			return CreateParams;
 		}
@@ -2591,8 +2591,28 @@ namespace System.Windows.Forms
 				}
 			}
 		}
-		
-		[DispId(-514)]
+
+        public void DrawToGraphics(Graphics g, Rectangle targetBounds)
+        {
+            // Only draw within the target bounds, and up to the size of the control
+            //g.IntersectClip(targetBounds);
+            //g.IntersectClip(Bounds);
+
+            // Logic copied from WmPaint
+            PaintEventArgs pea = new PaintEventArgs(g, targetBounds);
+
+            if (!GetStyle(ControlStyles.Opaque))
+                OnPaintBackground(pea);
+
+            OnPaintBackgroundInternal(pea);
+
+            OnPaintInternal(pea);
+
+            if (!pea.Handled)
+                OnPaint(pea);
+        }
+
+        [DispId(-514)]
 		[Localizable(true)]
 		[MWFCategory("Behavior")]
 		public bool Enabled {
@@ -3324,7 +3344,7 @@ namespace System.Windows.Forms
 
 
 				create_params.ClassName = XplatUI.GetDefaultClassName (GetType ());
-				create_params.ClassStyle = (int)(XplatUIWin32.ClassStyle.CS_OWNDC | XplatUIWin32.ClassStyle.CS_DBLCLKS);
+			//	create_params.ClassStyle = (int)(XplatUIWin32.ClassStyle.CS_OWNDC | XplatUIWin32.ClassStyle.CS_DBLCLKS);
 				create_params.ExStyle = 0;
 				create_params.Param = 0;
 
@@ -3589,7 +3609,8 @@ namespace System.Windows.Forms
 			if (!IsHandleCreated) {
 				this.CreateHandle();
 			}
-			return Graphics.FromHwnd(this.window.Handle);
+
+            return new Graphics();//Graphics.FromHwnd(this.window.Handle);
 		}
 
 		public DragDropEffects DoDragDrop(object data, DragDropEffects allowedEffects) {
@@ -4418,11 +4439,11 @@ namespace System.Windows.Forms
 			toInvoke.OnClick(e);
 		}
 
-		protected void InvokePaint(Control c, PaintEventArgs e) {
+		public void InvokePaint(Control c, PaintEventArgs e) {
 			c.OnPaint (e);
 		}
 
-		protected void InvokePaintBackground(Control c, PaintEventArgs e) {
+        public void InvokePaintBackground(Control c, PaintEventArgs e) {
 			c.OnPaintBackground (e);
 		}
 
@@ -5032,7 +5053,13 @@ namespace System.Windows.Forms
 			}
 		}
 
-		protected virtual void WndProc(ref Message m) {
+        public virtual void WndProcDOIT(Message m)
+        {
+            WndProc(ref m);
+        }
+
+
+        protected virtual void WndProc(ref Message m) {
 #if DebugMessages
 			Console.WriteLine("Control {0} received message {1}", window.Handle == IntPtr.Zero ? this.Text : XplatUI.Window(window.Handle), m.ToString ());
 #endif
@@ -6100,7 +6127,13 @@ namespace System.Windows.Forms
 				eh (this, e);
 		}
 
-		[EditorBrowsable(EditorBrowsableState.Advanced)]
+        public void OnMouseWheelD(MouseEventArgs e)
+        {
+            OnMouseWheel(e);
+        }
+
+
+        [EditorBrowsable(EditorBrowsableState.Advanced)]
 		protected virtual void OnMouseWheel(MouseEventArgs e) {
 			MouseEventHandler eh = (MouseEventHandler)(Events [MouseWheelEvent]);
 			if (eh != null)

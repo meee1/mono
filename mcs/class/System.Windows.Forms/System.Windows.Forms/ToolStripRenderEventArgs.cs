@@ -26,7 +26,8 @@
 //	Jonathan Pobst (monkey@jpobst.com)
 //
 
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {

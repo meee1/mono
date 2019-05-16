@@ -28,7 +28,7 @@
 
 using System;
 using System.Collections;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;

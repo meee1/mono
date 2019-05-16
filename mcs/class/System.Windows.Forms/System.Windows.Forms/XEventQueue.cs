@@ -32,7 +32,7 @@ using System.Collections;
 
 namespace System.Windows.Forms {
 
-	internal class XEventQueue {
+	public class XEventQueue {
 
 		private XQueue		xqueue;
 		private XQueue		lqueue;	// Events inserted from threads other then the main X thread

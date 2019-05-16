@@ -28,7 +28,7 @@
 
 
 using System;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows.Forms.Layout;
@@ -1824,10 +1824,10 @@ namespace System.Windows.Forms
 
 		private void BeginAnimation ()
 		{
-			if (image != null && ImageAnimator.CanAnimate (image)) {
-				frame_handler = new EventHandler (OnAnimateImage);
-				ImageAnimator.Animate (image, frame_handler);
-			}
+		//	if (image != null && ImageAnimator.CanAnimate (image)) {
+			//	frame_handler = new EventHandler (OnAnimateImage);
+			//	ImageAnimator.Animate (image, frame_handler);
+			//}
 		}
 
 		private void OnAnimateImage (object sender, EventArgs e)
@@ -1848,7 +1848,7 @@ namespace System.Windows.Forms
 			if (frame_handler == null)
 				return;
 				
-			ImageAnimator.StopAnimate (image, frame_handler);
+		//	ImageAnimator.StopAnimate (image, frame_handler);
 			frame_handler = null;
 		}
 
@@ -1859,7 +1859,7 @@ namespace System.Windows.Forms
 			if (Parent == null || !Parent.IsHandleCreated)
 				return;
 
-			ImageAnimator.UpdateFrames (image);
+		//	ImageAnimator.UpdateFrames (image);
 			Invalidate ();
 		}
 

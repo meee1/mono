@@ -27,7 +27,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Security.Permissions;
 using System.ComponentModel;
 

@@ -29,11 +29,12 @@
 
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Text;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Windows.Forms.Theming;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {

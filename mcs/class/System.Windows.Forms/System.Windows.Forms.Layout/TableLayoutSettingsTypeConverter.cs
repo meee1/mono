@@ -23,7 +23,7 @@
 
 using System;
 using System.ComponentModel;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Globalization;
 using System.Xml;
 using System.IO;

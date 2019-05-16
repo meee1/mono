@@ -31,11 +31,12 @@
 using System;
 using System.Collections;
 using System.ComponentModel.Design;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Design;
 using System.ComponentModel;
 using System.Threading;
 using System.Windows.Forms.Design;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms.PropertyGridInternal {
 	internal class PropertyGridView : ScrollableControl, IWindowsFormsEditorService {

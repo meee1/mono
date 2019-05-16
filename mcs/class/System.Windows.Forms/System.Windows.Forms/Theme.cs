@@ -24,10 +24,16 @@
 //	Peter Dennis Bartok, pbartok@novell.com
 //
 
+using MissionPlanner.Utilities.Drawing;
 using System.Collections;
-using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Reflection;
+using Color = System.Drawing.Color;
+using Rectangle = System.Drawing.Rectangle;
+using PointF = System.Drawing.PointF;
+using RectangleF = System.Drawing.RectangleF;
+using Point = System.Drawing.Point;
+using Size = System.Drawing.Size;
+using SizeF = System.Drawing.SizeF;
 
 namespace System.Windows.Forms
 {
@@ -128,7 +134,7 @@ namespace System.Windows.Forms
 			}
 		}		
 		
-		public HatchBrush GetHatchBrush (HatchStyle hatchStyle, Color foreColor, Color backColor)
+		public HatchBrush GetHatchBrush (MissionPlanner.Utilities.Drawing.HatchStyle hatchStyle, Color foreColor, Color backColor)
 		{
 			string hash = ((int)hatchStyle).ToString () + foreColor.ToString () + backColor.ToString ();
 
@@ -371,12 +377,12 @@ namespace System.Windows.Forms
 			get { return defaultWindowForeColor; }
 		}
 
-		public virtual Color GetColor (XplatUIWin32.GetSysColorIndex idx)
+		public virtual Color GetColor (GetSysColorIndex idx)
 		{
 			return (Color) syscolors.GetValue ((int)idx);
 		}
 
-		public virtual void SetColor (XplatUIWin32.GetSysColorIndex idx, Color color)
+		public virtual void SetColor (GetSysColorIndex idx, Color color)
 		{
 			syscolors.SetValue (color, (int) idx);
 		}
@@ -872,9 +878,9 @@ namespace System.Windows.Forms
 		#endregion	// PictureBox
 
 		#region PrintPreviewControl
-		public abstract int PrintPreviewControlPadding{get;}
-		public abstract Size PrintPreviewControlGetPageSize (PrintPreviewControl preview);
-		public abstract void PrintPreviewControlPaint (PaintEventArgs pe, PrintPreviewControl preview, Size page_image_size);
+	//	public abstract int PrintPreviewControlPadding{get;}
+	//	public abstract Size PrintPreviewControlGetPageSize (PrintPreviewControl preview);
+	//	public abstract void PrintPreviewControlPaint (PaintEventArgs pe, PrintPreviewControl preview, Size page_image_size);
 		#endregion      // PrintPreviewControl
 
 		#region ProgressBar

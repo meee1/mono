@@ -38,11 +38,18 @@
 // There are also thread-safe versions of MeasureString/MeasureCharacterRanges
 // for things that want to measure strings without having a Graphics object.
 
-using System.Drawing;
+
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Drawing.Text;
-
+using MissionPlanner.Utilities.Drawing;
+using Color = System.Drawing.Color;
+using Rectangle = System.Drawing.Rectangle;
+using PointF = System.Drawing.PointF;
+using RectangleF = System.Drawing.RectangleF;
+using Point = System.Drawing.Point;
+using Size = System.Drawing.Size;
+using SizeF = System.Drawing.SizeF;
 namespace System.Windows.Forms
 {
 	public sealed class TextRenderer
@@ -131,7 +138,7 @@ namespace System.Windows.Forms
 
 			if (text == null || text.Length == 0)
 				return;
-
+            /*
 			// We use MS GDI API's unless told not to, or we aren't on Windows
 			if (!useDrawString && !XplatUI.RunningOnUnix) {
 				if ((flags & TextFormatFlags.VerticalCenter) == TextFormatFlags.VerticalCenter || (flags & TextFormatFlags.Bottom) == TextFormatFlags.Bottom)
@@ -175,7 +182,7 @@ namespace System.Windows.Forms
 					SetBkMode (hdc, 1);	//1-Transparent, 2-Opaque
 				}
 
-				XplatUIWin32.RECT r = XplatUIWin32.RECT.FromRectangle (new_bounds);
+				RECT r = RECT.FromRectangle (new_bounds);
 
 				IntPtr prevobj;
 
@@ -193,7 +200,7 @@ namespace System.Windows.Forms
 					SelectClipRgn (hdc, IntPtr.Zero);
 
 				dc.ReleaseHdc ();
-			}
+			}*/
 			// Use Graphics.DrawString as a fallback method
 			else {
 				Graphics g;
@@ -202,8 +209,9 @@ namespace System.Windows.Forms
 				if (dc is Graphics)
 					g = (Graphics)dc;
 				else {
-					hdc = dc.GetHdc ();
-					g = Graphics.FromHdc (hdc);
+				//	hdc = dc.GetHdc ();
+				//	g = Graphics.FromHdc (hdc);
+                g= new Graphics();
 				}
 
 				StringFormat sf = FlagsToStringFormat (flags);
@@ -214,20 +222,21 @@ namespace System.Windows.Forms
 
 				if (!(dc is Graphics)) {
 					g.Dispose ();
-					dc.ReleaseHdc ();
+				//	dc.ReleaseHdc ();
 				}
 			}
 		}
 
 		internal static Size MeasureTextInternal (IDeviceContext dc, string text, Font font, Size proposedSize, TextFormatFlags flags, bool useMeasureString)
 		{
+            /*
 			if (!useMeasureString && !XplatUI.RunningOnUnix) {
 				// Tell DrawText to calculate size instead of draw
 				flags |= (TextFormatFlags)1024;		// DT_CALCRECT
 
 				IntPtr hdc = dc.GetHdc ();
 
-				XplatUIWin32.RECT r = XplatUIWin32.RECT.FromRectangle (new Rectangle (Point.Empty, proposedSize));
+				RECT r = RECT.FromRectangle (new Rectangle (Point.Empty, proposedSize));
 
 				IntPtr prevobj;
 
@@ -254,7 +263,7 @@ namespace System.Windows.Forms
 
 				return retval;
 			}
-			else {
+			else {*/
 			StringFormat sf = FlagsToStringFormat (flags);
 
 				Size retval;
@@ -276,7 +285,7 @@ namespace System.Windows.Forms
 					retval.Width += 9;
 
 				return retval;
-			}
+			//}
 		}
 		#endregion
 
@@ -507,7 +516,7 @@ namespace System.Windows.Forms
 
 #region DllImports (Windows)
 		[DllImport ("user32", CharSet = CharSet.Unicode, EntryPoint = "DrawText")]
-		static extern int Win32DrawText (IntPtr hdc, string lpStr, int nCount, ref XplatUIWin32.RECT lpRect, int wFormat);
+		static extern int Win32DrawText (IntPtr hdc, string lpStr, int nCount, ref RECT lpRect, int wFormat);
 
 		[DllImport ("gdi32")]
 		static extern int SetTextColor (IntPtr hdc, int crColor);

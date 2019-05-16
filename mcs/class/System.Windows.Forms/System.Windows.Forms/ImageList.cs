@@ -64,11 +64,12 @@ using System.Collections;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.ComponentModel.Design.Serialization;
-using System.Drawing;
+using System.Drawing; using MissionPlanner.Utilities.Drawing;
 using System.Drawing.Design;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using MissionPlanner.Utilities.Drawing;
 
 namespace System.Windows.Forms
 {
