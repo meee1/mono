@@ -60,7 +60,7 @@ namespace System.Windows.Forms {
 		public bool		mapped;
 		internal uint		opacity;
         public bool		enabled;
-		internal bool		zero_sized;
+		public bool		zero_sized;
 		internal ArrayList	invalid_list;
 		public Rectangle	nc_invalid;
 		public bool		expose_pending;
@@ -68,13 +68,13 @@ namespace System.Windows.Forms {
 		internal bool		configure_pending;
 		public bool		resizing_or_moving; // Used by the X11 backend to track form resize/move
 		internal bool		reparented;
-		public Stack          drawing_stack;
+
 		internal object		user_data;
 		internal Rectangle	client_rectangle;
 		internal int		caption_height;
 		internal int		tool_caption_height;
 		internal bool		whacky_wm;
-		internal bool		fixed_size;
+		public bool		fixed_size;
 		public bool		zombie; /* X11 only flag.  true if the X windows have been destroyed but we haven't been Disposed */
 		internal bool		topmost; /* X11 only. */
 		internal Region		user_clip;

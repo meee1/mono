@@ -48,6 +48,7 @@ using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
 using MissionPlanner.Utilities.Drawing;
+using System.Windows.Forms.Layout;
 
 namespace System.Windows.Forms
 {

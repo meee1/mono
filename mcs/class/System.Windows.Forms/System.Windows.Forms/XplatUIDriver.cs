@@ -318,11 +318,11 @@ namespace System.Windows.Forms {
 		public abstract bool IsEnabled(IntPtr handle);
 		public virtual bool IsKeyLocked (VirtualKeys key) { return false; }
 		public abstract IntPtr SetParent(IntPtr handle, IntPtr parent);
-		public abstract IntPtr GetParent(IntPtr handle);
+		public abstract IntPtr GetParent(IntPtr handle, bool with_owner);
 
 		public abstract void UpdateWindow(IntPtr handle);
 		public abstract PaintEventArgs PaintEventStart (ref Message msg, IntPtr handle, bool client);
-		public abstract void PaintEventEnd (ref Message msg, IntPtr handle, bool client);
+		public abstract void PaintEventEnd (ref Message msg, IntPtr handle, bool client, PaintEventArgs pevent);
 
 		public abstract void SetWindowPos(IntPtr handle, int x, int y, int width, int height);
 		public abstract void GetWindowPos(IntPtr handle, bool is_toplevel, out int x, out int y, out int width, out int height, out int client_width, out int client_height);

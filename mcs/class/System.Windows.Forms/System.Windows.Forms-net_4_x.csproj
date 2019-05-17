@@ -84,6 +84,8 @@
     <Compile Include="System.Resources\ResXResourceWriter.cs" />
     <Compile Include="System.Resources\SerializedFromResXHandler.cs" />
     <Compile Include="System.Resources\TypeConverterFromResXHandler.cs" />
+    <Compile Include="System.Windows.Forms.Layout\IArrangedContainer.cs" />
+    <Compile Include="System.Windows.Forms.Layout\IArrangedElement.cs" />
     <None Include="System.Windows.Forms.CarbonInternal\ApplicationHandler.cs" />
     <None Include="System.Windows.Forms.CarbonInternal\ControlHandler.cs" />
     <None Include="System.Windows.Forms.CarbonInternal\Cursor.cs" />
