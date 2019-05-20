@@ -114,7 +114,7 @@ namespace System.Windows.Forms {
 			return (this.style & (int) Style) == (int) Style;
 		}
 		
-		internal bool IsSet (WindowExStyles ExStyle) {
+		public bool IsSet (WindowExStyles ExStyle) {
 			return (this.ex_style & (int) ExStyle) == (int) ExStyle;
 		}
 		

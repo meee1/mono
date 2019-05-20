@@ -31,7 +31,7 @@ using System.Runtime.InteropServices;
 
 namespace System.Windows.Forms
 {
-	internal class ToolWindowManager : InternalWindowManager
+	public class ToolWindowManager : InternalWindowManager
 	{
 		public ToolWindowManager (Form form)
 			: base (form)

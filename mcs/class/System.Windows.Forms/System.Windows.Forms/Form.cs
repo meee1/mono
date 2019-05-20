@@ -71,7 +71,7 @@ namespace System.Windows.Forms {
 		private Form			owner;
 		private Form.ControlCollection	owned_forms;
 		private MdiClient		mdi_container;
-		internal InternalWindowManager	window_manager;
+		public InternalWindowManager	window_manager;
 		private Form			mdi_parent;
 		private bool			key_preview;
 		private MainMenu		menu;
@@ -110,7 +110,7 @@ namespace System.Windows.Forms {
 			default_icon = ResourceImageLoader.GetIcon ("mono.ico");
 		}
 
-		internal bool IsLoaded {
+		public bool IsLoaded {
 			get { return is_loaded; }
 		}
 

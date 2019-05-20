@@ -46,8 +46,8 @@ namespace System.Windows.Forms {
 		public IntPtr		client_window;
         public IntPtr		whole_window;
 		internal IntPtr		cursor;
-		internal Menu		menu;
-		internal TitleStyle	title_style;
+		public Menu		menu;
+		public TitleStyle	title_style;
 		public FormBorderStyle	border_style;
 		public bool		border_static;
         public int		x;
@@ -71,8 +71,8 @@ namespace System.Windows.Forms {
 
 		internal object		user_data;
 		internal Rectangle	client_rectangle;
-		internal int		caption_height;
-		internal int		tool_caption_height;
+		public int		caption_height;
+		public int		tool_caption_height;
 		internal bool		whacky_wm;
 		public bool		fixed_size;
 		public bool		zombie; /* X11 only flag.  true if the X windows have been destroyed but we haven't been Disposed */

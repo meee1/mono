@@ -32,7 +32,7 @@ using System.Runtime.InteropServices;
 
 namespace System.Windows.Forms {
 
-	internal abstract class InternalWindowManager {
+	public abstract class InternalWindowManager {
 		private TitleButtons title_buttons;
 		internal Form form;
 
@@ -895,7 +895,7 @@ namespace System.Windows.Forms {
 			return FormPos.None;
 		}
 	}
-	internal class TitleButton
+	public class TitleButton
 	{
 		public Rectangle Rectangle;
 		public ButtonState State;
@@ -923,7 +923,7 @@ namespace System.Windows.Forms {
 		}
 	}
 
-	internal class TitleButtons : System.Collections.IEnumerable
+	public class TitleButtons : System.Collections.IEnumerable
 	{
 		public TitleButton MinimizeButton;
 		public TitleButton MaximizeButton;

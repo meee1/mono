@@ -46,7 +46,7 @@ namespace System.Windows.Forms
 {
 	public sealed class Application
 	{
-		internal class MWFThread
+		public class MWFThread
 		{
 			#region Fields
 

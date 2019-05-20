@@ -2596,8 +2596,8 @@ namespace System.Windows.Forms
         public void DrawToGraphics(Graphics g, Rectangle targetBounds)
         {
             // Only draw within the target bounds, and up to the size of the control
-            //g.IntersectClip(targetBounds);
-            //g.IntersectClip(Bounds);
+           // g.IntersectClip(targetBounds);
+           // g.IntersectClip(Bounds);
 
             // Logic copied from WmPaint
             PaintEventArgs pea = new PaintEventArgs(g, targetBounds);
