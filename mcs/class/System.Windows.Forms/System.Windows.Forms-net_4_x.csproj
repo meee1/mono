@@ -23,7 +23,7 @@
     <RootNamespace>
     </RootNamespace>
     <AssemblyName>System.Windows.Forms</AssemblyName>
- <TargetFrameworks>netstandard2.0</TargetFrameworks>
+ <TargetFramework>netstandard2.0</TargetFramework>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -1441,7 +1441,7 @@
     <PackageReference Include="System.Security.Permissions" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\Utilities\MissionPlanner.Utilities.csproj" />
+    <ProjectReference Include="..\..\..\..\MissionPlanner.Drawing\MissionPlanner.Drawing.csproj" />
     <ProjectReference Include="..\Accessibility\Accessibility-net_4_x.csproj" />
     <ProjectReference Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap-net_4_x.csproj" />
   </ItemGroup>

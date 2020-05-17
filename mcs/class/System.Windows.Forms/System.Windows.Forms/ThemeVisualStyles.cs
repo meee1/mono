@@ -24,11 +24,10 @@
 //	George Giolfan, georgegiolfan@yahoo.com
 //	Ernesto Carrea, equistango@gmail.com
 
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Drawing.Drawing2D;
 using System.Windows.Forms.VisualStyles;
-using MissionPlanner.Utilities;
-using MissionPlanner.Utilities.Drawing;
+
 
 namespace System.Windows.Forms
 {

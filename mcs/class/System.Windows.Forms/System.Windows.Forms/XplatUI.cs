@@ -32,13 +32,13 @@
 //#undef DriverDebugState
 
 using System;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.ComponentModel;
 using System.Collections;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
-using MissionPlanner.Utilities.Drawing;
+
 
 namespace System.Windows.Forms {
 	public class XplatUI {

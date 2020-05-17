@@ -24,7 +24,7 @@
 
 // COMPLETE
 
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.ComponentModel;
 
 namespace System.Windows.Forms.Design

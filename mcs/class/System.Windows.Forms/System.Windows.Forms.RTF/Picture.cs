@@ -26,8 +26,8 @@
 
 using System;
 using System.IO;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
-using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
+
 
 namespace System.Windows.Forms.RTF {
 

@@ -39,10 +39,11 @@
 // for things that want to measure strings without having a Graphics object.
 
 
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Drawing.Text;
-using MissionPlanner.Utilities.Drawing;
+
 using Color = System.Drawing.Color;
 using Rectangle = System.Drawing.Rectangle;
 using PointF = System.Drawing.PointF;

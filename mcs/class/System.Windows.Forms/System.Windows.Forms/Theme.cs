@@ -24,8 +24,9 @@
 //	Peter Dennis Bartok, pbartok@novell.com
 //
 
-using MissionPlanner.Utilities.Drawing;
+
 using System.Collections;
+using System.Drawing;
 using System.Reflection;
 using Color = System.Drawing.Color;
 using Rectangle = System.Drawing.Rectangle;
@@ -134,7 +135,7 @@ namespace System.Windows.Forms
 			}
 		}		
 		
-		public HatchBrush GetHatchBrush (MissionPlanner.Utilities.Drawing.HatchStyle hatchStyle, Color foreColor, Color backColor)
+		public HatchBrush GetHatchBrush (HatchStyle hatchStyle, Color foreColor, Color backColor)
 		{
 			string hash = ((int)hatchStyle).ToString () + foreColor.ToString () + backColor.ToString ();
 

@@ -28,7 +28,7 @@
 
 using System;
 using System.IO;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Drawing.Design;
 using System.ComponentModel;
 using System.Collections;
@@ -37,7 +37,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Forms.Design;
 using System.Windows.Forms.PropertyGridInternal;
-using MissionPlanner.Utilities.Drawing;
+
 
 namespace System.Windows.Forms 
 {
@@ -1282,15 +1282,15 @@ namespace System.Windows.Forms
 		{
 		}
 
-		[MonoTODO ("Stub, does nothing")]
-		void ComponentModel.Com2Interop.IComPropertyBrowser.LoadState (Microsoft.Win32.RegistryKey optRoot)
-		{
-		}
+		//[MonoTODO ("Stub, does nothing")]
+		//void ComponentModel.Com2Interop.IComPropertyBrowser.LoadState (Microsoft.Win32.RegistryKey optRoot)
+		//{
+		//}
 
-		[MonoTODO ("Stub, does nothing")]
-		void ComponentModel.Com2Interop.IComPropertyBrowser.SaveState (Microsoft.Win32.RegistryKey optRoot)
-		{
-		}
+		//[MonoTODO ("Stub, does nothing")]
+		//void ComponentModel.Com2Interop.IComPropertyBrowser.SaveState (Microsoft.Win32.RegistryKey optRoot)
+		//{
+		//}
 
 		static object ComComponentNameChangedEvent = new object ();
 		event ComponentRenameEventHandler ComponentModel.Com2Interop.IComPropertyBrowser.ComComponentNameChanged {

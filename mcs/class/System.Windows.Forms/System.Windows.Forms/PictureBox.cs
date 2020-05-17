@@ -28,12 +28,12 @@
 using System;
 using System.ComponentModel;
 using System.ComponentModel.Design;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.Net;
-using MissionPlanner.Utilities.Drawing;
+
 
 namespace System.Windows.Forms {
 	[DefaultProperty("Image")]

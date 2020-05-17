@@ -28,7 +28,7 @@
 
 using System;
 using System.ComponentModel;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
 

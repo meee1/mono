@@ -41,13 +41,13 @@ using System.ComponentModel.Design;
 using System.ComponentModel.Design.Serialization;
 using System.Collections;
 using System.Diagnostics;
-using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing;  
 using System.Drawing.Drawing2D;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Threading;
-using MissionPlanner.Utilities.Drawing;
+
 using System.Windows.Forms.Layout;
 
 namespace System.Windows.Forms

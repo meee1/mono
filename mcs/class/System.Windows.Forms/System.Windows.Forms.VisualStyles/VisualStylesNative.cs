@@ -27,7 +27,7 @@
 //	Jonathan Pobst (monkey@jpobst.com)
 //
 
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Diagnostics;
 namespace System.Windows.Forms.VisualStyles
 {

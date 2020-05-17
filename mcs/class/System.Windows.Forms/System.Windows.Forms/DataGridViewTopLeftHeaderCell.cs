@@ -23,7 +23,7 @@
 //	Pedro Martínez Juliá <pedromj@gmail.com>
 //
 
-using System.Drawing; using MissionPlanner.Utilities.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing;  
 
 namespace System.Windows.Forms
 {

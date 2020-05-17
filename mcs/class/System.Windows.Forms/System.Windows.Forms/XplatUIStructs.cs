@@ -27,7 +27,7 @@
 // NOT COMPLETE
 
 using System;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Runtime.InteropServices;
 using static System.Windows.Forms.XplatUIDriver;
 

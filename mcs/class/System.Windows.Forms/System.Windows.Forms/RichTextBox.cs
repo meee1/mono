@@ -29,16 +29,10 @@
 using System;
 using System.Collections;
 using System.ComponentModel;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.IO;
 using System.Text;
 using System.Runtime.InteropServices;
-using Bitmap = MissionPlanner.Utilities.Drawing.Bitmap;
-using Font = MissionPlanner.Utilities.Drawing.Font;
-using FontStyle = MissionPlanner.Utilities.Drawing.FontStyle;
-using Graphics = MissionPlanner.Utilities.Drawing.Graphics;
-using RTF=System.Windows.Forms.RTF;
-using SystemColors = MissionPlanner.Utilities.Drawing.SystemColors;
 
 namespace System.Windows.Forms {
 	[ClassInterface (ClassInterfaceType.AutoDispatch)]

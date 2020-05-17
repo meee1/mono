@@ -28,8 +28,8 @@
 //
 
 using HRESULT = System.Int32;
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
-using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
+
 
 namespace System.Windows.Forms.VisualStyles
 {

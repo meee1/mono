@@ -32,7 +32,8 @@ using System.Data;
 
 using System.Text;
 using System.Windows.Forms.Theming;
-using MissionPlanner.Utilities.Drawing;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using Color = System.Drawing.Color;
 using Rectangle = System.Drawing.Rectangle;
 using PointF = System.Drawing.PointF;

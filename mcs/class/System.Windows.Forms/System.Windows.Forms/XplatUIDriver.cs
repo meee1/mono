@@ -26,10 +26,10 @@
 
 // COMPLETE
 
-using System.Drawing; using MissionPlanner.Utilities.Drawing;
+using System.Drawing; 
 using System.Threading;
 using System.Runtime.InteropServices;
-using MissionPlanner.Utilities.Drawing;
+
 
 namespace System.Windows.Forms {
 	public abstract class XplatUIDriver {
