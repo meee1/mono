@@ -97,163 +97,152 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=1.0.5000.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  
   <!-- System.Windows.Forms.Design/EventsTab.cs -->
-  <data name="Events">
-    <value>Events</value>
-  </data>
-  
   <!-- System.Windows.Forms.X11Internal/X11Display.cs -->
-  <data name="at">
-    <value>at</value>
-  </data>
-  <data name="&lt;unknown method&gt;" xml:space="preserve">
-    <value>&lt;unknown method&gt;</value>
-  </data> 
-  
   <!-- System.Windows.Forms/BindingNavigator.cs -->
-   <data name="of {0}" xml:space="preserve">
-    <value>of {0}</value>
-  </data>
-   <data name="Move first" xml:space="preserve">
-    <value>Move first</value>
-  </data>
-   <data name="Move previous" xml:space="preserve">
-    <value>Move previous</value>
-  </data>
-  <data name="Current position" xml:space="preserve">
-    <value>Current position</value>
-  </data>
-  <data name="Total number of items" xml:space="preserve">
-    <value>Total number of items</value>
-  </data>
-  <data name="Move next" xml:space="preserve">
-    <value>Move next</value>
-  </data>
-  <data name="Move last" xml:space="preserve">
-    <value>Move last</value>
-  </data>
-  <data name="Add new" xml:space="preserve">
-    <value>Add new</value>
-  </data>
-  
   <!-- System.Windows.Forms/ColorDialog.cs -->
-  <data name="Red">
-    <value>Red</value>
-  </data>
-  <data name="Blue">
-    <value>Blue</value>
-  </data>
-  <data name="Green">
-    <value>Green</value>
-  </data>
-  <data name="Color">
-    <value>Color</value>
-  </data>
-  <data name="Hue">
-    <value>Hue</value>
-  </data>
-  <data name="Sat">
-    <value>Sat</value>
-  </data>
-  <data name="Bri">
-    <value>Bri</value>
-  </data>
-  <data name="Define Custom Colors &gt;&gt;" xml:space="preserve">
-    <value>Define Custom Colors &gt;&gt;</value>
-  </data>
-  <data name="Add To Custom Colors" xml:space="preserve">
-    <value>Add To Custom Colors</value>
-  </data>
-  <data name="Base Colors" xml:space="preserve">
-    <value>Base Colors</value>
-  </data>
-  <data name="User Colors" xml:space="preserve">
-    <value>User Colors</value>
-  </data>
-  
   <!-- System.Windows.Forms/ComboBox.cs -->
-  <data name="Enum argument value '{0}' is not valid for AutoCompleteMode" xml:space="preserve">
-    <value>Enum argument value '{0}' is not valid for AutoCompleteMode </value>
-  </data>
-  <data name="Enum argument value '{0}' is not valid for AutoCompleteSource" xml:space="preserve">
-    <value>Enum argument value '{0}' is not valid for AutoCompleteSource</value>
-  </data>
-  
   <!-- System.Windows.Forms/MessageBox.cs -->
-  <data name="OK">
-    <value>OK</value>
-  </data>
-  <data name="Retry">
-    <value>Retry</value>
-  </data>
-  <data name="Yes">
-    <value>Yes</value>
-  </data>
-  <data name="Cancel">
-    <value>Cancel</value>
-  </data>
-  <data name="Abort">
-    <value>Abort</value>
-  </data>
-  <data name="No">
-    <value>No</value>
-  </data>
-  <data name="Ignore">
-    <value>Ignore</value>
-  </data>
-  <data name="Help">
-    <value>Help</value>
-  </data>
-  
   <!-- System.Windows.Forms/PropertyGrid.cs -->
-  <data name="Categorized">
-    <value>Categorized</value>
-  </data>
-  <data name="Alphabetic">
-    <value>Alphabetic</value>
-  </data>
-  
   <!-- System.Windows.Forms/TextBox.cs -->
-  <data name="&amp;Undo">
-    <value>&amp;Undo</value>
-  </data>
-  <data name="Cu&amp;t">
-    <value>Cu&amp;t</value>
-  </data>
+  <!-- System.Windows.Forms/TextBoxBase.cs -->
+  <!-- System.Windows.Forms/TextControl.cs -->
   <data name="&amp;Copy">
     <value>&amp;Copy</value>
-  </data>
-  <data name="&amp;Paste">
-    <value>&amp;Paste</value>
   </data>
   <data name="&amp;Delete">
     <value>&amp;Delete</value>
   </data>
-  <data name="Select &amp;All">
-    <value>Select &amp;All</value>
+  <data name="&amp;Paste">
+    <value>&amp;Paste</value>
+  </data>
+  <data name="&amp;Undo">
+    <value>&amp;Undo</value>
+  </data>
+  <data name="&lt;unknown method&gt;" xml:space="preserve">
+    <value>&lt;unknown method&gt;</value>
+  </data>
+  <data name="Abort">
+    <value>Abort</value>
+  </data>
+  <data name="Add new" xml:space="preserve">
+    <value>Add new</value>
+  </data>
+  <data name="Add To Custom Colors" xml:space="preserve">
+    <value>Add To Custom Colors</value>
+  </data>
+  <data name="Alphabetic">
+    <value>Alphabetic</value>
+  </data>
+  <data name="at">
+    <value>at</value>
+  </data>
+  <data name="Base Colors" xml:space="preserve">
+    <value>Base Colors</value>
+  </data>
+  <data name="Blue">
+    <value>Blue</value>
+  </data>
+  <data name="Bri">
+    <value>Bri</value>
+  </data>
+  <data name="Cancel">
+    <value>Cancel</value>
+  </data>
+  <data name="Categorized">
+    <value>Categorized</value>
+  </data>
+  <data name="Color">
+    <value>Color</value>
+  </data>
+  <data name="Cu&amp;t">
+    <value>Cu&amp;t</value>
+  </data>
+  <data name="Current position" xml:space="preserve">
+    <value>Current position</value>
+  </data>
+  <data name="Cut">
+    <value>Cut</value>
+  </data>
+  <data name="Define Custom Colors &gt;&gt;" xml:space="preserve">
+    <value>Define Custom Colors &gt;&gt;</value>
+  </data>
+  <data name="Delete">
+    <value>Delete</value>
   </data>
   <data name="Enum argument value '{0}' is not valid for AutoCompleteMode" xml:space="preserve">
+    <value>Enum argument value '{0}' is not valid for AutoCompleteMode </value>
+  </data>
+  <data name="Enum argument value '{0}' is not valid for AutoCompleteMode_Duplicate[1]" xml:space="preserve">
     <value>Enum argument value '{0}' is not valid for AutoCompleteMode</value>
   </data>
   <data name="Enum argument value '{0}' is not valid for AutoCompleteSource" xml:space="preserve">
     <value>Enum argument value '{0}' is not valid for AutoCompleteSource</value>
   </data>
-  
-  <!-- System.Windows.Forms/TextBoxBase.cs -->
-  <data name="Cut">
-    <value>Cut</value>
+  <data name="Enum argument value '{0}' is not valid for AutoCompleteSource_Duplicate[1]" xml:space="preserve">
+    <value>Enum argument value '{0}' is not valid for AutoCompleteSource</value>
   </data>
-  <data name="Delete">
-    <value>Delete</value>
+  <data name="Events">
+    <value>Events</value>
+  </data>
+  <data name="Green">
+    <value>Green</value>
+  </data>
+  <data name="Help">
+    <value>Help</value>
+  </data>
+  <data name="Hue">
+    <value>Hue</value>
+  </data>
+  <data name="Ignore">
+    <value>Ignore</value>
+  </data>
+  <data name="Move first" xml:space="preserve">
+    <value>Move first</value>
+  </data>
+  <data name="Move last" xml:space="preserve">
+    <value>Move last</value>
+  </data>
+  <data name="Move next" xml:space="preserve">
+    <value>Move next</value>
+  </data>
+  <data name="Move previous" xml:space="preserve">
+    <value>Move previous</value>
+  </data>
+  <data name="No">
+    <value>No</value>
+  </data>
+  <data name="of {0}" xml:space="preserve">
+    <value>of {0}</value>
+  </data>
+  <data name="OK">
+    <value>OK</value>
   </data>
   <data name="Paste">
     <value>Paste</value>
   </data>
-  
-  <!-- System.Windows.Forms/TextControl.cs -->
+  <data name="Red">
+    <value>Red</value>
+  </data>
+  <data name="Retry">
+    <value>Retry</value>
+  </data>
+  <data name="Sat">
+    <value>Sat</value>
+  </data>
+  <data name="Select &amp;All">
+    <value>Select &amp;All</value>
+  </data>
+  <data name="Total number of items" xml:space="preserve">
+    <value>Total number of items</value>
+  </data>
   <data name="Typing">
     <value>Typing</value>
   </data>
-  
+  <data name="User Colors" xml:space="preserve">
+    <value>User Colors</value>
+  </data>
+  <data name="Yes">
+    <value>Yes</value>
+  </data>
 </root>

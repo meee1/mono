@@ -7,6 +7,7 @@
    <SignAssembly>true</SignAssembly>
    <DelaySign>false</DelaySign>
    <PublicSign>true</PublicSign>
+   <GenerateResourceUsePreserializedResources>false</GenerateResourceUsePreserializedResources>
     <OutputType>Library</OutputType>
     <NoWarn>1699,618,612,809</NoWarn>
     <LangVersion>latest</LangVersion>
@@ -88,6 +89,7 @@
     <Compile Include="System.Windows.Forms.Layout\IArrangedElement.cs" />
     <Compile Include="System.Windows.Forms.RTF\CharsetToCodepage.cs" />
     <Compile Include="System.Windows.Forms\TabStops.cs" />
+    <Compile Include="xplatuimine.cs" />
     <None Include="System.Windows.Forms.CarbonInternal\ApplicationHandler.cs" />
     <None Include="System.Windows.Forms.CarbonInternal\ControlHandler.cs" />
     <None Include="System.Windows.Forms.CarbonInternal\Cursor.cs" />
@@ -1427,14 +1429,13 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="1.68.1.1" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="4.5.0" />
     <PackageReference Include="System.Drawing.Common" Version="4.7.0" />
     <PackageReference Include="System.Drawing.Primitives" Version="4.3.0" />
     <PackageReference Include="System.Reflection" Version="4.3.0" />
-    <PackageReference Include="System.Reflection.Emit" Version="4.3.0" />
-    <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.3.0" />
-    <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.3.0" />
+    <PackageReference Include="System.Reflection.Emit" Version="4.7.0" />
+    <PackageReference Include="System.Reflection.Emit.ILGeneration" Version="4.7.0" />
+    <PackageReference Include="System.Reflection.Emit.Lightweight" Version="4.7.0" />
     <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
     <PackageReference Include="System.Security.Permissions" Version="4.5.0" />
   </ItemGroup>

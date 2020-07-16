@@ -40,13 +40,12 @@ using System.Threading;
 
 /// Win32 Version
 namespace System.Windows.Forms {
-
 	[AttributeUsage (AttributeTargets.Method)]
 	sealed class MonoPInvokeCallbackAttribute : Attribute {
 		public MonoPInvokeCallbackAttribute (Type t) {}
 	}
 
-	internal class XplatUIWin32 : XplatUIDriver {
+	public class XplatUIWin32 : XplatUIDriver {
 		#region Local Variables
 		private static XplatUIWin32	instance;
 		private static int		ref_count;
@@ -2706,7 +2705,7 @@ namespace System.Windows.Forms {
 		private extern static IntPtr Win32GetWindowRect(IntPtr hWnd, out RECT rect);
 
 		[DllImport ("user32.dll", EntryPoint="GetClientRect", CallingConvention=CallingConvention.StdCall)]
-		private extern static IntPtr Win32GetClientRect(IntPtr hWnd, out RECT rect);
+		public extern static IntPtr Win32GetClientRect(IntPtr hWnd, out RECT rect);
 
 		[DllImport ("user32.dll", EntryPoint="ScreenToClient", CallingConvention=CallingConvention.StdCall)]
 		private extern static bool Win32ScreenToClient(IntPtr hWnd, ref POINT pt);
@@ -2810,7 +2809,7 @@ namespace System.Windows.Forms {
 		internal extern static bool Win32GetTextMetrics(IntPtr hdc, ref TEXTMETRIC tm);
 
 		[DllImport ("gdi32.dll", EntryPoint="SelectObject", CallingConvention=CallingConvention.StdCall)]
-		internal extern static IntPtr Win32SelectObject(IntPtr hdc, IntPtr hgdiobject);
+		public extern static IntPtr Win32SelectObject(IntPtr hdc, IntPtr hgdiobject);
 
 		//[DllImport ("user32.dll", EntryPoint="ScrollWindowEx", CallingConvention=CallingConvention.StdCall)]
 		//private extern static bool Win32ScrollWindowEx(IntPtr hwnd, int dx, int dy, ref RECT prcScroll, ref RECT prcClip, IntPtr hrgnUpdate, out RECT prcUpdate, ScrollWindowExFlags flags);
@@ -2972,17 +2971,17 @@ namespace System.Windows.Forms {
 		internal extern static bool Win32GetClipCursor (out RECT lpRect);
 
 		[DllImport ("gdi32.dll", EntryPoint="BitBlt", CallingConvention=CallingConvention.StdCall)]
-		internal static extern bool Win32BitBlt (IntPtr hObject, int nXDest, int nYDest, int nWidth,
+        public static extern bool Win32BitBlt (IntPtr hObject, int nXDest, int nYDest, int nWidth,
 		   int nHeight, IntPtr hObjSource, int nXSrc, int nYSrc, TernaryRasterOperations dwRop);
 
 		[DllImport ("gdi32.dll", EntryPoint="CreateCompatibleDC", CallingConvention=CallingConvention.StdCall, ExactSpelling = true, SetLastError = true)]
-		internal static extern IntPtr Win32CreateCompatibleDC (IntPtr hdc);
+		public static extern IntPtr Win32CreateCompatibleDC (IntPtr hdc);
 
 		[DllImport ("gdi32.dll", EntryPoint="DeleteDC", CallingConvention=CallingConvention.StdCall, ExactSpelling = true, SetLastError = true)]
-		internal static extern bool Win32DeleteDC (IntPtr hdc);
+        public static extern bool Win32DeleteDC (IntPtr hdc);
 
 		[DllImport ("gdi32.dll", EntryPoint="CreateCompatibleBitmap", CallingConvention=CallingConvention.StdCall)]
-		internal static extern IntPtr Win32CreateCompatibleBitmap (IntPtr hdc, int nWidth, int nHeight);
+		public static extern IntPtr Win32CreateCompatibleBitmap (IntPtr hdc, int nWidth, int nHeight);
 
 		[DllImport ("kernel32.dll", EntryPoint = "GetSystemPowerStatus", CallingConvention = CallingConvention.StdCall)]
 		internal static extern Boolean Win32GetSystemPowerStatus (SYSTEMPOWERSTATUS sps);
