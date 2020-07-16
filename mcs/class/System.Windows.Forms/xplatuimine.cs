@@ -1,0 +1,2944 @@
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+using IntPtr = System.IntPtr;
+using Timer = System.Windows.Forms.Timer;
+
+internal class XplatUIMine : XplatUIDriver
+{
+    private XplatUIDriver driver = XplatUIWin32.GetInstance();
+
+    public override IntPtr InitializeDriver()
+    {
+        return IntPtr.Zero;
+    }
+
+    public override void ShutdownDriver(IntPtr token)
+    {
+        
+    }
+
+    public override int CaptionHeight => 0;
+
+    public override Size CursorSize => throw new NotImplementedException();
+
+    public override bool DragFullWindows => throw new NotImplementedException();
+
+    public override Size DragSize => Size.Empty;
+
+    public override Size FrameBorderSize => Size.Empty;
+
+    public override Size IconSize => throw new NotImplementedException();
+
+    public override Size MaxWindowTrackSize => throw new NotImplementedException();
+
+    public override bool MenuAccessKeysUnderlined => false;
+
+    public override Size MinimizedWindowSpacingSize => throw new NotImplementedException();
+
+    public override Size MinimumWindowSize => Size.Empty;
+
+    public override Size SmallIconSize => throw new NotImplementedException();
+
+    public override int MouseButtonCount => throw new NotImplementedException();
+
+    public override bool MouseButtonsSwapped => throw new NotImplementedException();
+
+    public override bool MouseWheelPresent => throw new NotImplementedException();
+
+    public override Rectangle VirtualScreen => throw new NotImplementedException();
+
+    public override Rectangle WorkingArea => Rectangle.Empty;
+
+    public override Screen[] AllScreens => new Screen[] {new Screen(true, "screen1", new Rectangle(0,0,1024,768), new Rectangle(0, 0, 1024, 768))};
+
+    public override bool ThemesEnabled => throw new NotImplementedException();
+
+    public override event EventHandler Idle;
+
+    private static int ref_count;
+    private static IntPtr FosterParentLast;
+
+    internal static MouseButtons mouse_state;
+    internal static Point mouse_position;
+    internal static bool grab_confined;
+    internal static IntPtr grab_hwnd;
+    internal static Rectangle grab_area;
+    internal static WndProc wnd_proc;
+    internal static IntPtr prev_mouse_hwnd;
+    internal static bool caret_visible;
+
+    internal static bool themes_enabled;
+    private Hashtable timer_list;
+    private static Queue message_queue;
+    private static IntPtr clip_magic = new IntPtr(27051977);
+    private static int scroll_width;
+    private static int scroll_height;
+    private static Hashtable wm_nc_registered;
+    private static RECT clipped_cursor_rect;
+
+    private IntPtr InternalWndProc(IntPtr hWnd, Msg msg, IntPtr wParam, IntPtr lParam)
+    {
+        return NativeWindow.WndProc(hWnd, msg, wParam, lParam);
+    }
+    public XplatUIMine()
+    {
+        // Handle singleton stuff first
+        ref_count = 0;
+
+        mouse_state = MouseButtons.None;
+        mouse_position = Point.Empty;
+
+        grab_confined = false;
+        grab_area = Rectangle.Empty;
+
+        message_queue = new Queue();
+
+        themes_enabled = false;
+
+        wnd_proc = new WndProc(InternalWndProc);
+
+        FosterParentLast = IntPtr.Zero;
+
+        scroll_height = 0;//Win32GetSystemMetrics(SystemMetrics.SM_CYHSCROLL);
+        scroll_width = 0;//Win32GetSystemMetrics(SystemMetrics.SM_CXVSCROLL);
+
+        timer_list = new Hashtable();
+        registered_classes = new Hashtable();
+
+        MessageQueues = Hashtable.Synchronized(new Hashtable(7));
+        unattached_timer_list = ArrayList.Synchronized(new ArrayList(3));
+        messageHold = Hashtable.Synchronized(new Hashtable(3));
+
+        ModalWindows = new Stack(3);
+    }
+    public override void AudibleAlert(AlertType alert)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void BeginMoveResize(IntPtr handle)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void EnableThemes()
+    {
+        
+    }
+
+    public override void GetDisplaySize(out Size size)
+    {
+        throw new NotImplementedException();
+    }
+    private IntPtr GetFosterParent()
+    {
+        //if (!IsWindow(FosterParentLast))
+        {
+            //FosterParentLast = Win32CreateWindow(WindowExStyles.WS_EX_TOOLWINDOW, "static", "Foster Parent Window", WindowStyles.WS_OVERLAPPEDWINDOW, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+
+            if (FosterParentLast == IntPtr.Zero)
+            {
+                //Win32MessageBox(IntPtr.Zero, "Could not create foster window, win32 error " + Win32GetLastError().ToString(), "Oops", 0);
+            }
+        }
+        return FosterParentLast;
+    }
+    public override IntPtr CreateWindow(CreateParams cp)
+    {
+        IntPtr WindowHandle;
+        IntPtr ParentHandle;
+
+        ParentHandle = cp.Parent;
+
+        if ((ParentHandle == IntPtr.Zero) && (cp.Style & (int)(WindowStyles.WS_CHILD)) != 0)
+        {
+            // We need to use our foster parent window until this poor child gets it's parent assigned
+            ParentHandle = GetFosterParent();
+        }
+
+        if (((cp.Style & (int)(WindowStyles.WS_CHILD | WindowStyles.WS_POPUP)) == 0) && ((cp.ExStyle & (int)WindowExStyles.WS_EX_APPWINDOW) == 0))
+        {
+            // If we want to be hidden from the taskbar we need to be 'owned' by 
+            // something not on the taskbar. FosterParent is just that
+            ParentHandle = GetFosterParent();
+        }
+
+        Point location;
+        if (cp.control is Form && cp.X == int.MinValue && cp.Y == int.MinValue)
+        {
+            location = Hwnd.GetNextStackedFormLocation(cp);
+        }
+        else
+        {
+            location = new Point(cp.X, cp.Y);
+        }
+
+        string class_name = RegisterWindowClass(cp.ClassStyle);
+
+        // We cannot actually send the WS_EX_MDICHILD flag to Windows because we
+        // are faking MDI, not uses Windows' version.
+        if ((cp.WindowExStyle & WindowExStyles.WS_EX_MDICHILD) == WindowExStyles.WS_EX_MDICHILD)
+            cp.WindowExStyle ^= WindowExStyles.WS_EX_MDICHILD;
+
+        WindowHandle = driver.CreateWindow(cp);// new IntPtr(WindowHandleCount++);// Win32CreateWindow(cp.WindowExStyle, class_name, cp.Caption, cp.WindowStyle, location.X, location.Y, cp.Width, cp.Height, ParentHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+
+        if (WindowHandle == IntPtr.Zero)
+        {
+            //int error = Marshal.GetLastWin32Error();
+
+            //Win32MessageBox(IntPtr.Zero, "Error : " + error.ToString(), "Failed to create window, class '" + cp.ClassName + "'", 0);
+        }
+
+        var hwnd = new Hwnd();
+
+        hwnd.x = location.X;
+        hwnd.y = location.Y;
+        hwnd.width = cp.Width;
+        hwnd.height = cp.Height;
+        hwnd.parent = Hwnd.ObjectFromHandle(cp.Parent);
+        hwnd.initial_style = cp.WindowStyle;
+        hwnd.initial_ex_style = cp.WindowExStyle;
+
+        if (StyleSet(cp.Style, WindowStyles.WS_DISABLED))
+        {
+            hwnd.enabled = false;
+        }
+
+        var ClientWindow = IntPtr.Zero;
+
+        Size XWindowSize = TranslateWindowSizeToXWindowSize(cp);
+        Rectangle XClientRect = TranslateClientRectangleToXClientRectangle(hwnd, cp.control);
+
+        if (!StyleSet(cp.Style, WindowStyles.WS_CHILD))
+        {
+            /*
+            if ((X != unchecked((int)0x80000000)) && (Y != unchecked((int)0x80000000)))
+            {
+                XSizeHints hints;
+
+                hints = new XSizeHints();
+                hints.x = X;
+                hints.y = Y;
+                hints.flags = (IntPtr)(XSizeHintsFlags.USPosition | XSizeHintsFlags.PPosition);
+                //XSetWMNormalHints(DisplayHandle, WholeWindow, ref hints);
+            }*/
+        }
+
+        hwnd.Queue = ThreadQueue(Thread.CurrentThread);
+        hwnd.WholeWindow = WindowHandle;
+        hwnd.ClientWindow = WindowHandle;
+
+        if (ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_TOPMOST))
+            SetTopmost(hwnd.whole_window, true);
+
+        SetWMStyles(hwnd, cp);
+
+        if (StyleSet(cp.Style, WindowStyles.WS_MINIMIZE))
+        {
+            SetWindowState(hwnd.Handle, FormWindowState.Minimized);
+        }
+        else if (StyleSet(cp.Style, WindowStyles.WS_MAXIMIZE))
+        {
+            SetWindowState(hwnd.Handle, FormWindowState.Maximized);
+        }
+
+        // Set caption/window title
+        Text(hwnd.Handle, cp.Caption);
+
+        SendMessage(hwnd.Handle, Msg.WM_CREATE, (IntPtr)1, IntPtr.Zero /* XXX unused */);
+        SendParentNotify(hwnd.Handle, Msg.WM_CREATE, int.MaxValue, int.MaxValue);
+
+        if (StyleSet(cp.Style, WindowStyles.WS_VISIBLE))
+        {
+            hwnd.visible = true;
+            MapWindow(hwnd, WindowType.Both);
+            if (!(Control.FromHandle(hwnd.Handle) is Form))
+                SendMessage(hwnd.Handle, Msg.WM_SHOWWINDOW, (IntPtr)1, IntPtr.Zero);
+        }
+
+        return hwnd.zombie ? IntPtr.Zero : hwnd.Handle;
+
+        //Win32SetWindowLong(WindowHandle, WindowLong.GWL_USERDATA, (uint)ThemeEngine.Current.DefaultControlBackColor.ToArgb());
+
+        return WindowHandle;
+    }
+
+    internal static Size TranslateWindowSizeToXWindowSize(CreateParams cp)
+    {
+        return TranslateWindowSizeToXWindowSize(cp, new Size(cp.Width, cp.Height));
+    }
+
+    internal static Size TranslateWindowSizeToXWindowSize(CreateParams cp, Size size)
+    {
+        /* 
+         * If this is a form with no window manager, X is handling all the border and caption painting
+         * so remove that from the area (since the area we set of the window here is the part of the window 
+         * we're painting in only)
+         */
+        Form form = cp.control as Form;
+        if (form != null && (form.window_manager == null && !cp.IsSet(WindowExStyles.WS_EX_TOOLWINDOW)))
+        {
+            Hwnd.Borders borders = Hwnd.GetBorders(cp, null);
+            Size xrect = size;
+
+            xrect.Width -= borders.left + borders.right;
+            xrect.Height -= borders.top + borders.bottom;
+
+            size = xrect;
+        }
+        if (size.Height == 0)
+            size.Height = 1;
+        if (size.Width == 0)
+            size.Width = 1;
+        return size;
+    }
+    void SetWMStyles(Hwnd hwnd, CreateParams cp)
+    {
+        MotifWmHints mwmHints;
+        MotifFunctions functions;
+        MotifDecorations decorations;
+        int[] atoms;
+        int atom_count;
+        Rectangle client_rect;
+        Form form;
+        IntPtr window_type;
+        bool hide_from_taskbar;
+        IntPtr transient_for_parent;
+
+        // Windows we manage ourselves don't need WM window styles.
+        if (cp.HasWindowManager && !cp.IsSet(WindowExStyles.WS_EX_TOOLWINDOW))
+        {
+            return;
+        }
+
+        atoms = new int[8];
+        mwmHints = new MotifWmHints();
+        functions = 0;
+        decorations = 0;
+        transient_for_parent = IntPtr.Zero;
+
+        mwmHints.flags = (IntPtr)(MotifFlags.Functions | MotifFlags.Decorations);
+        mwmHints.functions = (IntPtr)0;
+        mwmHints.decorations = (IntPtr)0;
+
+        form = cp.control as Form;
+
+        if (ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+        {
+            /* tool windows get no window manager
+               decorations.
+            */
+
+            /* just because the window doesn't get any decorations doesn't
+               mean we should disable the functions.  for instance, without
+               MotifFunctions.Maximize, changing the windowstate to Maximized
+               is ignored by metacity. */
+            functions |= MotifFunctions.Move | MotifFunctions.Resize | MotifFunctions.Minimize | MotifFunctions.Maximize;
+        }
+        else if (form != null && form.FormBorderStyle == FormBorderStyle.None)
+        {
+            /* allow borderless window to be maximized */
+            functions |= MotifFunctions.All | MotifFunctions.Resize;
+        }
+        else
+        {
+            if (StyleSet(cp.Style, WindowStyles.WS_CAPTION))
+            {
+                functions |= MotifFunctions.Move;
+                decorations |= MotifDecorations.Title | MotifDecorations.Menu;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_THICKFRAME))
+            {
+                functions |= MotifFunctions.Move | MotifFunctions.Resize;
+                decorations |= MotifDecorations.Border | MotifDecorations.ResizeH;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_MINIMIZEBOX))
+            {
+                functions |= MotifFunctions.Minimize;
+                decorations |= MotifDecorations.Minimize;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_MAXIMIZEBOX))
+            {
+                functions |= MotifFunctions.Maximize;
+                decorations |= MotifDecorations.Maximize;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_SIZEBOX))
+            {
+                functions |= MotifFunctions.Resize;
+                decorations |= MotifDecorations.ResizeH;
+            }
+
+            if (ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_DLGMODALFRAME))
+            {
+                decorations |= MotifDecorations.Border;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_BORDER))
+            {
+                decorations |= MotifDecorations.Border;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_DLGFRAME))
+            {
+                decorations |= MotifDecorations.Border;
+            }
+
+            if (StyleSet(cp.Style, WindowStyles.WS_SYSMENU))
+            {
+                functions |= MotifFunctions.Close;
+            }
+            else
+            {
+                functions &= ~(MotifFunctions.Maximize | MotifFunctions.Minimize | MotifFunctions.Close);
+                decorations &= ~(MotifDecorations.Menu | MotifDecorations.Maximize | MotifDecorations.Minimize);
+                if (cp.Caption == "")
+                {
+                    functions &= ~MotifFunctions.Move;
+                    decorations &= ~(MotifDecorations.Title | MotifDecorations.ResizeH);
+                }
+            }
+        }
+
+        if ((functions & MotifFunctions.Resize) == 0)
+        {
+            hwnd.fixed_size = true;
+            Rectangle fixed_rectangle = new Rectangle(cp.X, cp.Y, cp.Width, cp.Height);
+            SetWindowMinMax(hwnd.Handle, fixed_rectangle, fixed_rectangle.Size, fixed_rectangle.Size);
+        }
+        else
+        {
+            hwnd.fixed_size = false;
+        }
+
+        mwmHints.functions = (IntPtr)functions;
+        mwmHints.decorations = (IntPtr)decorations;
+
+        //DriverDebug("SetWMStyles ({0}, {1}) functions = {2}, decorations = {3}", hwnd, cp, functions, decorations);
+
+        if (cp.IsSet(WindowExStyles.WS_EX_TOOLWINDOW))
+        {
+            // needed! map toolwindows to _NET_WM_WINDOW_TYPE_UTILITY to make newer metacity versions happy
+            // and get those windows in front of their parents
+            //window_type = _NET_WM_WINDOW_TYPE_UTILITY;
+        }
+        else
+        {
+           // window_type = _NET_WM_WINDOW_TYPE_NORMAL;
+        }
+
+        if (!cp.IsSet(WindowExStyles.WS_EX_APPWINDOW))
+        {
+            hide_from_taskbar = true;
+        }
+        else if (cp.IsSet(WindowExStyles.WS_EX_TOOLWINDOW) && form != null && form.Parent != null && !form.ShowInTaskbar)
+        {
+            hide_from_taskbar = true;
+        }
+        else
+        {
+            hide_from_taskbar = false;
+        }
+
+        if (ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+        {
+            if (form != null && !hwnd.reparented)
+            {
+                if (form.Owner != null && form.Owner.Handle != IntPtr.Zero)
+                {
+                    Hwnd owner_hwnd = Hwnd.ObjectFromHandle(form.Owner.Handle);
+                    if (owner_hwnd != null)
+                        transient_for_parent = owner_hwnd.whole_window;
+                }
+            }
+        }
+        if (StyleSet(cp.Style, WindowStyles.WS_POPUP) && (hwnd.parent != null) && (hwnd.parent.whole_window != IntPtr.Zero))
+        {
+            transient_for_parent = hwnd.parent.whole_window;
+        }
+
+        FormWindowState current_state = GetWindowState(hwnd.Handle);
+        if (current_state == (FormWindowState)(-1))
+            current_state = FormWindowState.Normal;
+
+        client_rect = TranslateClientRectangleToXClientRectangle(hwnd);
+
+    }
+
+    internal static Rectangle TranslateClientRectangleToXClientRectangle(Hwnd hwnd)
+    {
+        return TranslateClientRectangleToXClientRectangle(hwnd, Control.FromHandle(hwnd.Handle));
+    }
+
+    internal static Rectangle TranslateClientRectangleToXClientRectangle(Hwnd hwnd, Control ctrl)
+    {
+        /* 
+         * If this is a form with no window manager, X is handling all the border and caption painting
+         * so remove that from the area (since the area we set of the window here is the part of the window 
+         * we're painting in only)
+         */
+        Rectangle rect = hwnd.ClientRect;
+        Form form = ctrl as Form;
+        CreateParams cp = null;
+
+        if (form != null)
+            cp = form.GetCreateParams();
+
+        if (form != null && (form.window_manager == null && !cp.IsSet(WindowExStyles.WS_EX_TOOLWINDOW)))
+        {
+            Hwnd.Borders borders = Hwnd.GetBorders(cp, null);
+            Rectangle xrect = rect;
+
+            xrect.Y -= borders.top;
+            xrect.X -= borders.left;
+            xrect.Width += borders.left + borders.right;
+            xrect.Height += borders.top + borders.bottom;
+
+            rect = xrect;
+        }
+
+        if (rect.Width < 1 || rect.Height < 1)
+        {
+            rect.Width = 1;
+            rect.Height = 1;
+            rect.X = -5;
+            rect.Y = -5;
+        }
+
+        return rect;
+    }
+    void WaitForHwndMessage(Hwnd hwnd, Msg message)
+    {
+        WaitForHwndMessage(hwnd, message, false);
+
+    }
+    // messages WaitForHwndMwssage is waiting on
+    static Hashtable messageHold;
+    void WaitForHwndMessage(Hwnd hwnd, Msg message, bool process)
+    {
+        MSG msg = new MSG();
+        XEventQueue queue;
+
+        queue = ThreadQueue(Thread.CurrentThread);
+
+        queue.DispatchIdle = false;
+
+        bool done = false;
+        string key = hwnd.Handle + ":" + message;
+        if (!messageHold.ContainsKey(key))
+            messageHold.Add(key, 1);
+        else
+            messageHold[key] = ((int)messageHold[key]) + 1;
+
+
+        do
+        {
+
+            DebugHelper.WriteLine("Waiting for message " + message + " on hwnd " + String.Format("0x{0:x}", hwnd.Handle.ToInt32()));
+            DebugHelper.Indent();
+
+            if (PeekMessage(queue, ref msg, IntPtr.Zero, 0, 0, (uint)PeekMessageFlags.PM_REMOVE))
+            {
+                if ((Msg)msg.message == Msg.WM_QUIT)
+                {
+                    PostQuitMessage(0);
+                    done = true;
+                }
+                else
+                {
+
+                    DebugHelper.WriteLine("PeekMessage got " + msg);
+
+                    if (msg.hwnd == hwnd.Handle)
+                    {
+                        if ((Msg)msg.message == message)
+                        {
+                            if (process)
+                            {
+                                TranslateMessage(ref msg);
+                                DispatchMessage(ref msg);
+                            }
+                            break;
+                        }
+                        else if ((Msg)msg.message == Msg.WM_DESTROY)
+                            done = true;
+                    }
+
+                    TranslateMessage(ref msg);
+                    DispatchMessage(ref msg);
+                }
+            }
+
+            done = !messageHold.ContainsKey(key) || ((int)messageHold[key] < 1) || done;
+        } while (!done);
+
+        messageHold.Remove(key);
+
+        DebugHelper.Unindent();
+        DebugHelper.WriteLine("Finished waiting for " + key);
+
+        queue.DispatchIdle = true;
+
+    }
+
+    void MapWindow(Hwnd hwnd, WindowType windows)
+    {
+        if (!hwnd.mapped)
+        {
+            Form f = Control.FromHandle(hwnd.Handle) as Form;
+            if (f != null)
+            {
+                if (f.WindowState == FormWindowState.Normal)
+                {
+                    f.waiting_showwindow = true;
+                    SendMessage(hwnd.Handle, Msg.WM_SHOWWINDOW, (IntPtr)1, IntPtr.Zero);
+                }
+            }
+
+            // it's possible that our Hwnd is no
+            // longer valid after making that
+            // SendMessage call, so check here.
+            if (hwnd.zombie)
+                return;
+
+            if (hwnd.topmost)
+            {
+                // Most window managers will respect the _NET_WM_STATE property.
+                // If not, use XMapRaised to map the window at the top level as
+                // a last ditch effort.
+                if ((windows & WindowType.Whole) != 0)
+                {
+                    //XMapRaised(DisplayHandle, hwnd.whole_window);
+                }
+                if ((windows & WindowType.Client) != 0)
+                {
+                    //XMapRaised(DisplayHandle, hwnd.client_window);
+                }
+            }
+            else
+            {
+                if ((windows & WindowType.Whole) != 0)
+                {
+                    //XMapWindow(DisplayHandle, hwnd.whole_window);
+                }
+                if ((windows & WindowType.Client) != 0)
+                {
+                    //XMapWindow(DisplayHandle, hwnd.client_window);
+                }
+            }
+
+            hwnd.mapped = true;
+
+            if (f != null)
+            {
+                if (f.waiting_showwindow)
+                {
+                    WaitForHwndMessage(hwnd, Msg.WM_SHOWWINDOW);
+                    CreateParams cp = f.GetCreateParams();
+                    if (!ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_MDICHILD) &&
+                        !StyleSet(cp.Style, WindowStyles.WS_CHILD))
+                    {
+                        WaitForHwndMessage(hwnd, Msg.WM_ACTIVATE, true);
+                    }
+                }
+            }
+        }
+    }
+
+    void UnmapWindow(Hwnd hwnd, WindowType windows)
+    {
+        if (hwnd.mapped)
+        {
+            Form f = null;
+            if (Control.FromHandle(hwnd.Handle) is Form)
+            {
+                f = Control.FromHandle(hwnd.Handle) as Form;
+                if (f.WindowState == FormWindowState.Normal)
+                {
+                    f.waiting_showwindow = true;
+                    SendMessage(hwnd.Handle, Msg.WM_SHOWWINDOW, IntPtr.Zero, IntPtr.Zero);
+                }
+            }
+
+            // it's possible that our Hwnd is no
+            // longer valid after making that
+            // SendMessage call, so check here.
+            // FIXME: it is likely wrong, as it has already sent WM_SHOWWINDOW
+            if (hwnd.zombie)
+                return;
+
+            if ((windows & WindowType.Client) != 0)
+            {
+                //XUnmapWindow(DisplayHandle, hwnd.client_window);
+            }
+            if ((windows & WindowType.Whole) != 0)
+            {
+                //XUnmapWindow(DisplayHandle, hwnd.whole_window);
+            }
+
+            hwnd.mapped = false;
+
+            if (f != null)
+            {
+                if (f.waiting_showwindow)
+                {
+                    WaitForHwndMessage(hwnd, Msg.WM_SHOWWINDOW);
+                    CreateParams cp = f.GetCreateParams();
+                    if (!ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_MDICHILD) &&
+                        !StyleSet(cp.Style, WindowStyles.WS_CHILD))
+                    {
+                        WaitForHwndMessage(hwnd, Msg.WM_ACTIVATE, true);
+                    }
+                }
+            }
+        }
+    }
+
+    void SendParentNotify(IntPtr child, Msg cause, int x, int y)
+    {
+        Hwnd hwnd;
+
+        if (child == IntPtr.Zero)
+        {
+            return;
+        }
+
+        hwnd = Hwnd.GetObjectFromWindow(child);
+
+        if (hwnd == null)
+        {
+            return;
+        }
+
+        if (hwnd.Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (ExStyleSet((int)hwnd.initial_ex_style, WindowExStyles.WS_EX_NOPARENTNOTIFY))
+        {
+            return;
+        }
+
+        if (hwnd.Parent == null)
+        {
+            return;
+        }
+
+        if (hwnd.Parent.Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (cause == Msg.WM_CREATE || cause == Msg.WM_DESTROY)
+        {
+            SendMessage(hwnd.Parent.Handle, Msg.WM_PARENTNOTIFY, Control.MakeParam((int)cause, 0), child);
+        }
+        else
+        {
+            SendMessage(hwnd.Parent.Handle, Msg.WM_PARENTNOTIFY, Control.MakeParam((int)cause, 0), Control.MakeParam(x, y));
+        }
+
+        SendParentNotify(hwnd.Parent.Handle, cause, x, y);
+    }
+    static Hashtable MessageQueues;
+    static ArrayList unattached_timer_list; // holds timers that are enabled but not attached to a window.
+    XEventQueue ThreadQueue(Thread thread)
+    {
+        XEventQueue queue;
+
+        queue = (XEventQueue)MessageQueues[thread];
+        if (queue == null)
+        {
+            queue = new XEventQueue(thread);
+            MessageQueues[thread] = queue;
+        }
+
+        return queue;
+    }
+    bool StyleSet(int s, WindowStyles ws)
+    {
+        return (s & (int)ws) == (int)ws;
+    }
+
+    bool ExStyleSet(int ex, WindowExStyles exws)
+    {
+        return (ex & (int)exws) == (int)exws;
+    }
+
+    private static int WindowHandleCount = 1;
+
+    private Hashtable registered_classes;
+    private IntPtr AsyncAtom = new IntPtr(6544352);
+    private IntPtr PostAtom = new IntPtr(6544353);
+
+    private string RegisterWindowClass(int classStyle)
+    {
+        string class_name;
+
+        lock (registered_classes)
+        {
+            class_name = (string)registered_classes[classStyle];
+
+            if (class_name != null)
+                return class_name;
+
+            class_name = string.Format("Mono.WinForms.{0}.{1}", System.Threading.Thread.GetDomainID().ToString(), classStyle);
+
+            WNDCLASS wndClass;
+
+            wndClass.style = classStyle;
+            wndClass.lpfnWndProc = wnd_proc;
+            wndClass.cbClsExtra = 0;
+            wndClass.cbWndExtra = 0;
+            wndClass.hbrBackground = (IntPtr)(GetSysColorIndex.COLOR_WINDOW + 1);
+            //wndClass.hCursor = Win32LoadCursor(IntPtr.Zero, LoadCursorType.IDC_ARROW);
+            wndClass.hIcon = IntPtr.Zero;
+            wndClass.hInstance = IntPtr.Zero;
+            wndClass.lpszClassName = class_name;
+            wndClass.lpszMenuName = "";
+
+            //bool result = Win32RegisterClass(ref wndClass);
+
+            //if (result == false) Win32MessageBox(IntPtr.Zero, "Could not register the window class, win32 error " + Win32GetLastError().ToString(), "Oops", 0);
+
+            registered_classes[classStyle] = class_name;
+        }
+
+        return class_name;
+    }
+
+    public override IntPtr CreateWindow(IntPtr Parent, int X, int Y, int Width, int Height)
+    {
+        CreateParams create_params = new CreateParams();
+
+        create_params.Caption = "";
+        create_params.X = X;
+        create_params.Y = Y;
+        create_params.Width = Width;
+        create_params.Height = Height;
+
+        create_params.ClassName = XplatUI.GetDefaultClassName(GetType());
+        create_params.ClassStyle = 0;
+        create_params.ExStyle = 0;
+        create_params.Parent = IntPtr.Zero;
+        create_params.Param = 0;
+
+        return CreateWindow(create_params);
+    }
+
+    public override void DestroyWindow(IntPtr handle)
+    {
+
+        Hwnd hwnd;
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        // The window should never ever be a zombie here, since we should
+        // wait until it's completely dead before returning from 
+        // "destroying" calls, but just in case....
+        if (hwnd == null || hwnd.zombie)
+        {
+            DriverDebug("window {0:X} already destroyed", handle.ToInt32());
+            return;
+        }
+
+        DriverDebug("Destroying window {0}", XplatUI.Window(hwnd.client_window));
+
+        SendParentNotify(hwnd.Handle, Msg.WM_DESTROY, int.MaxValue, int.MaxValue);
+
+        CleanupCachedWindows(hwnd);
+
+        ArrayList windows = new ArrayList();
+
+        AccumulateDestroyedHandles(Control.ControlNativeWindow.ControlFromHandle(hwnd.Handle), windows);
+
+
+        foreach (Hwnd h in windows)
+        {
+            SendMessage(h.Handle, Msg.WM_DESTROY, IntPtr.Zero, IntPtr.Zero);
+            h.zombie = true;
+        }
+
+        //lock (XlibLock)
+        {
+            if (hwnd.whole_window != IntPtr.Zero)
+            {
+                DriverDebug("XDestroyWindow (whole_window = {0:X})", hwnd.whole_window.ToInt32());
+                //Keyboard.DestroyICForWindow(hwnd.whole_window);
+                //XDestroyWindow(DisplayHandle, hwnd.whole_window);
+            }
+            else if (hwnd.client_window != IntPtr.Zero)
+            {
+                DriverDebug("XDestroyWindow (client_window = {0:X})", hwnd.client_window.ToInt32());
+                //Keyboard.DestroyICForWindow(hwnd.client_window);
+                //XDestroyWindow(DisplayHandle, hwnd.client_window);
+            }
+
+        }
+
+        driver.DestroyWindow(handle);
+    }
+
+    void AccumulateDestroyedHandles(Control c, ArrayList list)
+    {
+        DebugHelper.Enter();
+        if (c != null)
+        {
+
+            Control[] controls = c.Controls.GetAllControls();
+
+            DebugHelper.WriteLine("Checking control:0x{0:x}", c.IsHandleCreated ? c.Handle.ToInt32() : 0);
+
+            if (c.IsHandleCreated && !c.IsDisposed)
+            {
+                Hwnd hwnd = Hwnd.ObjectFromHandle(c.Handle);
+
+                DriverDebug(" + adding {0} to the list of zombie windows", XplatUI.Window(hwnd.Handle));
+                //DriverDebug(" + parent X window is {0:X}", XGetParent(hwnd.whole_window).ToInt32());
+
+                list.Add(hwnd);
+                CleanupCachedWindows(hwnd);
+            }
+
+            for (int i = 0; i < controls.Length; i++)
+            {
+                AccumulateDestroyedHandles(controls[i], list);
+            }
+        }
+        DebugHelper.Leave();
+    }
+    static IntPtr ActiveWindow;		// Handle of the active window
+
+    void CleanupCachedWindows(Hwnd hwnd)
+    {
+        if (ActiveWindow == hwnd.Handle)
+        {
+            SendMessage(hwnd.client_window, Msg.WM_ACTIVATE, (IntPtr)WindowActiveFlags.WA_INACTIVE, IntPtr.Zero);
+            ActiveWindow = IntPtr.Zero;
+        }
+
+        if (FocusWindow == hwnd.Handle)
+        {
+            SendMessage(hwnd.client_window, Msg.WM_KILLFOCUS, IntPtr.Zero, IntPtr.Zero);
+            FocusWindow = IntPtr.Zero;
+        }
+
+        if (Grab.Hwnd == hwnd.Handle)
+        {
+            Grab.Hwnd = IntPtr.Zero;
+            Grab.Confined = false;
+        }
+
+        DestroyCaret(hwnd.Handle);
+    }
+    public override FormWindowState GetWindowState(IntPtr handle)
+    {
+        //throw new NotImplementedException();
+        return FormWindowState.Normal;
+    }
+
+    public override void SetWindowState(IntPtr handle, FormWindowState state)
+    {
+
+        FormWindowState current_state;
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        current_state = GetWindowState(handle);
+
+        if (current_state == state)
+        {
+            return;
+        }
+
+        switch (state)
+        {
+            case FormWindowState.Normal:
+            {
+                //lock (XlibLock)
+                {
+                    if (current_state == FormWindowState.Minimized)
+                    {
+                        MapWindow(hwnd, WindowType.Both);
+                    }
+                    else if (current_state == FormWindowState.Maximized)
+                    {
+                       // SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)2 /* toggle */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                    }
+                }
+                Activate(handle);
+                return;
+            }
+
+            case FormWindowState.Minimized:
+            {
+               // lock (XlibLock)
+                {
+                    if (current_state == FormWindowState.Maximized)
+                    {
+                        //SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)2 /* toggle */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                    }
+                    //XIconifyWindow(DisplayHandle, hwnd.whole_window, ScreenNo);
+                }
+                return;
+            }
+
+            case FormWindowState.Maximized:
+            {
+               // lock (XlibLock)
+                {
+                    if (current_state == FormWindowState.Minimized)
+                    {
+                        MapWindow(hwnd, WindowType.Both);
+                    }
+
+                    //SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)1 /* Add */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                }
+                Activate(handle);
+                return;
+            }
+        }
+    }
+
+    public override void SetWindowMinMax(IntPtr handle, Rectangle maximized, Size min, Size max)
+    {
+        Control ctrl = Control.FromHandle(handle);
+        SetWindowMinMax(handle, maximized, min, max, ctrl != null ? ctrl.GetCreateParams() : null);
+    }
+
+    internal void SetWindowMinMax(IntPtr handle, Rectangle maximized, Size min, Size max, CreateParams cp)
+    {
+        Hwnd hwnd;
+        XSizeHints hints;
+        IntPtr dummy;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+        if (hwnd == null)
+        {
+            return;
+        }
+
+        min.Width = Math.Max(min.Width, SystemInformation.MinimumWindowSize.Width);
+        min.Height = Math.Max(min.Height, SystemInformation.MinimumWindowSize.Height);
+
+        hints = new XSizeHints();
+
+        //XGetWMNormalHints(DisplayHandle, hwnd.whole_window, ref hints, out dummy);
+        if ((min != Size.Empty) && (min.Width > 0) && (min.Height > 0))
+        {
+            if (cp != null)
+                min = TranslateWindowSizeToXWindowSize(cp, min);
+            hints.flags = (IntPtr)((int)hints.flags | (int)XSizeHintsFlags.PMinSize);
+            hints.min_width = min.Width;
+            hints.min_height = min.Height;
+        }
+
+        if ((max != Size.Empty) && (max.Width > 0) && (max.Height > 0))
+        {
+            if (cp != null)
+                max = TranslateWindowSizeToXWindowSize(cp, max);
+            hints.flags = (IntPtr)((int)hints.flags | (int)XSizeHintsFlags.PMaxSize);
+            hints.max_width = max.Width;
+            hints.max_height = max.Height;
+        }
+
+        if (hints.flags != IntPtr.Zero)
+        {
+            // The Metacity team has decided that they won't care about this when clicking the maximize icon, 
+            // they will maximize the window to fill the screen/parent no matter what.
+            // http://bugzilla.ximian.com/show_bug.cgi?id=80021
+            //XSetWMNormalHints(DisplayHandle, hwnd.whole_window, ref hints);
+        }
+
+        if ((maximized != Rectangle.Empty) && (maximized.Width > 0) && (maximized.Height > 0))
+        {
+            if (cp != null)
+                maximized.Size = TranslateWindowSizeToXWindowSize(cp);
+            hints.flags = (IntPtr)XSizeHintsFlags.PPosition;
+            hints.x = maximized.X;
+            hints.y = maximized.Y;
+            hints.width = maximized.Width;
+            hints.height = maximized.Height;
+
+            // Metacity does not seem to follow this constraint for maximized (zoomed) windows
+            //XSetZoomHints(DisplayHandle, hwnd.whole_window, ref hints);
+        }
+    }
+
+    public override void SetWindowStyle(IntPtr handle, CreateParams cp)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+        SetHwndStyles(hwnd, cp);
+        SetWMStyles(hwnd, cp);
+    }
+    void SetHwndStyles(Hwnd hwnd, CreateParams cp)
+    {
+        DeriveStyles(cp.Style, cp.ExStyle, out hwnd.border_style, out hwnd.border_static, out hwnd.title_style, out hwnd.caption_height, out hwnd.tool_caption_height);
+    }
+
+    void DeriveStyles(int Style, int ExStyle, out FormBorderStyle border_style, out bool border_static, out TitleStyle title_style, out int caption_height, out int tool_caption_height)
+    {
+
+        caption_height = 0;
+        tool_caption_height = 19;
+        border_static = false;
+
+        if (StyleSet(Style, WindowStyles.WS_CHILD))
+        {
+            if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_CLIENTEDGE))
+            {
+                border_style = FormBorderStyle.Fixed3D;
+            }
+            else if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_STATICEDGE))
+            {
+                border_style = FormBorderStyle.Fixed3D;
+                border_static = true;
+            }
+            else if (!StyleSet(Style, WindowStyles.WS_BORDER))
+            {
+                border_style = FormBorderStyle.None;
+            }
+            else
+            {
+                border_style = FormBorderStyle.FixedSingle;
+            }
+            title_style = TitleStyle.None;
+
+            if (StyleSet(Style, WindowStyles.WS_CAPTION))
+            {
+                caption_height = 19;
+                if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+                {
+                    title_style = TitleStyle.Tool;
+                }
+                else
+                {
+                    title_style = TitleStyle.Normal;
+                }
+            }
+
+            if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_MDICHILD))
+            {
+                caption_height = 19;
+
+                if (StyleSet(Style, WindowStyles.WS_OVERLAPPEDWINDOW) ||
+                    ExStyleSet(ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+                {
+                    border_style = (FormBorderStyle)0xFFFF;
+                }
+                else
+                {
+                    border_style = FormBorderStyle.None;
+                }
+            }
+
+        }
+        else
+        {
+            title_style = TitleStyle.None;
+            if (StyleSet(Style, WindowStyles.WS_CAPTION))
+            {
+                if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+                {
+                    title_style = TitleStyle.Tool;
+                }
+                else
+                {
+                    title_style = TitleStyle.Normal;
+                }
+            }
+
+            border_style = FormBorderStyle.None;
+
+            if (StyleSet(Style, WindowStyles.WS_THICKFRAME))
+            {
+                if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+                {
+                    border_style = FormBorderStyle.SizableToolWindow;
+                }
+                else
+                {
+                    border_style = FormBorderStyle.Sizable;
+                }
+            }
+            else
+            {
+                if (StyleSet(Style, WindowStyles.WS_CAPTION))
+                {
+                    if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_CLIENTEDGE))
+                    {
+                        border_style = FormBorderStyle.Fixed3D;
+                    }
+                    else if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_STATICEDGE))
+                    {
+                        border_style = FormBorderStyle.Fixed3D;
+                        border_static = true;
+                    }
+                    else if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_DLGMODALFRAME))
+                    {
+                        border_style = FormBorderStyle.FixedDialog;
+                    }
+                    else if (ExStyleSet(ExStyle, WindowExStyles.WS_EX_TOOLWINDOW))
+                    {
+                        border_style = FormBorderStyle.FixedToolWindow;
+                    }
+                    else if (StyleSet(Style, WindowStyles.WS_BORDER))
+                    {
+                        border_style = FormBorderStyle.FixedSingle;
+                    }
+                }
+                else
+                {
+                    if (StyleSet(Style, WindowStyles.WS_BORDER))
+                    {
+                        border_style = FormBorderStyle.FixedSingle;
+                    }
+                }
+            }
+        }
+    }
+    public override double GetWindowTransparency(IntPtr handle)
+    {
+        return 1.0;
+    }
+
+    public override void SetWindowTransparency(IntPtr handle, double transparency, Color key)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override TransparencySupport SupportsTransparency()
+    {
+        return TransparencySupport.None;
+    }
+
+    public override void SetBorderStyle(IntPtr handle, FormBorderStyle border_style)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override void SetMenu(IntPtr handle, Menu menu)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override bool GetText(IntPtr handle, out string text)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override bool Text(IntPtr handle, string text)
+    {
+        //throw new NotImplementedException();
+        return true;
+    }
+
+    public override bool SetVisible(IntPtr handle, bool visible, bool activate)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd == null)
+            return false;
+
+        hwnd.visible = visible;
+
+        if (visible)
+        {
+            MapWindow(hwnd, WindowType.Both);
+
+            if (Control.FromHandle(handle) is Form)
+            {
+                FormWindowState s;
+
+                s = ((Form)Control.FromHandle(handle)).WindowState;
+
+                switch (s)
+                {
+                    case FormWindowState.Minimized: SetWindowState(handle, FormWindowState.Minimized); break;
+                    case FormWindowState.Maximized: SetWindowState(handle, FormWindowState.Maximized); break;
+                }
+            }
+
+            SendMessage(handle, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
+        }
+        else
+        {
+            UnmapWindow(hwnd, WindowType.Both);
+        }
+
+        return driver.SetVisible(handle, visible, activate);
+
+        return true;
+    }
+
+    public override bool IsVisible(IntPtr handle)
+    {
+        Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+        return (hwnd != null && hwnd.visible);
+    }
+
+    public override bool IsEnabled(IntPtr handle)
+    {
+        Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+        return (hwnd != null && hwnd.Enabled);
+    }
+
+    public override IntPtr SetParent(IntPtr handle, IntPtr parent)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+        hwnd.parent = Hwnd.ObjectFromHandle(parent);
+
+        //lock (XlibLock)
+        {
+            //DriverDebug("Parent for window {0} = {1}", XplatUI.Window(hwnd.Handle), XplatUI.Window(hwnd.parent != null ? hwnd.parent.Handle : IntPtr.Zero));
+            //XReparentWindow(DisplayHandle, hwnd.whole_window, hwnd.parent == null ? FosterParent : hwnd.parent.client_window, hwnd.x, hwnd.y);
+        }
+
+        return IntPtr.Zero;
+    }
+
+    public override IntPtr GetParent(IntPtr handle, bool with_owner)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+        if (hwnd != null)
+        {
+            if (hwnd.parent != null)
+            {
+                return hwnd.parent.Handle;
+            }
+            //if (hwnd.owner != null && with_owner)
+            {
+                //return hwnd.owner.Handle;
+            }
+        }
+        return IntPtr.Zero;
+    }
+
+    public override void UpdateWindow(IntPtr handle)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd == null || !hwnd.visible || !hwnd.expose_pending || !hwnd.Mapped)
+        {
+            return;
+        }
+
+        SendMessage(handle, Msg.WM_PAINT, IntPtr.Zero, IntPtr.Zero);
+        hwnd.Queue.Paint.Remove(hwnd);
+
+        //driver.UpdateWindow(handle);
+        //throw new NotImplementedException();
+    }
+
+    public override PaintEventArgs PaintEventStart(ref Message msg, IntPtr handle, bool client)
+    {
+        return driver.PaintEventStart(ref msg, handle, client);
+        //throw new NotImplementedException();
+    }
+
+    public override void PaintEventEnd(ref Message msg, IntPtr handle, bool client, PaintEventArgs pevent)
+    {
+        driver.PaintEventEnd(ref msg, handle, client, pevent);
+        //throw new NotImplementedException();
+    }
+
+    public override void SetWindowPos(IntPtr handle, int x, int y, int width, int height)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd == null)
+        {
+            return;
+        }
+
+        // Win32 automatically changes negative width/height to 0.
+        if (width < 0)
+            width = 0;
+        if (height < 0)
+            height = 0;
+
+        // X requires a sanity check for width & height; otherwise it dies
+        if (hwnd.zero_sized && width > 0 && height > 0)
+        {
+            if (hwnd.visible)
+            {
+                MapWindow(hwnd, WindowType.Whole);
+            }
+            hwnd.zero_sized = false;
+        }
+
+        if ((width < 1) || (height < 1))
+        {
+            hwnd.zero_sized = true;
+            UnmapWindow(hwnd, WindowType.Whole);
+        }
+
+        // Save a server roundtrip (and prevent a feedback loop)
+        if ((hwnd.x == x) && (hwnd.y == y) &&
+            (hwnd.width == width) && (hwnd.height == height))
+        {
+            return;
+        }
+
+        hwnd.x = x;
+        hwnd.y = y;
+        hwnd.width = width;
+        hwnd.height = height;
+
+        if (!hwnd.zero_sized)
+        {
+            if (hwnd.fixed_size)
+            {
+                SetWindowMinMax(handle, Rectangle.Empty, new Size(width, height), new Size(width, height));
+            }
+
+            //lock (XlibLock)
+            {
+                Control ctrl = Control.FromHandle(handle);
+                Size TranslatedSize = TranslateWindowSizeToXWindowSize(ctrl.GetCreateParams(), new Size(width, height));
+                //MoveResizeWindow(DisplayHandle, hwnd.whole_window, x, y, TranslatedSize.Width, TranslatedSize.Height);
+                PerformNCCalc(hwnd);
+            }
+        }
+
+        SendMessage(hwnd.client_window, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
+
+        driver.SetWindowPos(handle, x, y, width, height);
+        //throw new NotImplementedException();
+    }
+
+    public override void GetWindowPos(IntPtr handle, bool is_toplevel, out int x, out int y, out int width, out int height,
+        out int client_width, out int client_height)
+    {
+
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd != null)
+        {
+            x = hwnd.x;
+            y = hwnd.y;
+            width = hwnd.width;
+            height = hwnd.height;
+
+            PerformNCCalc(hwnd);
+
+            client_width = hwnd.ClientRect.Width;
+            client_height = hwnd.ClientRect.Height;
+
+            return;
+        }
+
+        // Should we throw an exception or fail silently?
+        // throw new ArgumentException("Called with an invalid window handle", "handle");
+
+        x = 0;
+        y = 0;
+        width = 0;
+        height = 0;
+        client_width = 0;
+        client_height = 0;
+
+        //driver.GetWindowPos(handle, is_toplevel, out x, out y, out width, out height, out client_width, out client_height);
+        //throw new NotImplementedException();
+    }
+
+
+    void PerformNCCalc(Hwnd hwnd)
+    {
+        NCCALCSIZE_PARAMS ncp;
+        IntPtr ptr;
+        Rectangle rect;
+
+        rect = new Rectangle(0, 0, hwnd.Width, hwnd.Height);
+
+        ncp = new NCCALCSIZE_PARAMS();
+        ptr = Marshal.AllocHGlobal(Marshal.SizeOf(ncp));
+
+        ncp.rgrc1.left = rect.Left;
+        ncp.rgrc1.top = rect.Top;
+        ncp.rgrc1.right = rect.Right;
+        ncp.rgrc1.bottom = rect.Bottom;
+
+        Marshal.StructureToPtr(ncp, ptr, true);
+        NativeWindow.WndProc(hwnd.client_window, Msg.WM_NCCALCSIZE, (IntPtr)1, ptr);
+        ncp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure(ptr, typeof(NCCALCSIZE_PARAMS));
+        Marshal.FreeHGlobal(ptr);
+
+
+        rect = new Rectangle(ncp.rgrc1.left, ncp.rgrc1.top, ncp.rgrc1.right - ncp.rgrc1.left, ncp.rgrc1.bottom - ncp.rgrc1.top);
+        hwnd.ClientRect = rect;
+
+        //rect = TranslateClientRectangleToXClientRectangle(hwnd);
+
+        if (hwnd.visible)
+        {
+            //MoveResizeWindow(DisplayHandle, hwnd.client_window, rect.X, rect.Y, rect.Width, rect.Height);
+        }
+
+        AddExpose(hwnd, hwnd.WholeWindow == hwnd.ClientWindow, 0, 0, hwnd.Width, hwnd.Height);
+    }
+
+
+    void AddExpose(Hwnd hwnd, bool client, int x, int y, int width, int height)
+    {
+        // Don't waste time
+        if ((hwnd == null) || (x > hwnd.Width) || (y > hwnd.Height) || ((x + width) < 0) || ((y + height) < 0))
+        {
+            return;
+        }
+
+        // Keep the invalid area as small as needed
+        if ((x + width) > hwnd.width)
+        {
+            width = hwnd.width - x;
+        }
+
+        if ((y + height) > hwnd.height)
+        {
+            height = hwnd.height - y;
+        }
+
+        if (client)
+        {
+            hwnd.AddInvalidArea(x, y, width, height);
+            if (!hwnd.expose_pending)
+            {
+                if (!hwnd.nc_expose_pending)
+                {
+                    hwnd.Queue.Paint.Enqueue(hwnd);
+                }
+                hwnd.expose_pending = true;
+            }
+        }
+        else
+        {
+            hwnd.AddNcInvalidArea(x, y, width, height);
+
+            if (!hwnd.nc_expose_pending)
+            {
+                if (!hwnd.expose_pending)
+                {
+                    hwnd.Queue.Paint.Enqueue(hwnd);
+                }
+                hwnd.nc_expose_pending = true;
+            }
+        }
+    }
+
+    public override void Activate(IntPtr handle)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        XEventQueue q = null;
+        lock (unattached_timer_list)
+        {
+            foreach (Timer t in unattached_timer_list)
+            {
+                if (q == null)
+                    q = (XEventQueue)MessageQueues[Thread.CurrentThread];
+                t.thread = q.Thread;
+                q.timer_list.Add(t);
+            }
+            unattached_timer_list.Clear();
+        }
+
+        driver.Activate(handle);
+        //throw new NotImplementedException();
+    }
+    /// <summary>
+    /// The EnableWindow function enables or disables mouse and keyboard input to the specified window or control. When input is disabled, the window does not receive input such as mouse clicks and key presses. When input is enabled, the window receives all input.
+    /// </summary>
+    /// <param name="handle"></param>
+    /// <param name="Enable"></param>
+    public override void EnableWindow(IntPtr handle, bool Enable)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+        if (hwnd != null)
+        {
+            hwnd.Enabled = Enable;
+        }
+
+        driver.EnableWindow(handle, Enable);
+    }
+    // Modality support
+    static Stack ModalWindows;		// Stack of our modal windows
+    public override void SetModal(IntPtr handle, bool Modal)
+    {
+        if (Modal)
+        {
+            ModalWindows.Push(handle);
+        }
+        else
+        {
+            if (ModalWindows.Contains(handle))
+            {
+                ModalWindows.Pop();
+            }
+            if (ModalWindows.Count > 0)
+            {
+                Activate((IntPtr)ModalWindows.Peek());
+            }
+        }
+
+        Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+        Control ctrl = Control.FromHandle(handle);
+        SetWMStyles(hwnd, ctrl.GetCreateParams());
+    }
+
+    public override void Invalidate(IntPtr handle, Rectangle rc, bool clear)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (clear)
+        {
+            AddExpose(hwnd, true, hwnd.X, hwnd.Y, hwnd.Width, hwnd.Height);
+        }
+        else
+        {
+            AddExpose(hwnd, true, rc.X, rc.Y, rc.Width, rc.Height);
+        }
+
+        driver.Invalidate(handle, rc, clear);
+    }
+
+    public override void InvalidateNC(IntPtr handle)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        AddExpose(hwnd, hwnd.WholeWindow == hwnd.ClientWindow, 0, 0, hwnd.Width, hwnd.Height);
+    }
+
+    public override IntPtr DefWndProc(ref Message msg)
+    {
+        driver.DefWndProc(ref msg);
+
+        switch ((Msg)msg.Msg)
+        {
+
+            case Msg.WM_IME_COMPOSITION:
+                //string s = Keyboard.GetCompositionString();
+                //foreach (char c in s)
+                    //SendMessage(msg.HWnd, Msg.WM_IME_CHAR, (IntPtr)c, msg.LParam);
+                return IntPtr.Zero;
+
+            case Msg.WM_IME_CHAR:
+                // On Windows API it sends two WM_CHAR messages for each byte, but
+                // I wonder if it is worthy to emulate it (also no idea how to 
+                // reconstruct those bytes into chars).
+                SendMessage(msg.HWnd, Msg.WM_CHAR, msg.WParam, msg.LParam);
+                return IntPtr.Zero;
+
+            case Msg.WM_PAINT:
+                {
+                    Hwnd hwnd;
+
+                    hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+                    if (hwnd != null)
+                    {
+                        hwnd.expose_pending = false;
+                    }
+
+                    return IntPtr.Zero;
+                }
+
+            case Msg.WM_NCPAINT:
+                {
+                    Hwnd hwnd;
+
+                    hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+                    if (hwnd != null)
+                    {
+                        hwnd.nc_expose_pending = false;
+                    }
+
+                    return IntPtr.Zero;
+                }
+
+            case Msg.WM_NCCALCSIZE:
+                {
+                    Hwnd hwnd;
+
+                    if (msg.WParam == (IntPtr)1)
+                    {
+                        hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+
+                        NCCALCSIZE_PARAMS ncp;
+                        ncp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure(msg.LParam, typeof(NCCALCSIZE_PARAMS));
+
+                        // Add all the stuff X is supposed to draw.
+                        Control ctrl = Control.FromHandle(hwnd.Handle);
+
+                        if (ctrl != null)
+                        {
+                            Hwnd.Borders rect = Hwnd.GetBorders(ctrl.GetCreateParams(), null);
+
+                            ncp.rgrc1.top += rect.top;
+                            ncp.rgrc1.bottom -= rect.bottom;
+                            ncp.rgrc1.left += rect.left;
+                            ncp.rgrc1.right -= rect.right;
+
+                            Marshal.StructureToPtr(ncp, msg.LParam, true);
+                        }
+                    }
+
+                    return IntPtr.Zero;
+                }
+
+            case Msg.WM_CONTEXTMENU:
+                {
+                    Hwnd hwnd;
+
+                    hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+
+                    if ((hwnd != null) && (hwnd.parent != null))
+                    {
+                        SendMessage(hwnd.parent.client_window, Msg.WM_CONTEXTMENU, msg.WParam, msg.LParam);
+                    }
+                    return IntPtr.Zero;
+                }
+
+            case Msg.WM_MOUSEWHEEL:
+                {
+                    Hwnd hwnd;
+
+                    hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+
+                    if ((hwnd != null) && (hwnd.parent != null))
+                    {
+                        SendMessage(hwnd.parent.client_window, Msg.WM_MOUSEWHEEL, msg.WParam, msg.LParam);
+                        if (msg.Result == IntPtr.Zero)
+                        {
+                            return IntPtr.Zero;
+                        }
+                    }
+                    return IntPtr.Zero;
+                }
+
+            case Msg.WM_SETCURSOR:
+                {
+                    Hwnd hwnd;
+
+                    hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+                    if (hwnd == null)
+                        break; // not sure how this happens, but it does
+
+                    // Pass to parent window first
+                    while ((hwnd.parent != null) && (msg.Result == IntPtr.Zero))
+                    {
+                        hwnd = hwnd.parent;
+                        msg.Result = NativeWindow.WndProc(hwnd.Handle, Msg.WM_SETCURSOR, msg.HWnd, msg.LParam);
+                    }
+
+                    if (msg.Result == IntPtr.Zero)
+                    {
+                        IntPtr handle;
+
+                        switch ((HitTest)(msg.LParam.ToInt32() & 0xffff))
+                        {
+                            case HitTest.HTBOTTOM: handle = Cursors.SizeNS.handle; break;
+                            case HitTest.HTBORDER: handle = Cursors.SizeNS.handle; break;
+                            case HitTest.HTBOTTOMLEFT: handle = Cursors.SizeNESW.handle; break;
+                            case HitTest.HTBOTTOMRIGHT: handle = Cursors.SizeNWSE.handle; break;
+                            case HitTest.HTERROR:
+                                if ((msg.LParam.ToInt32() >> 16) == (int)Msg.WM_LBUTTONDOWN)
+                                {
+                                    AudibleAlert(AlertType.Default);
+                                }
+                                handle = Cursors.Default.handle;
+                                break;
+
+                            case HitTest.HTHELP: handle = Cursors.Help.handle; break;
+                            case HitTest.HTLEFT: handle = Cursors.SizeWE.handle; break;
+                            case HitTest.HTRIGHT: handle = Cursors.SizeWE.handle; break;
+                            case HitTest.HTTOP: handle = Cursors.SizeNS.handle; break;
+                            case HitTest.HTTOPLEFT: handle = Cursors.SizeNWSE.handle; break;
+                            case HitTest.HTTOPRIGHT: handle = Cursors.SizeNESW.handle; break;
+
+#if SameAsDefault
+							case HitTest.HTGROWBOX:
+							case HitTest.HTSIZE:
+							case HitTest.HTZOOM:
+							case HitTest.HTVSCROLL:
+							case HitTest.HTSYSMENU:
+							case HitTest.HTREDUCE:
+							case HitTest.HTNOWHERE:
+							case HitTest.HTMAXBUTTON:
+							case HitTest.HTMINBUTTON:
+							case HitTest.HTMENU:
+							case HitTest.HSCROLL:
+							case HitTest.HTBOTTOM:
+							case HitTest.HTCAPTION:
+							case HitTest.HTCLIENT:
+							case HitTest.HTCLOSE:
+#endif
+                            default: handle = Cursors.Default.handle; break;
+                        }
+                        SetCursor(msg.HWnd, handle);
+                    }
+                    return (IntPtr)1;
+                }
+        }
+       // return IntPtr.Zero;
+
+        return driver.DefWndProc(ref msg);
+        throw new NotImplementedException();
+    }
+
+    public override void HandleException(Exception e)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void DoEvents()
+    {
+
+        DebugHelper.Enter();
+
+        MSG msg = new MSG();
+        XEventQueue queue;
+
+        queue = ThreadQueue(Thread.CurrentThread);
+
+        queue.DispatchIdle = false;
+        in_doevents = true;
+
+        while (PeekMessage(queue, ref msg, IntPtr.Zero, 0, 0, (uint)PeekMessageFlags.PM_REMOVE))
+        {
+            Message m = Message.Create(msg.hwnd, (int)msg.message, msg.wParam, msg.lParam);
+
+            if (Application.FilterMessage(ref m))
+                continue;
+
+            TranslateMessage(ref msg);
+            DispatchMessage(ref msg);
+
+            string key = msg.hwnd + ":" + msg.message;
+            if (messageHold[key] != null)
+            {
+                messageHold[key] = ((int)messageHold[key]) - 1;
+                DebugHelper.WriteLine("Got " + msg + " for " + key);
+            }
+        }
+
+        in_doevents = false;
+        queue.DispatchIdle = true;
+
+        DebugHelper.Leave();
+    }
+
+    public override bool PeekMessage(object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax, uint flags)
+    {
+
+        XEventQueue queue = (XEventQueue)queue_id;
+        bool pending;
+
+        if ((flags & (uint)PeekMessageFlags.PM_REMOVE) == 0)
+        {
+            throw new NotImplementedException("PeekMessage PM_NOREMOVE is not implemented yet");    // FIXME - Implement PM_NOREMOVE flag
+        }
+
+        pending = false;
+        if (queue.Count > 0)
+        {
+            pending = true;
+        }
+        else
+        {
+            // Only call UpdateMessageQueue if real events are pending 
+            // otherwise we go to sleep on the socket
+            //if (XPending(DisplayHandle) != 0)
+            {
+                //UpdateMessageQueue((XEventQueue)queue_id);
+                //pending = true;
+            }
+            //else 
+            if (((XEventQueue)queue_id).Paint.Count > 0)
+            {
+                pending = true;
+            }
+        }
+
+        CheckTimers(queue.timer_list, DateTime.UtcNow);
+
+        if (!pending)
+        {
+            return false;
+        }
+        return GetMessage(queue_id, ref msg, hWnd, wFilterMin, wFilterMax);
+    }
+
+
+    void CheckTimers(ArrayList timers, DateTime now)
+    {
+        int count;
+
+        count = timers.Count;
+
+        if (count == 0)
+            return;
+
+        for (int i = 0; i < timers.Count; i++)
+        {
+            Timer timer;
+
+            timer = (Timer)timers[i];
+
+            if (timer.Enabled && timer.Expires <= now && !timer.Busy)
+            {
+                // Timer ticks:
+                //  - Before MainForm.OnLoad if DoEvents () is called.
+                //  - After MainForm.OnLoad if not.
+                //
+                if (in_doevents ||
+                    (Application.MWFThread.Current.Context != null &&
+                     (Application.MWFThread.Current.Context.MainForm == null ||
+                      Application.MWFThread.Current.Context.MainForm.IsLoaded)))
+                {
+                    timer.Busy = true;
+                    timer.Update(now);
+                    timer.FireTick();
+                    timer.Busy = false;
+                }
+            }
+        }
+    }
+
+    public override void PostQuitMessage(int exitCode)
+    {
+        ApplicationContext ctx = Application.MWFThread.Current.Context;
+        Form f = ctx != null ? ctx.MainForm : null;
+        if (f != null)
+            PostMessage(Application.MWFThread.Current.Context.MainForm.window.Handle, Msg.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+        else
+            PostMessage(IntPtr.Zero, Msg.WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    public override bool GetMessage(object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax)
+    {
+
+        XEvent xevent;
+        bool client;
+        Hwnd hwnd;
+
+        ProcessNextMessage:
+
+        if (((XEventQueue) queue_id).Count > 0)
+        {
+            xevent = (XEvent) ((XEventQueue) queue_id).Dequeue();
+        }
+        else
+        {
+            //UpdateMessageQueue((XEventQueue)queue_id);
+
+            if (((XEventQueue) queue_id).Count > 0)
+            {
+                xevent = (XEvent) ((XEventQueue) queue_id).Dequeue();
+            }
+            else if (((XEventQueue) queue_id).Paint.Count > 0)
+            {
+                xevent = ((XEventQueue) queue_id).Paint.Dequeue();
+            }
+            else
+            {
+                msg.hwnd = IntPtr.Zero;
+                msg.message = Msg.WM_ENTERIDLE;
+                return driver.GetMessage(queue_id, ref msg, hWnd, wFilterMin, wFilterMax); ;
+            }
+        }
+
+        hwnd = Hwnd.GetObjectFromWindow(xevent.AnyEvent.window);
+
+#if DriverDebugDestroy
+			if (hwnd != null)
+				if (hwnd.zombie)
+					Console.WriteLine ( "GetMessage zombie, got Event: " + xevent.ToString () + " for 0x{0:x}", hwnd.Handle.ToInt32());
+				else	
+					Console.WriteLine ( "GetMessage, got Event: " + xevent.ToString () + " for 0x{0:x}", hwnd.Handle.ToInt32());
+#endif
+        // Handle messages for windows that are already or are about to be destroyed.
+
+        // we need a special block for this because unless we remove the hwnd from the paint
+        // queue it will always stay there (since we don't handle the expose), and we'll
+        // effectively loop infinitely trying to repaint a non-existant window.
+        if (hwnd != null && hwnd.zombie && xevent.type == XEventName.Expose)
+        {
+            hwnd.expose_pending = hwnd.nc_expose_pending = false;
+            hwnd.Queue.Paint.Remove(hwnd);
+            goto ProcessNextMessage;
+        }
+
+        // We need to make sure we only allow DestroyNotify events through for zombie
+        // hwnds, since much of the event handling code makes requests using the hwnd's
+        // client_window, and that'll result in BadWindow errors if there's some lag
+        // between the XDestroyWindow call and the DestroyNotify event.
+        if (hwnd == null || hwnd.zombie && xevent.AnyEvent.type != XEventName.ClientMessage)
+        {
+            DriverDebug("GetMessage(): Got message {0} for non-existent or already destroyed window {1:X}", xevent.type,
+                xevent.AnyEvent.window.ToInt32());
+            goto ProcessNextMessage;
+        }
+
+
+        // If we get here, that means the window is no more but there are Client Messages
+        // to be processed, probably a Posted message (for instance, an WM_ACTIVATE message) 
+        // We don't want anything else to run but the ClientMessage block, so reset all hwnd
+        // properties that might cause other processing to occur.
+        if (hwnd.zombie)
+        {
+            hwnd.resizing_or_moving = false;
+        }
+
+        if (hwnd.client_window == xevent.AnyEvent.window)
+        {
+            client = true;
+            Console.WriteLine("Client message {1}, sending to window {0:X}", msg.hwnd.ToInt32(), xevent.type);
+        }
+        else
+        {
+            client = false;
+            Console.WriteLine("Non-Client message, sending to window {0:X}", msg.hwnd.ToInt32());
+        }
+
+        msg.hwnd = hwnd.Handle;
+
+        // Windows sends WM_ENTERSIZEMOVE when a form resize/move operation starts and WM_EXITSIZEMOVE 
+        // when it is done. The problem in X11 is that there is no concept of start-end of a moving/sizing.
+        // Configure events ("this window has resized/moved") are sent for each step of the resize. We send a
+        // WM_ENTERSIZEMOVE when we get the first Configure event. The problem is the WM_EXITSIZEMOVE.
+        // 
+        //  - There is no way for us to know which is the last Configure event. We can't traverse the events 
+        //    queue, because the next configure event might not be pending yet.
+        //  - We can't get ButtonPress/Release events for the window decorations, because they are not part 
+        //    of the window(s) we manage.
+        //  - We can't rely on the mouse state to change to "up" before the last Configure event. It doesn't.
+        // 
+        // We are almost 100% guaranteed to get another event (e.g Expose or other), but we can't know for sure 
+        // which, so we have here to check if the mouse buttons state is "up" and send the WM_EXITSIZEMOVE
+        //
+        if (hwnd.resizing_or_moving)
+        {
+            int root_x, root_y, win_x, win_y, keys_buttons;
+            IntPtr root, child;
+            keys_buttons = 0;
+            //XQueryPointer(DisplayHandle, hwnd.Handle, out root, out child, out root_x, out root_y, out win_x, out win_y, out keys_buttons);
+            if ((keys_buttons & (int) MouseKeyMasks.Button1Mask) == 0 &&
+                (keys_buttons & (int) MouseKeyMasks.Button2Mask) == 0 &&
+                (keys_buttons & (int) MouseKeyMasks.Button3Mask) == 0)
+            {
+                hwnd.resizing_or_moving = false;
+                SendMessage(hwnd.Handle, Msg.WM_EXITSIZEMOVE, IntPtr.Zero, IntPtr.Zero);
+            }
+        }
+
+        switch (xevent.type)
+        {
+            case XEventName.KeyPress:
+            {
+
+                goto ProcessNextMessage;
+            }
+
+            case XEventName.ClientMessage:
+            {
+                if (xevent.ClientMessageEvent.message_type == AsyncAtom)
+                {
+                    XplatUIDriverSupport.ExecuteClientMessage((GCHandle)xevent.ClientMessageEvent.ptr1);
+                    goto ProcessNextMessage;
+                }
+
+                if (xevent.ClientMessageEvent.message_type == (IntPtr) PostAtom)
+                {
+                    DebugHelper.Indent();
+                    DebugHelper.WriteLine(String.Format(
+                        "Posted message:" + (Msg) xevent.ClientMessageEvent.ptr2.ToInt32() + " for 0x{0:x}",
+                        xevent.ClientMessageEvent.ptr1.ToInt32()));
+                    DebugHelper.Unindent();
+                    msg.hwnd = xevent.ClientMessageEvent.ptr1;
+                    msg.message = (Msg) xevent.ClientMessageEvent.ptr2.ToInt32();
+                    msg.wParam = xevent.ClientMessageEvent.ptr3;
+                    msg.lParam = xevent.ClientMessageEvent.ptr4;
+                    if (msg.message == (Msg) Msg.WM_QUIT)
+                        return false;
+                    else
+                        return true;
+                }
+
+                goto ProcessNextMessage;
+            }
+            case XEventName.Expose:
+            {
+                if (!hwnd.Mapped)
+                {
+                    if (client)
+                    {
+                        hwnd.expose_pending = false;
+                    }
+                    else
+                    {
+                        hwnd.nc_expose_pending = false;
+                    }
+
+                    goto ProcessNextMessage;
+                }
+
+                if (client)
+                {
+                    if (!hwnd.expose_pending)
+                    {
+                        goto ProcessNextMessage;
+                    }
+                }
+                else
+                {
+                    if (!hwnd.nc_expose_pending)
+                    {
+                        goto ProcessNextMessage;
+                    }
+
+                    switch (hwnd.border_style)
+                    {
+                        case FormBorderStyle.Fixed3D:
+                        {
+                            Graphics g;
+
+                            g = Graphics.FromHwnd(hwnd.whole_window);
+                            if (hwnd.border_static)
+                                ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                    Border3DStyle.SunkenOuter);
+                            else
+                                ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                    Border3DStyle.Sunken);
+                            g.Dispose();
+                            break;
+                        }
+
+                        case FormBorderStyle.FixedSingle:
+                        {
+                            Graphics g;
+
+                            g = Graphics.FromHwnd(hwnd.whole_window);
+                            ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
+                                ButtonBorderStyle.Solid);
+                            g.Dispose();
+                            break;
+                        }
+                    }
+
+                    DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
+                        hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
+                        xevent.ExposeEvent.width, xevent.ExposeEvent.height);
+
+                    Rectangle rect = new Rectangle(xevent.ExposeEvent.x, xevent.ExposeEvent.y, xevent.ExposeEvent.width,
+                        xevent.ExposeEvent.height);
+                    Region region = new Region(rect);
+                    IntPtr hrgn = region.GetHrgn(null); // Graphics object isn't needed
+                    msg.message = Msg.WM_NCPAINT;
+                    msg.wParam = hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
+                    msg.refobject = region;
+                    break;
+                }
+
+                DriverDebug("GetMessage(): Window {0:X} Exposed area {1},{2} {3}x{4}",
+                    hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
+                    xevent.ExposeEvent.width, xevent.ExposeEvent.height);
+                /*if (Caret.Visible == true)
+                {
+                    Caret.Paused = true;
+                    HideCaret();
+                }
+
+                if (Caret.Visible == true)
+                {
+                    ShowCaret();
+                    Caret.Paused = false;
+                }*/
+                msg.message = Msg.WM_PAINT;
+                break;
+            }
+
+            default:
+            {
+                goto ProcessNextMessage;
+            }
+        }
+
+        return true;
+    }
+
+    static void DriverDebug(string format, params object[] args)
+    {
+        Console.WriteLine(String.Format(format, args));
+    }
+
+    public override bool TranslateMessage(ref MSG msg)
+    {
+        return driver.TranslateMessage(ref msg);
+        throw new NotImplementedException();
+    }
+
+    public override IntPtr DispatchMessage(ref MSG msg)
+    {
+        return driver.DispatchMessage(ref msg);
+        throw new NotImplementedException();
+    }
+
+    public override bool SetZOrder(IntPtr hWnd, IntPtr AfterhWnd, bool Top, bool Bottom)
+    {
+        //throw new NotImplementedException();
+        return true;
+    }
+
+    public override bool SetTopmost(IntPtr hWnd, bool Enabled)
+    {
+        //throw new NotImplementedException();
+        return true;
+    }
+
+    public override bool SetOwner(IntPtr hWnd, IntPtr hWndOwner)
+    {
+        //throw new NotImplementedException();
+        return true;
+    }
+
+    public override bool CalculateWindowRect(ref Rectangle ClientRect, CreateParams cp, Menu menu, out Rectangle WindowRect)
+    {
+        WindowRect = Hwnd.GetWindowRectangle(cp, menu, ClientRect);
+        return true;
+    }
+
+    public override Region GetClipRegion(IntPtr hwnd)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void SetClipRegion(IntPtr hwnd, Region region)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void SetCursor(IntPtr hwnd, IntPtr cursor)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override void ShowCursor(bool show)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void OverrideCursor(IntPtr cursor)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override IntPtr DefineCursor(Bitmap bitmap, Bitmap mask, Color cursor_pixel, Color mask_pixel, int xHotSpot, int yHotSpot)
+    {
+        //throw new NotImplementedException();
+        return IntPtr.Zero;
+    }
+
+    public override IntPtr DefineStdCursor(StdCursor id)
+    {
+        //throw new NotImplementedException();
+        return IntPtr.Zero;
+    }
+
+    public override Bitmap DefineStdCursorBitmap(StdCursor id)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void DestroyCursor(IntPtr cursor)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void GetCursorInfo(IntPtr cursor, out int width, out int height, out int hotspot_x, out int hotspot_y)
+    {
+        width = 20;
+        height = 20;
+        hotspot_x = 0;
+        hotspot_y = 0;
+    }
+
+    public override void GetCursorPos(IntPtr handle, out int x, out int y)
+    {
+        IntPtr use_handle;
+        IntPtr root;
+        IntPtr child;
+        int root_x;
+        int root_y;
+        int win_x;
+        int win_y;
+        int keys_buttons;
+
+        if (handle != IntPtr.Zero)
+        {
+            use_handle = Hwnd.ObjectFromHandle(handle).client_window;
+        }
+        else
+        {
+            //use_handle = RootWindow;
+        }
+
+        //lock (XlibLock)
+        {
+            driver.GetCursorPos(handle, out win_x, out win_y);
+            //QueryPointer(DisplayHandle, use_handle, out root, out child, out root_x, out root_y, out win_x, out win_y, out keys_buttons);
+        }
+
+        if (handle != IntPtr.Zero)
+        {
+            x = win_x;
+            y = win_y;
+        }
+        else
+        {
+            x = win_x;
+            y = win_y;
+        }
+    }
+
+    public override void SetCursorPos(IntPtr hwnd, int x, int y)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void ScreenToClient(IntPtr hwnd, ref int x, ref int y)
+    {
+        driver.ScreenToClient(hwnd, ref x, ref y);
+    }
+
+    public override void ClientToScreen(IntPtr hwnd, ref int x, ref int y)
+    {
+        driver.ClientToScreen(hwnd, ref x, ref y);
+    }
+    static GrabStruct Grab;
+    public override void GrabWindow(IntPtr handle, IntPtr ConfineToHwnd)
+    {
+        Hwnd hwnd;
+        IntPtr confine_to_window;
+
+        confine_to_window = IntPtr.Zero;
+
+        if (ConfineToHwnd != IntPtr.Zero)
+        {
+            XWindowAttributes attributes = new XWindowAttributes();
+
+            hwnd = Hwnd.ObjectFromHandle(ConfineToHwnd);
+
+       
+            Grab.Area.X = attributes.x;
+            Grab.Area.Y = attributes.y;
+            Grab.Area.Width = attributes.width;
+            Grab.Area.Height = attributes.height;
+            Grab.Confined = true;
+            confine_to_window = hwnd.client_window;
+        }
+
+        Grab.Hwnd = handle;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+    }
+
+    public override void GrabInfo(out IntPtr handle, out bool GrabConfined, out Rectangle GrabArea)
+    {
+        handle = Grab.Hwnd;
+        GrabConfined = Grab.Confined;
+        GrabArea = Grab.Area;
+    }
+
+    public override void UngrabWindow(IntPtr hwnd)
+    {
+        WindowUngrabbed(hwnd);
+    }
+
+    void WindowUngrabbed(IntPtr hwnd)
+    {
+        bool was_grabbed = Grab.Hwnd != IntPtr.Zero;
+
+        Grab.Hwnd = IntPtr.Zero;
+        Grab.Confined = false;
+
+        if (was_grabbed)
+        {
+            // lparam should be the handle to the window gaining the mouse capture,
+            // but X doesn't seem to give us that information.
+            // Also only generate WM_CAPTURECHANGED if the window actually was grabbed.
+            // X will send a NotifyUngrab, but since it comes late sometimes we're
+            // calling WindowUngrabbed directly from UngrabWindow in order to send
+            // this WM right away.
+            SendMessage(hwnd, Msg.WM_CAPTURECHANGED, IntPtr.Zero, IntPtr.Zero);
+        }
+    }
+
+    public override void SendAsyncMethod(AsyncMethodData method)
+    {
+        Hwnd hwnd;
+        XEvent xevent = new XEvent();
+
+        hwnd = Hwnd.ObjectFromHandle(method.Handle);
+
+        xevent.type = XEventName.ClientMessage;
+        //xevent.ClientMessageEvent.display = DisplayHandle;
+        xevent.ClientMessageEvent.window = method.Handle;
+        xevent.ClientMessageEvent.message_type = (IntPtr)AsyncAtom;
+        xevent.ClientMessageEvent.format = 32;
+        xevent.ClientMessageEvent.ptr1 = (IntPtr)GCHandle.Alloc(method);
+
+        if (hwnd == null)
+            return;
+
+        hwnd.Queue.EnqueueLocked(xevent);
+
+        //lock (queuelock)
+        {
+            //MessageQueue.Enqueue(GCHandle.Alloc(method));
+        }
+
+        //driver.SendAsyncMethod(method);
+    }
+
+    public override void SetTimer(Timer timer)
+    {
+        XEventQueue queue = (XEventQueue) MessageQueues [timer.thread];
+
+			if (queue == null) {
+				// This isn't really an error, MS doesn't start the timer if
+				// it has no assosciated queue at this stage (it will be
+				// enabled when a window is activated).
+				unattached_timer_list.Add (timer);
+				return;
+			}
+			queue.timer_list.Add (timer);
+    }
+
+    public override void KillTimer(Timer timer)
+    {
+        XEventQueue queue = (XEventQueue)MessageQueues[timer.thread];
+
+        if (queue == null)
+        {
+            // This isn't really an error, MS doesn't start the timer if
+            // it has no assosciated queue. In this case, remove the timer
+            // from the list of unattached timers (if it was enabled).
+            lock (unattached_timer_list)
+            {
+                if (unattached_timer_list.Contains(timer))
+                    unattached_timer_list.Remove(timer);
+            }
+            return;
+        }
+        queue.timer_list.Remove(timer);
+    }
+
+    public override void CreateCaret(IntPtr hwnd, int width, int height)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override void DestroyCaret(IntPtr hwnd)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override void SetCaretPos(IntPtr hwnd, int x, int y)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override void CaretVisible(IntPtr hwnd, bool visible)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override IntPtr GetFocus()
+    {
+        return FocusWindow;
+    }
+    static IntPtr FocusWindow = IntPtr.Zero;
+    private bool in_doevents;
+
+    public override void SetFocus(IntPtr handle)
+    {
+        Hwnd hwnd;
+        IntPtr prev_focus_window;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd.client_window == FocusWindow)
+        {
+            return;
+        }
+
+        // Win32 doesn't do anything if disabled
+        if (!hwnd.enabled)
+            return;
+
+        prev_focus_window = FocusWindow;
+        FocusWindow = hwnd.client_window;
+
+        if (prev_focus_window != IntPtr.Zero)
+        {
+            SendMessage(prev_focus_window, Msg.WM_KILLFOCUS, FocusWindow, IntPtr.Zero);
+        }
+        //Keyboard.FocusIn(FocusWindow);
+
+        if (FocusWindow == IntPtr.Zero)
+        {
+            Control c = Control.FromHandle(hwnd.client_window);
+
+            if (c == null)
+                return;
+            Form form = c.FindForm();
+            if (form == null)
+                return;
+
+            if (ActiveWindow != form.Handle)
+            {
+                ActiveWindow = form.Handle;
+                SendMessage(ActiveWindow, Msg.WM_ACTIVATE, (IntPtr)WindowActiveFlags.WA_ACTIVE, IntPtr.Zero);
+            }
+        }
+
+        SendMessage(FocusWindow, Msg.WM_SETFOCUS, prev_focus_window, IntPtr.Zero);
+
+
+    }
+
+    public override IntPtr GetActive()
+    {
+        //throw new NotImplementedException();
+        return IntPtr.Zero;
+        
+    }
+
+    public override IntPtr GetPreviousWindow(IntPtr hwnd)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void ScrollWindow(IntPtr handle, Rectangle area, int XAmount, int YAmount, bool with_children)
+    {
+
+        Hwnd hwnd;
+        IntPtr gc;
+        XGCValues gc_values;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        Rectangle r = Rectangle.Intersect(hwnd.Invalid, area);
+        if (!r.IsEmpty)
+        {
+            /* We have an invalid area in the window we're scrolling. 
+               Adjust our stored invalid rectangle to to match the scrolled amount */
+
+            r.X += XAmount;
+            r.Y += YAmount;
+
+            if (r.X < 0)
+            {
+                r.Width += r.X;
+                r.X = 0;
+            }
+
+            if (r.Y < 0)
+            {
+                r.Height += r.Y;
+                r.Y = 0;
+            }
+
+            if (area.Contains(hwnd.Invalid))
+                hwnd.ClearInvalidArea();
+            hwnd.AddInvalidArea(r);
+        }
+
+        gc_values = new XGCValues();
+
+        if (with_children)
+        {
+            gc_values.subwindow_mode = GCSubwindowMode.IncludeInferiors;
+        }
+
+        //gc = XCreateGC(DisplayHandle, hwnd.client_window, IntPtr.Zero, ref gc_values);
+
+        Rectangle visible_rect = GetTotalVisibleArea(hwnd.client_window);
+        visible_rect.Intersect(area);
+
+        Rectangle dest_rect = visible_rect;
+        dest_rect.Y += YAmount;
+        dest_rect.X += XAmount;
+        dest_rect.Intersect(area);
+
+        Point src = new Point(dest_rect.X - XAmount, dest_rect.Y - YAmount);
+       // XCopyArea(DisplayHandle, hwnd.client_window, hwnd.client_window, gc, src.X, src.Y,dest_rect.Width, dest_rect.Height, dest_rect.X, dest_rect.Y);
+
+        Rectangle dirty_area = GetDirtyArea(area, dest_rect, XAmount, YAmount);
+        AddExpose(hwnd, true, dirty_area.X, dirty_area.Y, dirty_area.Width, dirty_area.Height);
+
+        ProcessGraphicsExpose(hwnd);
+
+        //XFreeGC(DisplayHandle, gc);
+    }
+    bool GraphicsExposePredicate(IntPtr display, ref XEvent xevent, IntPtr arg)
+    {
+        return (xevent.type == XEventName.GraphicsExpose || xevent.type == XEventName.NoExpose) &&
+               arg == xevent.GraphicsExposeEvent.drawable;
+    }
+
+    delegate bool EventPredicate(IntPtr display, ref XEvent xevent, IntPtr arg);
+
+    void ProcessGraphicsExpose(Hwnd hwnd)
+    {
+        XEvent xevent = new XEvent();
+        IntPtr handle = Hwnd.HandleFromObject(hwnd);
+        EventPredicate predicate = GraphicsExposePredicate;
+
+        for (; ; )
+        {
+            //XIfEvent(Display, ref xevent, predicate, handle);
+            if (xevent.type != XEventName.GraphicsExpose)
+                break;
+
+            AddExpose(hwnd, xevent.ExposeEvent.window == hwnd.ClientWindow, xevent.GraphicsExposeEvent.x, xevent.GraphicsExposeEvent.y,
+                xevent.GraphicsExposeEvent.width, xevent.GraphicsExposeEvent.height);
+
+            if (xevent.GraphicsExposeEvent.count == 0)
+                break;
+        }
+    }
+    Rectangle GetDirtyArea(Rectangle total_area, Rectangle valid_area, int XAmount, int YAmount)
+    {
+        Rectangle dirty_area = total_area;
+
+        if (YAmount > 0)
+            dirty_area.Height -= valid_area.Height;
+        else if (YAmount < 0)
+        {
+            dirty_area.Height -= valid_area.Height;
+            dirty_area.Y += valid_area.Height;
+        }
+
+        if (XAmount > 0)
+            dirty_area.Width -= valid_area.Width;
+        else if (XAmount < 0)
+        {
+            dirty_area.Width -= valid_area.Width;
+            dirty_area.X += valid_area.Width;
+        }
+
+        return dirty_area;
+    }
+    
+    Rectangle GetTotalVisibleArea(IntPtr handle)
+    {
+        Control c = Control.FromHandle(handle);
+
+        Rectangle visible_area = c.ClientRectangle;
+        visible_area.Location = c.PointToScreen(Point.Empty);
+
+        for (Control parent = c.Parent; parent != null; parent = parent.Parent)
+        {
+            if (!parent.IsHandleCreated || !parent.Visible)
+                return visible_area; // Non visible, not need to finish computations
+
+            Rectangle r = parent.ClientRectangle;
+            r.Location = parent.PointToScreen(Point.Empty);
+
+            visible_area.Intersect(r);
+        }
+
+        visible_area.Location = c.PointToClient(visible_area.Location);
+        return visible_area;
+    }
+
+    public override void ScrollWindow(IntPtr handle, int XAmount, int YAmount, bool with_children)
+    {
+        Hwnd hwnd;
+        Rectangle rect;
+
+        hwnd = Hwnd.GetObjectFromWindow(handle);
+
+        rect = hwnd.ClientRect;
+        rect.X = 0;
+        rect.Y = 0;
+        ScrollWindow(handle, rect, XAmount, YAmount, with_children);
+    }
+
+    public override bool GetFontMetrics(Graphics g, Font font, out int ascent, out int descent)
+    {
+        FontFamily ff = font.FontFamily;
+        ascent = ff.GetCellAscent(font.Style);
+        descent = ff.GetCellDescent(font.Style);
+        return true;
+    }
+
+    public override bool SystrayAdd(IntPtr hwnd, string tip, Icon icon, out ToolTip tt)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override bool SystrayChange(IntPtr handle, string tip, Icon icon, ref ToolTip tt)
+    {
+        Control control;
+
+        control = Control.FromHandle(handle);
+        if (control != null && tt != null)
+        {
+            tt.SetToolTip(control, tip);
+            tt.Active = true;
+            SendMessage(handle, Msg.WM_PAINT, IntPtr.Zero, IntPtr.Zero);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    public override void SystrayRemove(IntPtr handle, ref ToolTip tt)
+    {
+        SetVisible(handle, false, false);
+
+        // The caller can now re-dock it later...
+        if (tt != null)
+        {
+            tt.Dispose();
+            tt = null;
+        }
+        // Close any balloon window *we* fired.
+        ThemeEngine.Current.HideBalloonWindow(handle);
+    }
+
+    public override void SystrayBalloon(IntPtr handle, int timeout, string title, string text, ToolTipIcon icon)
+    {
+        ThemeEngine.Current.ShowBalloonWindow(handle, timeout, title, text, icon);
+        SendMessage(handle, Msg.WM_USER, IntPtr.Zero, (IntPtr)Msg.NIN_BALLOONSHOW);
+    }
+
+    public override Point GetMenuOrigin(IntPtr handle)
+    {
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd != null)
+        {
+            return hwnd.MenuOrigin;
+        }
+        return Point.Empty;
+    }
+
+    public override void MenuToScreen(IntPtr hwnd, ref int x, ref int y)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void ScreenToMenu(IntPtr hwnd, ref int x, ref int y)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void SetIcon(IntPtr handle, Icon icon)
+    {
+        //throw new NotImplementedException();
+    }
+
+    public override void ClipboardClose(IntPtr handle)
+    {
+        
+    }
+
+    public override IntPtr ClipboardOpen(bool primary_selection)
+    {
+        return IntPtr.Zero;
+    }
+
+    public override int ClipboardGetID(IntPtr handle, string format)
+    {
+        return 0;
+    }
+
+    public override void ClipboardStore(IntPtr handle, object obj, int id, XplatUI.ObjectToClipboard converter, bool copy)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override int[] ClipboardAvailableFormats(IntPtr handle)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override object ClipboardRetrieve(IntPtr handle, int id, XplatUI.ClipboardToObject converter)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void DrawReversibleLine(Point start, Point end, Color backColor)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void DrawReversibleRectangle(IntPtr handle, Rectangle rect, int line_width)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void FillReversibleRectangle(Rectangle rectangle, Color backColor)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void DrawReversibleFrame(Rectangle rectangle, Color backColor, FrameStyle style)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override SizeF GetAutoScaleSize(Font font)
+    {
+        // 5.3, 13
+        var size = driver.GetAutoScaleSize(font);
+        return size;
+        //throw new NotImplementedException();
+    }
+
+    delegate IntPtr WndProcDelegate(IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam);
+
+    public override IntPtr SendMessage(IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam)
+    {
+        Hwnd h;
+        h = Hwnd.ObjectFromHandle(hwnd);
+
+        if (h != null && h.queue != ThreadQueue(Thread.CurrentThread))
+        {
+            AsyncMethodResult result;
+            AsyncMethodData data;
+
+            result = new AsyncMethodResult();
+            data = new AsyncMethodData();
+
+            data.Handle = hwnd;
+            data.Method = new WndProcDelegate(NativeWindow.WndProc);
+            data.Args = new object[] { hwnd, message, wParam, lParam };
+            data.Result = result;
+
+            SendAsyncMethod(data);
+            DriverDebug("Sending {0} message across.", message);
+
+            return IntPtr.Zero;
+        }
+        string key = hwnd + ":" + message;
+        if (messageHold[key] != null)
+            messageHold[key] = ((int)messageHold[key]) - 1;
+        return NativeWindow.WndProc(hwnd, message, wParam, lParam);
+    }
+
+    public override bool PostMessage(IntPtr handle, Msg message, IntPtr wParam, IntPtr lParam)
+    {
+        XEvent xevent = new XEvent();
+        Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+
+        xevent.type = XEventName.ClientMessage;
+        //xevent.ClientMessageEvent.display = DisplayHandle;
+
+        if (hwnd != null)
+        {
+            xevent.ClientMessageEvent.window = hwnd.whole_window;
+        }
+        else
+        {
+            xevent.ClientMessageEvent.window = IntPtr.Zero;
+        }
+
+        xevent.ClientMessageEvent.message_type = (IntPtr)PostAtom;
+        xevent.ClientMessageEvent.format = 32;
+        xevent.ClientMessageEvent.ptr1 = handle;
+        xevent.ClientMessageEvent.ptr2 = (IntPtr)message;
+        xevent.ClientMessageEvent.ptr3 = wParam;
+        xevent.ClientMessageEvent.ptr4 = lParam;
+
+        if (hwnd != null)
+            hwnd.Queue.EnqueueLocked(xevent);
+        else
+            ThreadQueue(Thread.CurrentThread).EnqueueLocked(xevent);
+
+        return true;
+    }
+
+    public override int SendInput(IntPtr hwnd, Queue keys)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override object StartLoop(Thread thread)
+    {
+        XEventQueue q = ThreadQueue(thread);
+        return q;
+
+        return driver.StartLoop(thread);
+        //throw new NotImplementedException();
+    }
+
+    public override void EndLoop(Thread thread)
+    {
+        driver.EndLoop(thread);
+        //throw new NotImplementedException();
+    }
+
+    public override void RequestNCRecalc(IntPtr hwnd)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void ResetMouseHover(IntPtr hwnd)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void RequestAdditionalWM_NCMessages(IntPtr hwnd, bool hover, bool leave)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override void RaiseIdle(EventArgs e)
+    {
+        throw new NotImplementedException();
+    }
+
+    public override int KeyboardSpeed => throw new NotImplementedException();
+
+    public override int KeyboardDelay => throw new NotImplementedException();
+}
