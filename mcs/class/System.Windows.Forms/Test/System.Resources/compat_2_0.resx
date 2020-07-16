@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -64,41 +64,19 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="String" xml:space="preserve">
-    <value>hola</value>
-  </data>
-  <data name="String2" xml:space="preserve"><![CDATA[hello]]></data>
   <assembly alias="mscorlib" name="mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" />
-  <data name="Int" type="System.Int32, mscorlib">
-    <value>42</value>
-  </data>
-  <data name="Enum" type="System.PlatformID, mscorlib">
-    <value>Win32NT</value>
-  </data>
   <assembly alias="System.Drawing" name="System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-  <data name="Convertible" type="System.Drawing.Point, System.Drawing">
-    <value>43, 45</value>
-  </data>
-  <data name="Serializable" mimetype="application/x-microsoft.net.object.binary.base64">
-    <value>
-        AAEAAAD/////AQAAAAAAAAAEAQAAABxTeXN0ZW0uQ29sbGVjdGlvbnMuQXJyYXlMaXN0AwAAAAZfaXRl
-        bXMFX3NpemUIX3ZlcnNpb24FAAAICAkCAAAABAAAAAEAAAAQAgAAAAQAAAAIAgEIAgIIAgMIAgQL
-</value>
-  </data>
   <data name="ByteArray" type="System.Byte[], mscorlib">
     <value>DA0O</value>
   </data>
   <data name="ByteArray2" type="System.Byte[], mscorlib">
     <value>DxAR</value>
   </data>
-  <data name="IntArray" mimetype="application/x-microsoft.net.object.binary.base64">
-    <value>AAEAAAD/////AQAAAAAAAAAPAQAAAAMAAAAI9AMAAPUDAAD2AwAACw==</value>
+  <data name="Convertible" type="System.Drawing.Point, System.Drawing">
+    <value>43, 45</value>
   </data>
-  <data name="StringArray" mimetype="application/x-microsoft.net.object.binary.base64">
-    <value>AAEAAAD/////AQAAAAAAAAARAQAAAAIAAAAGAgAAAAVoZWxsbwYDAAAABXdvcmxkCw==</value>
-  </data>
-  <data name="InvalidMimeType" mimetype="foo">
-    <value>AAEAAAD/////AQAAAAAAAAARAQAAAAIAAAAGAgAAAAVoZWxsbwYDAAAABXdvcmxkCw==</value>
+  <data name="Enum" type="System.PlatformID, mscorlib">
+    <value>Win32NT</value>
   </data>
   <data name="Image" type="System.Drawing.Bitmap, System.Drawing, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>
@@ -108,5 +86,27 @@
 	AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 	AAAAAAAAAAAAAAAAAAAAAA==
     </value>
+  </data>
+  <data name="Int" type="System.Int32, mscorlib">
+    <value>42</value>
+  </data>
+  <data name="IntArray" mimetype="application/x-microsoft.net.object.binary.base64">
+    <value>AAEAAAD/////AQAAAAAAAAAPAQAAAAMAAAAI9AMAAPUDAAD2AwAACw==</value>
+  </data>
+  <data name="InvalidMimeType" >
+    <value>AAEAAAD/////AQAAAAAAAAARAQAAAAIAAAAGAgAAAAVoZWxsbwYDAAAABXdvcmxkCw==</value>
+  </data>
+  <data name="Serializable" mimetype="application/x-microsoft.net.object.binary.base64">
+    <value>
+        AAEAAAD/////AQAAAAAAAAAEAQAAABxTeXN0ZW0uQ29sbGVjdGlvbnMuQXJyYXlMaXN0AwAAAAZfaXRl
+        bXMFX3NpemUIX3ZlcnNpb24FAAAICAkCAAAABAAAAAEAAAAQAgAAAAQAAAAIAgEIAgIIAgMIAgQL
+</value>
+  </data>
+  <data name="String" xml:space="preserve">
+    <value>hola</value>
+  </data>
+  <data name="String2" xml:space="preserve"><![CDATA[hello]]></data>
+  <data name="StringArray" mimetype="application/x-microsoft.net.object.binary.base64">
+    <value>AAEAAAD/////AQAAAAAAAAARAQAAAAIAAAAGAgAAAAVoZWxsbwYDAAAABXdvcmxkCw==</value>
   </data>
 </root>

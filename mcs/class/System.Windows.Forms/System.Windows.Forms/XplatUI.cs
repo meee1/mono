@@ -125,8 +125,9 @@ namespace System.Windows.Forms {
 				}*/
 		//	} else 
             {
-				driver=XplatUIWin32.GetInstance ();
-			}
+				//driver=XplatUIWin32.GetInstance ();
+                driver = new XplatUIMine();
+            }
             
 
 			driver.InitializeDriver ();
@@ -620,7 +621,8 @@ namespace System.Windows.Forms {
 
 		internal static IntPtr DispatchMessage (ref MSG msg)
 		{
-			return driver.DispatchMessage (ref msg);
+            return NativeWindow.WndProc(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+			//return driver.DispatchMessage (ref msg);
 		}
 
 		internal static void DoEvents ()

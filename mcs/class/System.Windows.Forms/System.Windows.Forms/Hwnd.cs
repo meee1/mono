@@ -30,7 +30,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
-using SkiaSharp;
 
 // NOTE: Possible optimization:
 // Several properties calculate dimensions on the fly; instead; they can 
