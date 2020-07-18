@@ -35,6 +35,8 @@ namespace System.Windows.Forms {
 		private Rectangle	clip_rectangle;
 		internal bool		Handled;
 		private bool		disposed;
+
+        public object Tag;
 		
 		#region Public Constructors
 		public PaintEventArgs (Graphics graphics, Rectangle clipRect)

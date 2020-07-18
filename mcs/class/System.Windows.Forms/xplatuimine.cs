@@ -9,7 +9,7 @@ using System.Windows.Forms;
 using IntPtr = System.IntPtr;
 using Timer = System.Windows.Forms.Timer;
 
-internal class XplatUIMine : XplatUIDriver
+public class XplatUIMine : XplatUIDriver
 {
     private XplatUIDriver driver = XplatUIWin32.GetInstance();
 
@@ -55,14 +55,14 @@ internal class XplatUIMine : XplatUIDriver
 
     public override Rectangle WorkingArea => Rectangle.Empty;
 
-    public override Screen[] AllScreens => new Screen[] {new Screen(true, "screen1", new Rectangle(0,0,1024,768), new Rectangle(0, 0, 1024, 768))};
+    public override Screen[] AllScreens => new Screen[] {new Screen(true, "screen1", new Rectangle(0,0,1100,1100), new Rectangle(0, 0, 1100, 1100))};
 
     public override bool ThemesEnabled => throw new NotImplementedException();
 
     public override event EventHandler Idle;
 
     private static int ref_count;
-    private static IntPtr FosterParentLast;
+    public static IntPtr FosterParentLast;
 
     internal static MouseButtons mouse_state;
     internal static Point mouse_position;
@@ -119,7 +119,7 @@ internal class XplatUIMine : XplatUIDriver
     }
     public override void AudibleAlert(AlertType alert)
     {
-        throw new NotImplementedException();
+        Console.Beep();
     }
 
     public override void BeginMoveResize(IntPtr handle)
@@ -149,6 +149,11 @@ internal class XplatUIMine : XplatUIDriver
         }
         return FosterParentLast;
     }
+    /// <summary>
+    /// Creates an overlapped, pop-up, or child window. It specifies the window class, window title, window style, and (optionally) the initial position and size of the window. The function also specifies the window's parent or owner, if any, and the window's menu.
+    /// </summary>
+    /// <param name="cp"></param>
+    /// <returns></returns>
     public override IntPtr CreateWindow(CreateParams cp)
     {
         IntPtr WindowHandle;
@@ -185,8 +190,9 @@ internal class XplatUIMine : XplatUIDriver
         // are faking MDI, not uses Windows' version.
         if ((cp.WindowExStyle & WindowExStyles.WS_EX_MDICHILD) == WindowExStyles.WS_EX_MDICHILD)
             cp.WindowExStyle ^= WindowExStyles.WS_EX_MDICHILD;
+        // driver.CreateWindow(cp);
 
-        WindowHandle = driver.CreateWindow(cp);// new IntPtr(WindowHandleCount++);// Win32CreateWindow(cp.WindowExStyle, class_name, cp.Caption, cp.WindowStyle, location.X, location.Y, cp.Width, cp.Height, ParentHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        WindowHandle = new IntPtr(WindowHandleCount++);// Win32CreateWindow(cp.WindowExStyle, class_name, cp.Caption, cp.WindowStyle, location.X, location.Y, cp.Width, cp.Height, ParentHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
 
         if (WindowHandle == IntPtr.Zero)
         {
@@ -942,7 +948,36 @@ internal class XplatUIMine : XplatUIDriver
     }
     public override FormWindowState GetWindowState(IntPtr handle)
     {
-        //throw new NotImplementedException();
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (hwnd.cached_window_state == (FormWindowState)(-1))
+            hwnd.cached_window_state = UpdateWindowState(handle);
+
+        return hwnd.cached_window_state;
+    }
+
+
+    FormWindowState UpdateWindowState(IntPtr handle)
+    {
+        IntPtr actual_atom;
+        int actual_format;
+        IntPtr nitems;
+        IntPtr bytes_after;
+        IntPtr prop = IntPtr.Zero;
+        IntPtr atom;
+        int maximized;
+        bool minimized;
+        XWindowAttributes attributes;
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        maximized = 0;
+        minimized = false;
+       
+
         return FormWindowState.Normal;
     }
 
@@ -1226,7 +1261,19 @@ internal class XplatUIMine : XplatUIDriver
 
     public override void SetBorderStyle(IntPtr handle, FormBorderStyle border_style)
     {
-        //throw new NotImplementedException();
+        Form form = Control.FromHandle(handle) as Form;
+        if (form != null && form.window_manager == null)
+        {
+            CreateParams cp = form.GetCreateParams();
+            if (border_style == FormBorderStyle.FixedToolWindow ||
+                border_style == FormBorderStyle.SizableToolWindow ||
+                cp.IsSet(WindowExStyles.WS_EX_TOOLWINDOW))
+            {
+                form.window_manager = new ToolWindowManager(form);
+            }
+        }
+
+        RequestNCRecalc(handle);
     }
 
     public override void SetMenu(IntPtr handle, Menu menu)
@@ -1244,7 +1291,13 @@ internal class XplatUIMine : XplatUIDriver
         //throw new NotImplementedException();
         return true;
     }
-
+    /// <summary>
+    /// Sets the specified window's show state.
+    /// </summary>
+    /// <param name="handle"></param>
+    /// <param name="visible"></param>
+    /// <param name="activate"></param>
+    /// <returns></returns>
     public override bool SetVisible(IntPtr handle, bool visible, bool activate)
     {
         Hwnd hwnd;
@@ -1279,10 +1332,9 @@ internal class XplatUIMine : XplatUIDriver
         {
             UnmapWindow(hwnd, WindowType.Both);
         }
-
-        return driver.SetVisible(handle, visible, activate);
-
+        
         return true;
+        return driver.SetVisible(handle, visible, activate);
     }
 
     public override bool IsVisible(IntPtr handle)
@@ -1306,8 +1358,9 @@ internal class XplatUIMine : XplatUIDriver
 
         //lock (XlibLock)
         {
-            //DriverDebug("Parent for window {0} = {1}", XplatUI.Window(hwnd.Handle), XplatUI.Window(hwnd.parent != null ? hwnd.parent.Handle : IntPtr.Zero));
+            DriverDebug("Parent for window {0} = {1}", XplatUI.Window(hwnd.Handle), XplatUI.Window(hwnd.parent != null ? hwnd.parent.Handle : IntPtr.Zero));
             //XReparentWindow(DisplayHandle, hwnd.whole_window, hwnd.parent == null ? FosterParent : hwnd.parent.client_window, hwnd.x, hwnd.y);
+            SendMessage(handle, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
         }
 
         return IntPtr.Zero;
@@ -1352,16 +1405,141 @@ internal class XplatUIMine : XplatUIDriver
 
     public override PaintEventArgs PaintEventStart(ref Message msg, IntPtr handle, bool client)
     {
+        PaintEventArgs paint_event;
+        Hwnd hwnd;
+        Hwnd paint_hwnd;
+
+        // 
+        // handle  (and paint_hwnd) refers to the window that is should be painted.
+        // msg.HWnd (and hwnd) refers to the window that got the paint message.
+        // 
+
+        hwnd = Hwnd.ObjectFromHandle(msg.HWnd);
+        if (msg.HWnd == handle)
+        {
+            paint_hwnd = hwnd;
+        }
+        else
+        {
+            paint_hwnd = Hwnd.ObjectFromHandle(handle);
+        }
+
+        var bmp = new Bitmap(paint_hwnd.Width == 0 ? 1 : paint_hwnd.Width, paint_hwnd.Height == 0 ? 1 : paint_hwnd.Height);
+        bmp.MakeTransparent(Color.Transparent);
+
+        Graphics dc;
+
+        if (client)
+        {
+            dc = Graphics.FromImage(bmp);//Graphics.FromHwnd(paint_hwnd.client_window);
+
+            Region clip_region = new Region();
+            clip_region.MakeEmpty();
+
+            foreach (Rectangle r in hwnd.ClipRectangles)
+            {
+                /* Expand the region slightly.
+                 * See bug 464464.
+                 */
+                Rectangle r2 = Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom + 1);
+                clip_region.Union(r2);
+            }
+
+            if (hwnd.UserClip != null)
+            {
+                clip_region.Intersect(hwnd.UserClip);
+            }
+
+            dc.Clip = clip_region;
+            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = bmp };
+            hwnd.expose_pending = false;
+
+            hwnd.ClearInvalidArea();
+
+            return paint_event;
+        }
+        else
+        {
+            dc = Graphics.FromImage(bmp);//Graphics.FromHwnd(paint_hwnd.whole_window);
+
+            if (!hwnd.nc_invalid.IsEmpty)
+            {
+                dc.SetClip(hwnd.nc_invalid);
+                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = bmp };
+            }
+            else
+            {
+                paint_event = new PaintEventArgs(dc, new Rectangle(0, 0, hwnd.width, hwnd.height)) { Tag = bmp };
+            }
+            hwnd.nc_expose_pending = false;
+
+            hwnd.ClearNcInvalidArea();
+
+            return paint_event;
+        }
+
         return driver.PaintEventStart(ref msg, handle, client);
         //throw new NotImplementedException();
     }
 
+    public Bitmap bmp = new Bitmap(2000,2000);
     public override void PaintEventEnd(ref Message msg, IntPtr handle, bool client, PaintEventArgs pevent)
     {
-        driver.PaintEventEnd(ref msg, handle, client, pevent);
+        Hwnd hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(msg.HWnd);
+
+        Func<Hwnd, (int X, int Y)> GetParent = null;
+        GetParent = (hw) =>
+        {
+            if (hw.parent == null) return (hw.X, hw.Y);
+            var parent = GetParent(hw.parent);
+            return (hw.X + parent.X, hw.Y + parent.Y);
+        };
+
+        Func<Control, (int X, int Y)> GetParent2 = null;
+        GetParent2 = (hw) =>
+        {
+            if (hw.Parent == null) return (hw.Location.X, hw.Location.Y);
+            var parent = GetParent2(hw.Parent);
+            return (hw.Location.X + parent.X, hw.Location.Y + parent.Y);
+        };
+
+        //((Bitmap)pevent.Tag).Save("test.jpg");
+
+        var ctl = Control.FromHandle(handle);
+
+        lock (bmp)
+        {
+            var g = Graphics.FromImage(bmp);
+
+            var (x2, y2) = GetParent(hwnd);
+            var (x, y) = GetParent2(ctl);
+
+            g.DrawImageUnscaled((Bitmap) pevent.Tag, x, y);
+
+            g.Dispose();
+        }
+        //bmp.Save("screen.jpg");
+        
+        foreach (Control ctlControl in ctl.Controls)
+        {
+            ctlControl.Invalidate();
+        }
+       
+        pevent.Graphics.Dispose();
+
+        //driver.PaintEventEnd(ref msg, handle, client, pevent);
         //throw new NotImplementedException();
     }
-
+    /// <summary>
+    /// Changes the position and dimensions of the specified window. For a top-level window, the position and dimensions are relative to the upper-left corner of the screen. For a child window, they are relative to the upper-left corner of the parent window's client area.
+    /// </summary>
+    /// <param name="handle"></param>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
+    /// <param name="width"></param>
+    /// <param name="height"></param>
     public override void SetWindowPos(IntPtr handle, int x, int y, int width, int height)
     {
         Hwnd hwnd;
@@ -1419,12 +1597,32 @@ internal class XplatUIMine : XplatUIDriver
                 Control ctrl = Control.FromHandle(handle);
                 Size TranslatedSize = TranslateWindowSizeToXWindowSize(ctrl.GetCreateParams(), new Size(width, height));
                 //MoveResizeWindow(DisplayHandle, hwnd.whole_window, x, y, TranslatedSize.Width, TranslatedSize.Height);
+                AddExpose(hwnd, true, x, y, TranslatedSize.Width, TranslatedSize.Height);
+
+                Form form = Control.FromHandle(hwnd.client_window) as Form;
+                if (form != null && !hwnd.resizing_or_moving)
+                {
+                    if (hwnd.x != form.Bounds.X || hwnd.y != form.Bounds.Y)
+                    {
+                        SendMessage(form.Handle, Msg.WM_SYSCOMMAND, (IntPtr)SystemCommands.SC_MOVE, IntPtr.Zero);
+                        hwnd.resizing_or_moving = true;
+                    }
+                    else if (hwnd.width != form.Bounds.Width || hwnd.height != form.Bounds.Height)
+                    {
+                        SendMessage(form.Handle, Msg.WM_SYSCOMMAND, (IntPtr)SystemCommands.SC_SIZE, IntPtr.Zero);
+                        hwnd.resizing_or_moving = true;
+                    }
+                    if (hwnd.resizing_or_moving)
+                        SendMessage(form.Handle, Msg.WM_ENTERSIZEMOVE, IntPtr.Zero, IntPtr.Zero);
+                }
+
                 PerformNCCalc(hwnd);
             }
         }
 
         SendMessage(hwnd.client_window, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
 
+        return;
         driver.SetWindowPos(handle, x, y, width, height);
         //throw new NotImplementedException();
     }
@@ -1492,7 +1690,7 @@ internal class XplatUIMine : XplatUIDriver
         rect = new Rectangle(ncp.rgrc1.left, ncp.rgrc1.top, ncp.rgrc1.right - ncp.rgrc1.left, ncp.rgrc1.bottom - ncp.rgrc1.top);
         hwnd.ClientRect = rect;
 
-        //rect = TranslateClientRectangleToXClientRectangle(hwnd);
+        rect = TranslateClientRectangleToXClientRectangle(hwnd);
 
         if (hwnd.visible)
         {
@@ -1548,7 +1746,11 @@ internal class XplatUIMine : XplatUIDriver
             }
         }
     }
-
+    /// <summary>
+    /// Activates a window. The window must be attached to the calling thread's message queue.
+    /// The SetActiveWindow function activates a window, but not if the application is in the background. The window will be brought into the foreground (top of Z-Order) if its application is in the foreground when the system activates the window.
+    /// </summary>
+    /// <param name="handle"></param>
     public override void Activate(IntPtr handle)
     {
         Hwnd hwnd;
@@ -1568,6 +1770,7 @@ internal class XplatUIMine : XplatUIDriver
             unattached_timer_list.Clear();
         }
 
+        return;
         driver.Activate(handle);
         //throw new NotImplementedException();
     }
@@ -1586,6 +1789,7 @@ internal class XplatUIMine : XplatUIDriver
             hwnd.Enabled = Enable;
         }
 
+        return;
         driver.EnableWindow(handle, Enable);
     }
     // Modality support
@@ -1612,7 +1816,12 @@ internal class XplatUIMine : XplatUIDriver
         Control ctrl = Control.FromHandle(handle);
         SetWMStyles(hwnd, ctrl.GetCreateParams());
     }
-
+    /// <summary>
+    /// The InvalidateRect function adds a rectangle to the specified window's update region. The update region represents the portion of the window's client area that must be redrawn.
+    /// </summary>
+    /// <param name="handle"></param>
+    /// <param name="rc"></param>
+    /// <param name="clear"></param>
     public override void Invalidate(IntPtr handle, Rectangle rc, bool clear)
     {
         Hwnd hwnd;
@@ -1628,6 +1837,7 @@ internal class XplatUIMine : XplatUIDriver
             AddExpose(hwnd, true, rc.X, rc.Y, rc.Width, rc.Height);
         }
 
+        return;
         driver.Invalidate(handle, rc, clear);
     }
 
@@ -1642,7 +1852,7 @@ internal class XplatUIMine : XplatUIDriver
 
     public override IntPtr DefWndProc(ref Message msg)
     {
-        driver.DefWndProc(ref msg);
+        //driver.DefWndProc(ref msg);
 
         switch ((Msg)msg.Msg)
         {
@@ -1693,6 +1903,9 @@ internal class XplatUIMine : XplatUIDriver
                     if (msg.WParam == (IntPtr)1)
                     {
                         hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+
+                        if(hwnd == null)
+                            return IntPtr.Zero;
 
                         NCCALCSIZE_PARAMS ncp;
                         ncp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure(msg.LParam, typeof(NCCALCSIZE_PARAMS));
@@ -1810,10 +2023,10 @@ internal class XplatUIMine : XplatUIDriver
                     return (IntPtr)1;
                 }
         }
-       // return IntPtr.Zero;
+       
+        return IntPtr.Zero;
 
         return driver.DefWndProc(ref msg);
-        throw new NotImplementedException();
     }
 
     public override void HandleException(Exception e)
@@ -1860,7 +2073,6 @@ internal class XplatUIMine : XplatUIDriver
 
     public override bool PeekMessage(object queue_id, ref MSG msg, IntPtr hWnd, int wFilterMin, int wFilterMax, uint flags)
     {
-
         XEventQueue queue = (XEventQueue)queue_id;
         bool pending;
 
@@ -1880,10 +2092,10 @@ internal class XplatUIMine : XplatUIDriver
             // otherwise we go to sleep on the socket
             //if (XPending(DisplayHandle) != 0)
             {
-                //UpdateMessageQueue((XEventQueue)queue_id);
-                //pending = true;
+         //       UpdateMessageQueue((XEventQueue)queue_id);
+           //     pending = true;
             }
-            //else 
+            //else
             if (((XEventQueue)queue_id).Paint.Count > 0)
             {
                 pending = true;
@@ -1974,6 +2186,8 @@ internal class XplatUIMine : XplatUIDriver
             {
                 msg.hwnd = IntPtr.Zero;
                 msg.message = Msg.WM_ENTERIDLE;
+                Thread.Sleep(20);
+                return true;
                 return driver.GetMessage(queue_id, ref msg, hWnd, wFilterMin, wFilterMax); ;
             }
         }
@@ -2204,14 +2418,14 @@ internal class XplatUIMine : XplatUIDriver
 
     public override bool TranslateMessage(ref MSG msg)
     {
+        return false;
         return driver.TranslateMessage(ref msg);
-        throw new NotImplementedException();
     }
 
     public override IntPtr DispatchMessage(ref MSG msg)
     {
+        return NativeWindow.WndProc(msg.hwnd, msg.message, msg.wParam, msg.lParam);
         return driver.DispatchMessage(ref msg);
-        throw new NotImplementedException();
     }
 
     public override bool SetZOrder(IntPtr hWnd, IntPtr AfterhWnd, bool Top, bool Bottom)
@@ -2228,6 +2442,8 @@ internal class XplatUIMine : XplatUIDriver
 
     public override bool SetOwner(IntPtr hWnd, IntPtr hWndOwner)
     {
+        var hw = Hwnd.ObjectFromHandle(hWnd);
+        hw.Parent = Hwnd.ObjectFromHandle(hWndOwner);
         //throw new NotImplementedException();
         return true;
     }
@@ -2315,19 +2531,22 @@ internal class XplatUIMine : XplatUIDriver
 
         //lock (XlibLock)
         {
-            driver.GetCursorPos(handle, out win_x, out win_y);
+            //driver.GetCursorPos(handle, out win_x, out win_y);
             //QueryPointer(DisplayHandle, use_handle, out root, out child, out root_x, out root_y, out win_x, out win_y, out keys_buttons);
         }
 
+        x = 0;
+        y = 0;
+
         if (handle != IntPtr.Zero)
         {
-            x = win_x;
-            y = win_y;
+            //x = win_x;
+            //y = win_y;
         }
         else
         {
-            x = win_x;
-            y = win_y;
+           // x = win_x;
+           // y = win_y;
         }
     }
 
@@ -2336,15 +2555,56 @@ internal class XplatUIMine : XplatUIDriver
         throw new NotImplementedException();
     }
 
-    public override void ScreenToClient(IntPtr hwnd, ref int x, ref int y)
+    public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     {
-        driver.ScreenToClient(hwnd, ref x, ref y);
+        Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+
+        Func<Control, (int X, int Y)> GetParent2 = null;
+        GetParent2 = (hw) =>
+        {
+            if (hw.Parent == null) return (hw.Location.X, hw.Location.Y);
+            var parent = GetParent2(hw.Parent);
+            return (hw.Location.X + parent.X, hw.Location.Y + parent.Y);
+        };
+
+        var ctl = Control.FromHandle(handle);
+
+        if (ctl != null)
+        {
+            var (x1, y1) = GetParent2(ctl);
+            x -= x1;
+            y -= y1;
+        }
+    }
+    /// <summary>
+    /// The ClientToScreen function converts the client-area coordinates of a specified point to screen coordinates.
+    /// </summary>
+    /// <param name="handle"></param>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
+    public override void ClientToScreen(IntPtr handle, ref int x, ref int y)
+    {
+        Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+
+        Func<Control, (int X, int Y)> GetParent2 = null;
+        GetParent2 = (hw) =>
+        {
+            if (hw.Parent == null) return (hw.Location.X, hw.Location.Y);
+            var parent = GetParent2(hw.Parent);
+            return (hw.Location.X + parent.X, hw.Location.Y + parent.Y);
+        };
+
+        var ctl = Control.FromHandle(handle);
+
+        if (ctl != null)
+        {
+            var (x1, y1) = GetParent2(ctl);
+            x += x1;
+            y += y1;
+        }
+
     }
 
-    public override void ClientToScreen(IntPtr hwnd, ref int x, ref int y)
-    {
-        driver.ClientToScreen(hwnd, ref x, ref y);
-    }
     static GrabStruct Grab;
     public override void GrabWindow(IntPtr handle, IntPtr ConfineToHwnd)
     {
@@ -2830,17 +3090,115 @@ internal class XplatUIMine : XplatUIDriver
     public override SizeF GetAutoScaleSize(Font font)
     {
         // 5.3, 13
-        var size = driver.GetAutoScaleSize(font);
-        return size;
-        //throw new NotImplementedException();
+        return new SizeF(5.3f, 13);
+    }
+
+    public static Control FindControlAtPoint(Control container, Point pos)
+    {
+        Control child;
+        foreach (Control c in container.Controls)
+        {
+            if (c.Visible && c.Bounds.Contains(pos))
+            {
+                child = FindControlAtPoint(c, new Point(pos.X - c.Left, pos.Y - c.Top));
+                if (child == null) return c;
+                else return child;
+            }
+        }
+        return null;
+    }
+
+    public static Control FindControlAtCursor(Form form)
+    {
+        Point pos = Cursor.Position;
+        if (form.Bounds.Contains(pos))
+            return FindControlAtPoint(form, form.PointToClient(pos));
+        return null;
     }
 
     delegate IntPtr WndProcDelegate(IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam);
-
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    struct tagWINDOWPOS
+    {
+       public IntPtr hwndInsertAfter;
+       public IntPtr hwnd;
+       public int x;
+       public int y;
+       public int cx;
+       public int cy;
+       public uint flags;
+    }
     public override IntPtr SendMessage(IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam)
     {
         Hwnd h;
         h = Hwnd.ObjectFromHandle(hwnd);
+
+        if (hwnd == IntPtr.Zero)
+        {
+            // from the real event system
+
+            if (message == Msg.WM_MOUSEMOVE || message == Msg.WM_LBUTTONDOWN || 
+                message == Msg.WM_MOUSEACTIVATE || message == Msg.WM_MOUSEFIRST || 
+                message == Msg.WM_MOUSELEAVE || message == Msg.WM_LBUTTONUP || 
+                message == Msg.WM_RBUTTONDOWN || message == Msg.WM_RBUTTONUP ||
+                message == Msg.WM_MBUTTONDOWN || message == Msg.WM_MBUTTONUP)
+            {
+                if (Grab.Hwnd != IntPtr.Zero)
+                {
+                    hwnd = Grab.Hwnd;
+                }
+                else
+                {
+                    Func<Control, (int X, int Y)> GetParent2 = null;
+                    GetParent2 = (hw) =>
+                    {
+                        if (hw.Parent == null) return (hw.Location.X, hw.Location.Y);
+                        var parent = GetParent2(hw.Parent);
+                        return (hw.Location.X + parent.X, hw.Location.Y + parent.Y);
+                    };
+
+                    //(HoverState.Y << 16 | HoverState.X)
+                    var x = lParam.ToInt32() & 0xffff;
+                    var y = lParam.ToInt32() >> 16;
+
+                    var ctl = FindControlAtPoint(Application.OpenForms[0], new Point(x, y));
+
+                    if (ctl != null)
+                    {
+                        hwnd = ctl.Handle;
+                        h = Hwnd.ObjectFromHandle(ctl.Handle);
+                        var (xc, yc) = GetParent2(ctl);
+
+
+                        lParam = (IntPtr) ((y - yc) << 16 | (x - xc));
+
+                        ScreenToClient(ctl.Handle, ref x, ref y);
+                    }
+                }
+
+                //lParam = (IntPtr)(mouse_position.Y << 16 | mouse_position.X);
+            }
+            else if (message == Msg.WM_WINDOWPOSCHANGING || message == Msg.WM_WINDOWPOSCHANGED)
+            {
+                if (Application.OpenForms.Count > 0)
+                {
+                    var h2 = Hwnd.ObjectFromHandle(Application.OpenForms[0].Handle);
+                    var pos = new tagWINDOWPOS();
+                    pos = (tagWINDOWPOS)Marshal.PtrToStructure(lParam, typeof(tagWINDOWPOS));
+                    if ((pos.flags & 0x1) == 0)
+                    {
+                        h2.Width = pos.cx;
+                        h2.Height = pos.cy;
+                        hwnd = h2.Handle;
+                        h = Hwnd.ObjectFromHandle(hwnd);
+                    }
+                }
+            }
+            else
+            {
+
+            }
+        }
 
         if (h != null && h.queue != ThreadQueue(Thread.CurrentThread))
         {
@@ -2907,20 +3265,27 @@ internal class XplatUIMine : XplatUIDriver
     {
         XEventQueue q = ThreadQueue(thread);
         return q;
-
-        return driver.StartLoop(thread);
-        //throw new NotImplementedException();
     }
 
     public override void EndLoop(Thread thread)
     {
         driver.EndLoop(thread);
-        //throw new NotImplementedException();
     }
 
     public override void RequestNCRecalc(IntPtr hwnd)
     {
-        throw new NotImplementedException();
+        Hwnd hwnd2;
+
+        hwnd2 = Hwnd.ObjectFromHandle(hwnd);
+
+        if (hwnd2 == null)
+        {
+            return;
+        }
+
+        PerformNCCalc(hwnd2);
+        SendMessage(hwnd, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
+        InvalidateNC(hwnd);
     }
 
     public override void ResetMouseHover(IntPtr hwnd)
@@ -2935,7 +3300,8 @@ internal class XplatUIMine : XplatUIDriver
 
     public override void RaiseIdle(EventArgs e)
     {
-        throw new NotImplementedException();
+        if (Idle != null)
+            Idle(this, e);
     }
 
     public override int KeyboardSpeed => throw new NotImplementedException();
