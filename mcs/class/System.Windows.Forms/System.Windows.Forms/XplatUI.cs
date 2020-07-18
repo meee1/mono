@@ -57,8 +57,8 @@ namespace System.Windows.Forms {
 		[Conditional ("DriverDebug")]
 		static void DriverDebug (string format, params object [] args)
 		{
-			Console.WriteLine (String.Format (format, args));
-            System.Diagnostics.Debug.WriteLine(String.Format(format, args));
+			//Console.WriteLine (String.Format (format, args));
+            //System.Diagnostics.Debug.WriteLine(String.Format(format, args));
         }
 		
 		#endregion	// Private Methods
@@ -125,8 +125,8 @@ namespace System.Windows.Forms {
 				}*/
 		//	} else 
             {
-				driver=XplatUIWin32.GetInstance ();
-                //driver = new XplatUIMine();
+				//driver=XplatUIWin32.GetInstance ();
+                driver = new XplatUIMine();
             }
             
 
