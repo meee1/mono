@@ -125,8 +125,8 @@ namespace System.Windows.Forms {
 				}*/
 		//	} else 
             {
-				//driver=XplatUIWin32.GetInstance ();
-                driver = new XplatUIMine();
+				driver=XplatUIWin32.GetInstance ();
+                //driver = new XplatUIMine();
             }
             
 
@@ -521,7 +521,7 @@ namespace System.Windows.Forms {
 
 				handle = driver.CreateWindow (cp);
 
-				Console.WriteLine ("CreateWindow (): Called, returning {0:X}", handle.ToInt32 ());
+				Console.WriteLine ("CreateWindow ({1}): Called, returning {0:X}", handle.ToInt32 (),cp);
 				return handle;
 			#else
 				return driver.CreateWindow (cp);
