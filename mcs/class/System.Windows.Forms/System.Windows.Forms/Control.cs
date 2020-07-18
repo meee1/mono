@@ -3623,6 +3623,7 @@ namespace System.Windows.Forms
 				this.CreateHandle();
 			}
 
+            return Graphics.FromImage(new Bitmap(this.Width, this.Height));
             return Graphics.FromHwnd(this.window.Handle);
 		}
 
