@@ -3290,6 +3290,9 @@ public class XplatUIMine : XplatUIDriver
                     ScreenToClient(hwnd, ref x, ref y);
 
                     lParam = (IntPtr)((y) << 16 | (x));
+
+                    if (message == Msg.WM_LBUTTONDOWN)
+                        UngrabWindow(hwnd);
                 }
                 else
                 {
@@ -3310,7 +3313,22 @@ public class XplatUIMine : XplatUIDriver
 
                     ScreenToClient(Application.OpenForms[Application.OpenForms.Count - 1].Handle, ref x, ref y);
 
-                    var ctl = FindControlAtPoint(Application.OpenForms[Application.OpenForms.Count - 1], new Point(x, y));
+                    Control ctl = null;
+
+                    foreach (Hwnd hw in Hwnd.windows.Values)
+                    {
+                        if (hw.topmost && hw.Mapped && hw.Visible)
+                        {
+                            var ctlmenu = Control.FromHandle(hw.ClientWindow);
+                            if (ctlmenu.Bounds.Contains(x, y) && ctlmenu is ContextMenuStrip )
+                            {
+                                ctl = ctlmenu;
+                            }
+                        }
+                    }
+
+                    if(ctl == null)
+                        ctl = FindControlAtPoint(Application.OpenForms[Application.OpenForms.Count - 1], new Point(x, y));
 
                     if (ctl != null)
                     {
@@ -3320,8 +3338,6 @@ public class XplatUIMine : XplatUIDriver
 
 
                         lParam = (IntPtr) ((y - yc) << 16 | (x - xc));
-
-                        ScreenToClient(ctl.Handle, ref x, ref y);
                     }
                 }
 
