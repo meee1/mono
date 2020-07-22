@@ -695,9 +695,7 @@
     </Compile>
     <Compile Include="System.Windows.Forms\LabelEditEventArgs.cs" />
     <Compile Include="System.Windows.Forms\LabelEditEventHandler.cs" />
-    <Compile Include="System.Windows.Forms\LabelEditTextBox.cs">
-      <SubType>Component</SubType>
-    </Compile>
+    <Compile Include="System.Windows.Forms\LabelEditTextBox.cs" />
     <Compile Include="System.Windows.Forms\LayoutEventArgs.cs" />
     <Compile Include="System.Windows.Forms\LayoutEventHandler.cs" />
     <Compile Include="System.Windows.Forms\LayoutSettings.cs" />
@@ -807,9 +805,7 @@
     <Compile Include="System.Windows.Forms\NumericUpDownAcceleration.cs" />
     <Compile Include="System.Windows.Forms\NumericUpDownAccelerationCollection.cs" />
     <Compile Include="System.Windows.Forms\OpacityConverter.cs" />
-    <Compile Include="System.Windows.Forms\OpenFileDialog.cs">
-      <SubType>Component</SubType>
-    </Compile>
+    <Compile Include="System.Windows.Forms\OpenFileDialog.cs" />
     <Compile Include="System.Windows.Forms\OpenTreeNodeEnumerator.cs" />
     <Compile Include="System.Windows.Forms\Orientation.cs" />
     <Compile Include="System.Windows.Forms\OSFeature.cs" />
@@ -897,9 +893,7 @@
     <Compile Include="System.Windows.Forms\RightToLeft.cs" />
     <Compile Include="System.Windows.Forms\RootGridEntry.cs" />
     <Compile Include="System.Windows.Forms\RowStyle.cs" />
-    <Compile Include="System.Windows.Forms\SaveFileDialog.cs">
-      <SubType>Component</SubType>
-    </Compile>
+    <Compile Include="System.Windows.Forms\SaveFileDialog.cs" />
     <Compile Include="System.Windows.Forms\Screen.cs" />
     <Compile Include="System.Windows.Forms\ScreenOrientation.cs" />
     <Compile Include="System.Windows.Forms\ScrollableControl.cs">

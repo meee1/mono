@@ -39,7 +39,7 @@ namespace System.Windows.Forms
 {
     public class Hwnd : IDisposable {
 		#region Local Variables
-		private static Hashtable	windows	= new Hashtable(100, 0.5f);
+		public static Hashtable	windows	= new Hashtable(100, 0.5f);
 		//private const int	menu_height = 14;			// FIXME - Read this value from somewhere
 		private static Dictionary<IntPtr, int> destroyed_windows = new Dictionary<IntPtr, int> (); 		// destroyed Hwnds for which we haven't gotten DestroyNotify yet
 		
@@ -77,7 +77,7 @@ namespace System.Windows.Forms
 		internal bool		whacky_wm;
 		public bool		fixed_size;
 		public bool		zombie; /* X11 only flag.  true if the X windows have been destroyed but we haven't been Disposed */
-		internal bool		topmost; /* X11 only. */
+		public bool		topmost; /* X11 only. */
 		internal Region		user_clip;
         public XEventQueue	queue;
         public WindowExStyles	initial_ex_style;
@@ -93,9 +93,11 @@ namespace System.Windows.Forms
 		private static Graphics bmp_g;
 		#endregion	// Local Variables
 
+        public Bitmap hwndbmp;
+
 		// locks for some operations (used in XplatUIX11.cs)
 		internal object configure_lock = new object ();
-		internal object expose_lock = new object ();
+		public object expose_lock = new object ();
 
 		#region Constructors and destructors
 		public Hwnd() {
