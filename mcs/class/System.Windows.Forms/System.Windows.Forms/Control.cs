@@ -1341,7 +1341,7 @@ namespace System.Windows.Forms
 		internal virtual void PaintControlBackground (PaintEventArgs pevent) {
 
 			bool tbstyle_flat = ((CreateParams.Style & (int) ToolBarStyles.TBSTYLE_FLAT) != 0);
-            /*
+
 			// If we have transparent background
 			if (((BackColor.A != 0xff) && GetStyle(ControlStyles.SupportsTransparentBackColor)) || tbstyle_flat) {
 				if (parent != null) {
@@ -1403,7 +1403,7 @@ namespace System.Windows.Forms
 					}
 				}
 			}
-            */
+
 			if (background_image == null) {
 				if (!tbstyle_flat) {
 					Rectangle paintRect = pevent.ClipRectangle;
@@ -3357,7 +3357,7 @@ namespace System.Windows.Forms
 
 
 				create_params.ClassName = XplatUI.GetDefaultClassName (GetType ());
-			//	create_params.ClassStyle = (int)(XplatUIWin32.ClassStyle.CS_OWNDC | XplatUIWin32.ClassStyle.CS_DBLCLKS);
+				create_params.ClassStyle = (int)(ClassStyle.CS_OWNDC | ClassStyle.CS_DBLCLKS);
 				create_params.ExStyle = 0;
 				create_params.Param = 0;
 
