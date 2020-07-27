@@ -5071,13 +5071,7 @@ namespace System.Windows.Forms
 			}
 		}
 
-        public virtual void WndProcDOIT(Message m)
-        {
-            WndProc(ref m);
-        }
-
-
-        protected virtual void WndProc(ref Message m) {
+		protected virtual void WndProc(ref Message m) {
 #if DebugMessages
 			Console.WriteLine("Control {0} received message {1}", window.Handle == IntPtr.Zero ? this.Text : XplatUI.Window(window.Handle), m.ToString ());
 #endif
@@ -6156,13 +6150,7 @@ namespace System.Windows.Forms
 				eh (this, e);
 		}
 
-        public void OnMouseWheelD(MouseEventArgs e)
-        {
-            OnMouseWheel(e);
-        }
-
-
-        [EditorBrowsable(EditorBrowsableState.Advanced)]
+		[EditorBrowsable(EditorBrowsableState.Advanced)]
 		protected virtual void OnMouseWheel(MouseEventArgs e) {
 			MouseEventHandler eh = (MouseEventHandler)(Events [MouseWheelEvent]);
 			if (eh != null)

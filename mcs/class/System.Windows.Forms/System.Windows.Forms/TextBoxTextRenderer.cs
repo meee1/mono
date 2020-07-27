@@ -52,7 +52,7 @@ namespace System.Windows.Forms
 			if (platform == 4 || platform == 128 || platform == 6)
 				use_textrenderer = false;
 			else
-				use_textrenderer = true;
+				use_textrenderer = false;
 
 			// windows 2000 doesn't draw with gdi if bounds are In32.MaxValue
 			max_size = new Size (Int16.MaxValue, Int16.MaxValue);
