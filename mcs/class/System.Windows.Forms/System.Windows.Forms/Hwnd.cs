@@ -94,6 +94,7 @@ namespace System.Windows.Forms
 		#endregion	// Local Variables
 
         public Bitmap hwndbmp;
+		public Bitmap hwndbmpNC;
 
 		// locks for some operations (used in XplatUIX11.cs)
 		internal object configure_lock = new object ();
