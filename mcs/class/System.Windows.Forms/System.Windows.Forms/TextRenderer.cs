@@ -138,7 +138,7 @@ namespace System.Windows.Forms
 
 			if (text == null || text.Length == 0)
 				return;
-            /*
+            
 			// We use MS GDI API's unless told not to, or we aren't on Windows
 			if (!useDrawString && !XplatUI.RunningOnUnix) {
 				if ((flags & TextFormatFlags.VerticalCenter) == TextFormatFlags.VerticalCenter || (flags & TextFormatFlags.Bottom) == TextFormatFlags.Bottom)
@@ -200,7 +200,7 @@ namespace System.Windows.Forms
 					SelectClipRgn (hdc, IntPtr.Zero);
 
 				dc.ReleaseHdc ();
-			}*/
+			}
 			// Use Graphics.DrawString as a fallback method
 			else {
 				Graphics g;
@@ -211,7 +211,6 @@ namespace System.Windows.Forms
 				else {
 					hdc = dc.GetHdc ();
 					g = Graphics.FromHdc (hdc);
-                //g= new Graphics();
 				}
 
 				StringFormat sf = FlagsToStringFormat (flags);
@@ -229,7 +228,7 @@ namespace System.Windows.Forms
 
 		internal static Size MeasureTextInternal (IDeviceContext dc, string text, Font font, Size proposedSize, TextFormatFlags flags, bool useMeasureString)
 		{
-            /*
+            
 			if (!useMeasureString && !XplatUI.RunningOnUnix) {
 				// Tell DrawText to calculate size instead of draw
 				flags |= (TextFormatFlags)1024;		// DT_CALCRECT
@@ -263,7 +262,7 @@ namespace System.Windows.Forms
 
 				return retval;
 			}
-			else {*/
+			else {
 			StringFormat sf = FlagsToStringFormat (flags);
 
 				Size retval;
@@ -285,7 +284,7 @@ namespace System.Windows.Forms
 					retval.Width += 9;
 
 				return retval;
-			//}
+			}
 		}
 		#endregion
 
