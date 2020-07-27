@@ -32,7 +32,7 @@ public class XplatUIMine : XplatUIDriver
             return mouse_position;
         }
     }
-    public override int CaptionHeight => 0;
+    public override int CaptionHeight => 20;
 
     public override Size CursorSize => throw new NotImplementedException();
 
@@ -248,23 +248,23 @@ public class XplatUIMine : XplatUIDriver
             hwnd.enabled = false;
         }
 
-        ClientWindow = IntPtr.Zero;
-
         Size XWindowSize = TranslateWindowSizeToXWindowSize(cp);
         Rectangle XClientRect = TranslateClientRectangleToXClientRectangle(hwnd, cp.control);
 
-
-
         WholeWindow = new IntPtr(WindowHandleCount++);// Win32CreateWindow(cp.WindowExStyle, class_name, cp.Caption, cp.WindowStyle, location.X, location.Y, cp.Width, cp.Height, ParentHandle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+        if (XWindowSize.Width == XClientRect.Width && XWindowSize.Height == XClientRect.Height)
+            ClientWindow = WholeWindow;
+        else
+            ClientWindow = new IntPtr(WindowHandleCount++);
 
-        if(Thread.CurrentThread.ManagedThreadId == 1)
+        if (Thread.CurrentThread.ManagedThreadId == 1)
         {
 
         }
 
         hwnd.Queue = ThreadQueue(Thread.CurrentThread);
         hwnd.WholeWindow = WholeWindow;
-        hwnd.ClientWindow = WholeWindow;
+        hwnd.ClientWindow = ClientWindow;
 
         if (ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_TOPMOST))
             SetTopmost(hwnd.whole_window, true);
@@ -290,9 +290,16 @@ public class XplatUIMine : XplatUIDriver
         {
             hwnd.visible = true;
             MapWindow(hwnd, WindowType.Both);
+
             if (!(Control.FromHandle(hwnd.Handle) is Form))
                 SendMessage(hwnd.Handle, Msg.WM_SHOWWINDOW, (IntPtr)1, IntPtr.Zero);
         }
+
+        if ((Control.FromHandle(hwnd.Handle) is Form))
+        {           
+            ((Form)Control.FromHandle(hwnd.Handle)).window_manager = new FormWindowManager((Form)(Control.FromHandle(hwnd.Handle)));
+        }
+
 
         return hwnd.zombie ? IntPtr.Zero : hwnd.Handle;
     }
@@ -502,7 +509,7 @@ public class XplatUIMine : XplatUIDriver
 
     }
 
-    internal static Rectangle TranslateClientRectangleToXClientRectangle(Hwnd hwnd)
+    public static Rectangle TranslateClientRectangleToXClientRectangle(Hwnd hwnd)
     {
         return TranslateClientRectangleToXClientRectangle(hwnd, Control.FromHandle(hwnd.Handle));
     }
@@ -1431,6 +1438,7 @@ public class XplatUIMine : XplatUIDriver
         PaintEventArgs paint_event;
         Hwnd hwnd;
         Hwnd paint_hwnd;
+         
 
         // 
         // handle  (and paint_hwnd) refers to the window that is should be painted.
@@ -1447,7 +1455,7 @@ public class XplatUIMine : XplatUIDriver
             paint_hwnd = Hwnd.ObjectFromHandle(handle);
         }
 
-        Monitor.Enter(paint_hwnd.expose_lock);
+        Monitor.Enter(paintlock);
 
         // recreate bmp if needed
         if (paint_hwnd.hwndbmp == null || paint_hwnd.hwndbmp.Width != paint_hwnd.width ||
@@ -1455,7 +1463,11 @@ public class XplatUIMine : XplatUIDriver
         {
                 paint_hwnd.hwndbmp = new Bitmap(paint_hwnd.Width <= 0 ? 1 : paint_hwnd.Width,
                     paint_hwnd.Height <= 0 ? 1 : paint_hwnd.Height);
-                paint_hwnd.hwndbmp.MakeTransparent(Color.Transparent);            
+                paint_hwnd.hwndbmp.MakeTransparent(Color.Transparent);
+
+            paint_hwnd.hwndbmpNC = new Bitmap(paint_hwnd.Width <= 0 ? 1 : paint_hwnd.Width,
+          paint_hwnd.Height <= 0 ? 1 : paint_hwnd.Height);
+            paint_hwnd.hwndbmpNC.MakeTransparent(Color.Transparent);
         }
 
         Graphics dc;
@@ -1491,16 +1503,16 @@ public class XplatUIMine : XplatUIDriver
         }
         else
         {
-            dc = Graphics.FromImage(paint_hwnd.hwndbmp);//Graphics.FromHwnd(paint_hwnd.whole_window);
+            dc = Graphics.FromImage(paint_hwnd.hwndbmpNC);//Graphics.FromHwnd(paint_hwnd.whole_window);
 
             if (!hwnd.nc_invalid.IsEmpty)
             {
                 dc.SetClip(hwnd.nc_invalid);
-                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = paint_hwnd.hwndbmp };
+                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = paint_hwnd.hwndbmpNC };
             }
             else
             {
-                paint_event = new PaintEventArgs(dc, new Rectangle(0, 0, hwnd.width, hwnd.height)) { Tag = paint_hwnd.hwndbmp };
+                paint_event = new PaintEventArgs(dc, new Rectangle(0, 0, hwnd.width, hwnd.height)) { Tag = paint_hwnd.hwndbmpNC };
             }
             hwnd.nc_expose_pending = false;
 
@@ -1593,11 +1605,13 @@ public class XplatUIMine : XplatUIDriver
 
         pevent.Graphics.Dispose();
 
-        Monitor.Exit(hwnd.expose_lock);
+        Monitor.Exit(paintlock);
 
         //driver.PaintEventEnd(ref msg, handle, client, pevent);
         //throw new NotImplementedException();
     }
+
+    public static object paintlock = new object();
 
     private IEnumerable<(IntPtr hwnd, IntPtr afterhwnd, bool top, bool bottom)> GetAllChildren(List<(IntPtr hwnd, IntPtr afterhwnd, bool top, bool bottom)> valueTuples, IntPtr handle)
     {
@@ -1680,7 +1694,6 @@ public class XplatUIMine : XplatUIDriver
                 Control ctrl = Control.FromHandle(handle);
                 Size TranslatedSize = TranslateWindowSizeToXWindowSize(ctrl.GetCreateParams(), new Size(width, height));
                 //MoveResizeWindow(DisplayHandle, hwnd.whole_window, x, y, TranslatedSize.Width, TranslatedSize.Height);
-                AddExpose(hwnd, true, x, y, TranslatedSize.Width, TranslatedSize.Height);
 
                 Form form = Control.FromHandle(hwnd.client_window) as Form;
                 if (form != null && !hwnd.resizing_or_moving)
@@ -2424,13 +2437,15 @@ public class XplatUIMine : XplatUIDriver
                         goto ProcessNextMessage;
                     }
 
+                        Monitor.Enter(paintlock);
+                        if (hwnd.hwndbmp != null)
                     switch (hwnd.border_style)
                     {
                         case FormBorderStyle.Fixed3D:
                         {
                             Graphics g;
 
-                            g = Graphics.FromHwnd(hwnd.whole_window);
+                            g = Graphics.FromImage(hwnd.hwndbmp);
                             if (hwnd.border_static)
                                 ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
                                     Border3DStyle.SunkenOuter);
@@ -2445,24 +2460,25 @@ public class XplatUIMine : XplatUIDriver
                         {
                             Graphics g;
 
-                            g = Graphics.FromHwnd(hwnd.whole_window);
+                            g = Graphics.FromImage(hwnd.hwndbmp);
                             ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
                                 ButtonBorderStyle.Solid);
                             g.Dispose();
                             break;
                         }
                     }
+                        Monitor.Exit(paintlock);
 
-                    DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
+                        DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
                         hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
                         xevent.ExposeEvent.width, xevent.ExposeEvent.height);
 
                     Rectangle rect = new Rectangle(xevent.ExposeEvent.x, xevent.ExposeEvent.y, xevent.ExposeEvent.width,
                         xevent.ExposeEvent.height);
                     Region region = new Region(rect);
-                    IntPtr hrgn = region.GetHrgn(null); // Graphics object isn't needed
+                    //IntPtr hrgn = region.GetHrgn(null); // Graphics object isn't needed
                     msg.message = Msg.WM_NCPAINT;
-                    msg.wParam = hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
+                    msg.wParam = (IntPtr)1;// hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
                     msg.refobject = region;
                     break;
                 }
@@ -2561,7 +2577,7 @@ public class XplatUIMine : XplatUIDriver
     public override bool SetOwner(IntPtr hWnd, IntPtr hWndOwner)
     {
         var hw = Hwnd.ObjectFromHandle(hWnd);
-        hw.Parent = Hwnd.ObjectFromHandle(hWndOwner);
+        //hw.Parent = Hwnd.ObjectFromHandle(hWndOwner);
         //throw new NotImplementedException();
         return true;
     }
@@ -2672,27 +2688,30 @@ public class XplatUIMine : XplatUIDriver
     {
         throw new NotImplementedException();
     }
+    (int X, int Y) GetParent2(Hwnd hw)
+    {
+        if (hw.Parent == null)
+        {
+            if(hw.x > 0)
+            {
+                //return (0, 0);
+            }
+            return (hw.X, hw.Y);
+        }
+        var parent = GetParent2(hw.Parent);
+        return (hw.X  + parent.X, hw.Y + parent.Y);
 
-    public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
+    }
+
+public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     {
         Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
 
-        Func<Control, (int X, int Y)> GetParent2 = null;
-        GetParent2 = (hw) =>
-        {
-            if (hw.Parent == null) return (hw.Location.X, hw.Location.Y);
-            var parent = GetParent2(hw.Parent);
-            return (hw.Location.X + parent.X, hw.Location.Y + parent.Y);
-        };
+        var ctl = Control.FromHandle(hwnd.Handle);
 
-        var ctl = Control.FromHandle(handle);
-
-        if (ctl != null)
-        {
-            var (x1, y1) = GetParent2(ctl);
+        var (x1, y1) = GetParent2(hwnd);
             x -= x1;
             y -= y1;
-        }
     }
     /// <summary>
     /// The ClientToScreen function converts the client-area coordinates of a specified point to screen coordinates.
@@ -2704,37 +2723,12 @@ public class XplatUIMine : XplatUIDriver
     {
         Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
 
-        List<Control> tree = new List<Control>();
-        Func<Control, (int X, int Y)> GetParent2 = null;
-        GetParent2 = (hw) =>
-        {
-            tree.Add(hw);
-            if (hw.Parent == null)
-            {
-                return (hw.Bounds.X, hw.Bounds.Y);
-            }
-            var parent = GetParent2(hw.Parent);
-            return (hw.Bounds.X + parent.X, hw.Bounds.Y + parent.Y);
-        };
+        var ctl = Control.FromHandle(hwnd.Handle);
 
-        var ctl = Control.FromHandle(handle);
+        var (x1, y1) = GetParent2(hwnd);
 
-       // var root = ctl.FindRootParent();
-
-        if (ctl != null)
-        {
-            FindControlAtPoint(ctl, new Point(x, y));
-            var (x1, y1) = GetParent2(ctl);
-
-            var x5 = tree.Sum(a => a.Location.X);
-            var x6 = tree.Sum(a => a.Bounds.X);
-            var x7 = tree.Sum(a => a.ExplicitBounds.X);
-            var y7 = tree.Sum(a => a.ExplicitBounds.Y);
-
-            x += x1;
-            y += y1;
-        }
-
+        x += x1;
+        y += y1;
     }
 
     static GrabStruct Grab;
@@ -2742,6 +2736,12 @@ public class XplatUIMine : XplatUIDriver
     {
         Hwnd hwnd;
         IntPtr confine_to_window;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (!hwnd.Mapped || !hwnd.Visible)
+            return;
+
 
         confine_to_window = IntPtr.Zero;
 
@@ -2761,8 +2761,6 @@ public class XplatUIMine : XplatUIDriver
         }
 
         Grab.Hwnd = handle;
-
-        hwnd = Hwnd.ObjectFromHandle(handle);
 
     }
 
@@ -2998,10 +2996,14 @@ public class XplatUIMine : XplatUIDriver
         Point src = new Point(dest_rect.X - XAmount, dest_rect.Y - YAmount);
        // XCopyArea(DisplayHandle, hwnd.client_window, hwnd.client_window, gc, src.X, src.Y,dest_rect.Width, dest_rect.Height, dest_rect.X, dest_rect.Y);
 
+
         Rectangle dirty_area = GetDirtyArea(area, dest_rect, XAmount, YAmount);
         AddExpose(hwnd, true, dirty_area.X, dirty_area.Y, dirty_area.Width, dirty_area.Height);
 
-        ProcessGraphicsExpose(hwnd);
+        var ctl = Control.FromHandle(hwnd.ClientWindow);
+        ctl.Invalidate();
+
+        //ProcessGraphicsExpose(hwnd);
 
         //XFreeGC(DisplayHandle, gc);
     }
@@ -3018,6 +3020,10 @@ public class XplatUIMine : XplatUIDriver
         XEvent xevent = new XEvent();
         IntPtr handle = Hwnd.HandleFromObject(hwnd);
         EventPredicate predicate = GraphicsExposePredicate;
+
+        DoEvents();
+
+        return;
 
         for (; ; )
         {
@@ -3228,12 +3234,16 @@ public class XplatUIMine : XplatUIDriver
     public static Control FindControlAtPoint(Control container, Point pos)
     {
         Control child;
-        foreach (Control c in container.Controls)
+        // inclide implicit controls
+        foreach (Control c in container.Controls.GetAllControls())
         {
             if (c.Visible && c.Bounds.Contains(pos))
             {
                 child = FindControlAtPoint(c, new Point(pos.X - c.Left, pos.Y - c.Top));
-                if (child == null) return c;
+                if (child == null) {
+
+                    return c;
+                }
                 else return child;
             }
         }
@@ -3280,6 +3290,7 @@ public class XplatUIMine : XplatUIDriver
                 if (Grab.Hwnd != IntPtr.Zero)
                 {
                     hwnd = Grab.Hwnd;
+                    h = Hwnd.ObjectFromHandle(hwnd);
 
                     var x = lParam.ToInt32() & 0xffff;
                     var y = lParam.ToInt32() >> 16;
@@ -3291,19 +3302,11 @@ public class XplatUIMine : XplatUIDriver
 
                     lParam = (IntPtr)((y) << 16 | (x));
 
-                    if (message == Msg.WM_LBUTTONDOWN)
+                    if (!h.Mapped || !h.Visible)
                         UngrabWindow(hwnd);
                 }
                 else
                 {
-                    Func<Control, (int X, int Y)> GetParent2 = null;
-                    GetParent2 = (hw) =>
-                    {
-                        if (hw.Parent == null) return (hw.Location.X, hw.Location.Y);
-                        var parent = GetParent2(hw.Parent);
-                        return (hw.Location.X + parent.X, hw.Location.Y + parent.Y);
-                    };
-
                     //(HoverState.Y << 16 | HoverState.X)
                     var x = lParam.ToInt32() & 0xffff;
                     var y = lParam.ToInt32() >> 16;
@@ -3311,33 +3314,47 @@ public class XplatUIMine : XplatUIDriver
                     mouse_position.X = x;
                     mouse_position.Y = y;
 
-                    ScreenToClient(Application.OpenForms[Application.OpenForms.Count - 1].Handle, ref x, ref y);
-
                     Control ctl = null;
 
-                    foreach (Hwnd hw in Hwnd.windows.Values)
+                    if(h == null)
                     {
-                        if (hw.topmost && hw.Mapped && hw.Visible)
+                        foreach (Hwnd hw in Hwnd.windows.Values)
                         {
-                            var ctlmenu = Control.FromHandle(hw.ClientWindow);
-                            if (ctlmenu.Bounds.Contains(x, y) && ctlmenu is ContextMenuStrip )
+                            if (hw.topmost == true && hw.Mapped && hw.Visible)
                             {
-                                ctl = ctlmenu;
+                                var ctlmenu = Control.FromHandle(hw.ClientWindow);
+                                if (ctlmenu != null && ctlmenu.Bounds.Contains(x, y) && ctlmenu is ContextMenuStrip )
+                                {
+                                    ctl = ctlmenu;
+                                    break;
+                                }
                             }
                         }
                     }
 
-                    if(ctl == null)
+                    if (ctl == null)
+                    {
+                        XplatUI.driver.ScreenToClient(Application.OpenForms[Application.OpenForms.Count - 1].Handle, ref x, ref y);
                         ctl = FindControlAtPoint(Application.OpenForms[Application.OpenForms.Count - 1], new Point(x, y));
+                    }
 
                     if (ctl != null)
                     {
                         hwnd = ctl.Handle;
-                        h = Hwnd.ObjectFromHandle(ctl.Handle);
-                        var (xc, yc) = GetParent2(ctl);
+                        h = Hwnd.ObjectFromHandle(hwnd);
 
+                        x = lParam.ToInt32() & 0xffff;
+                        y = lParam.ToInt32() >> 16;
 
-                        lParam = (IntPtr) ((y - yc) << 16 | (x - xc));
+                        ScreenToClient(hwnd, ref x, ref y);
+
+                        lParam = (IntPtr) ((y ) << 16 | (x));
+
+                        if(Control.FromHandle(h.Handle) is Form)
+                            PostMessage(hwnd, Msg.WM_NCPAINT, IntPtr.Zero, IntPtr.Zero);
+                    } else
+                    {
+                        PostMessage(Application.OpenForms[Application.OpenForms.Count - 1].Handle, Msg.WM_NCPAINT, IntPtr.Zero, IntPtr.Zero);
                     }
                 }
 
@@ -3350,8 +3367,10 @@ public class XplatUIMine : XplatUIDriver
                     // The current message will be sent out next time around
                     //StoreMessage(ref msg);
 
-                    if(prev_mouse_hwnd != IntPtr.Zero)
-                        PostMessage(prev_mouse_hwnd, Msg.WM_MOUSELEAVE, wParam, lParam);
+                    if (prev_mouse_hwnd != IntPtr.Zero)
+                    {
+                        PostMessage(prev_mouse_hwnd, Msg.WM_MOUSELEAVE, wParam, lParam);                        
+                    }
 
                     // This is the message we want to send at this point
                     message = Msg.WM_MOUSE_ENTER;
@@ -3378,18 +3397,24 @@ public class XplatUIMine : XplatUIDriver
                     pos = (tagWINDOWPOS)Marshal.PtrToStructure(lParam, typeof(tagWINDOWPOS));
                     if ((pos.flags & 0x1) == 0)
                     {
+                        h = h2;
+                        SetWindowPos(h.ClientWindow, h.x, h.y, pos.cx, pos.cy);
+                        return IntPtr.Zero;
+
                         h2.Width = pos.cx;
-                        h2.Height = pos.cy - 20;
+                        h2.Height = pos.cy;
                         h2.X = 0;
                         h2.y = 0;
                         hwnd = h2.Handle;
-                        h = Hwnd.ObjectFromHandle(hwnd);
+                       
 
                         PerformNCCalc(h);
                     }
+
+                    //if (hwnd != IntPtr.Zero)
+                        //PostMessage(hwnd, message, wParam, lParam);
                 }
-                if (hwnd != IntPtr.Zero)
-                    PostMessage(hwnd, message, wParam, lParam);
+            
                 return IntPtr.Zero;
             } else if (message == Msg.WM_MOUSEWHEEL)
             {
@@ -3416,6 +3441,11 @@ public class XplatUIMine : XplatUIDriver
             }
             else
             {
+                return IntPtr.Zero;
+                if (message == Msg.WM_NCHITTEST)
+                {
+                    
+                }
 
             }
         }

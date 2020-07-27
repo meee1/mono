@@ -4149,11 +4149,17 @@ namespace System.Windows.Forms
 						fsEntry.DeviceShort = drive.Name;
 						fsEntry.Attributes = FileAttributes.Directory;
 						fsEntry.MainTopNode = GetMyComputerFSEntry ();
-						if (String.IsNullOrEmpty(drive.VolumeLabel) || drive.VolumeLabel == drive.Name) {
-							fsEntry.Name = drive.Name;
-						} else {
-							fsEntry.Name = drive.VolumeLabel + " (" + fsEntry.Name + ")";
-						}
+						try
+						{
+							if (String.IsNullOrEmpty(drive.VolumeLabel) || drive.VolumeLabel == drive.Name)
+							{
+								fsEntry.Name = drive.Name;
+							}
+							else
+							{
+								fsEntry.Name = drive.VolumeLabel + " (" + fsEntry.Name + ")";
+							}
+						} catch { fsEntry.Name = "Error"; }
 						if (drive.DriveType == DriveType.Removable) {
 							fsEntry.FileType = FSEntry.FSEntryType.RemovableDevice;
 							fsEntry.IconIndex = MimeIconEngine.GetIconIndexForMimeType ("removable/removable");
