@@ -50,7 +50,8 @@ namespace System.Windows.Forms
 
 		public override void PointToClient (ref int x, ref int y)
 		{
-			XplatUI.ScreenToClient (Form.Parent.Handle, ref x, ref y);
+			if(Form.Parent != null)
+				XplatUI.ScreenToClient (Form.Parent.Handle, ref x, ref y);
 		}
 
 

@@ -89,9 +89,10 @@ namespace System.Windows.Forms
 		private static Bitmap bmp;
 		[ThreadStatic]
 		private static Graphics bmp_g;
-		#endregion	// Local Variables
+		#endregion    // Local Variables
 
-        public Bitmap hwndbmp;
+		public Bitmap hwndbmpbase;
+		public Bitmap hwndbmp;
 		public Bitmap hwndbmpNC;
 
 		// locks for some operations (used in XplatUIX11.cs)
