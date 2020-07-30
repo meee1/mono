@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,7 +13,7 @@ using Timer = System.Windows.Forms.Timer;
 
 public class XplatUIMine : XplatUIDriver
 {
-    private XplatUIDriver driver = XplatUIWin32.GetInstance();
+    //private XplatUIDriver driver = XplatUIWin32.GetInstance();
 
     public override IntPtr InitializeDriver()
     {
@@ -212,8 +213,8 @@ public class XplatUIMine : XplatUIDriver
         if (cp.control is Form && cp.X == int.MinValue && cp.Y == int.MinValue)
         {
             Point next = Hwnd.GetNextStackedFormLocation(cp);
-            X = 0;//next.X;
-            Y = 0;//next.Y;
+            X = next.X;
+            Y = next.Y;
         }
         ValueMask = SetWindowValuemask.BitGravity | SetWindowValuemask.WinGravity;
 
@@ -257,6 +258,8 @@ public class XplatUIMine : XplatUIDriver
         else
             ClientWindow = new IntPtr(WindowHandleCount++);
 
+        CreateBackingGraphic(hwnd, XWindowSize, XClientRect);
+
         if (Thread.CurrentThread.ManagedThreadId == 1)
         {
 
@@ -296,12 +299,50 @@ public class XplatUIMine : XplatUIDriver
         }
 
         if ((Control.FromHandle(hwnd.Handle) is Form))
-        {           
-            ((Form)Control.FromHandle(hwnd.Handle)).window_manager = new FormWindowManager((Form)(Control.FromHandle(hwnd.Handle)));
-        }
-
+        {
+            var frm = ((Form)Control.FromHandle(hwnd.Handle));            
+            frm.window_manager = new FormWindowManager(frm);
+        } 
 
         return hwnd.zombie ? IntPtr.Zero : hwnd.Handle;
+    }
+
+    void CreateBackingGraphic(Hwnd hwnd, Size xWindowSize = new Size(), Rectangle xClientRect = new Rectangle())
+    {       
+        // create bmp
+        if (hwnd.hwndbmp == null || hwnd.hwndbmp.Width != hwnd.width ||
+            hwnd.hwndbmp.Height != hwnd.height)
+        {
+            //hwnd.hwndbmpbase = new Bitmap(hwnd.Width, hwnd.Height, PixelFormat.Format32bppArgb);
+            //hwnd.hwndbmpbase.MakeTransparent(Color.Transparent);
+            hwnd.hwndbmp = null;
+            hwnd.hwndbmpNC = null;
+
+            hwnd.hwndbmp = new Bitmap(hwnd.Width, hwnd.Height);
+            hwnd.hwndbmp.MakeTransparent(Color.Transparent);
+            hwnd.hwndbmpNC = new Bitmap(hwnd.Width, hwnd.Height);
+            hwnd.hwndbmpNC.MakeTransparent(Color.Transparent);
+
+            /*
+            var bmpdata = hwnd.hwndbmpbase.LockBits(new Rectangle(0, 0, hwnd.Width, hwnd.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+
+            if(xWindowSize.Width != xClientRect.Width)
+            {
+                var deltaw = (xClientRect.Width - xWindowSize.Width);
+                var borderw = deltaw / 2;
+                var deltah = (xClientRect.Height - xWindowSize.Height);
+                var bordert = deltah - deltaw;
+
+                if (bordert > 0 && borderw > 0)
+                    hwnd.hwndbmp = new Bitmap(bmpdata.Width - deltaw, bmpdata.Height - deltah, bmpdata.Stride, bmpdata.PixelFormat, bmpdata.Scan0 + (bmpdata.Stride * bordert + borderw * 4));
+            }
+                        
+            if(hwnd.hwndbmp == null)
+                hwnd.hwndbmp = new Bitmap(bmpdata.Width, bmpdata.Height, bmpdata.Stride, bmpdata.PixelFormat, bmpdata.Scan0);
+
+            hwnd.hwndbmpNC = new Bitmap(bmpdata.Width, bmpdata.Height, bmpdata.Stride, bmpdata.PixelFormat, bmpdata.Scan0);
+            */
+        }
     }
 
     internal static Size TranslateWindowSizeToXWindowSize(CreateParams cp)
@@ -920,8 +961,6 @@ public class XplatUIMine : XplatUIDriver
             }
 
         }
-
-        driver.DestroyWindow(handle);
     }
 
     void AccumulateDestroyedHandles(Control c, ArrayList list)
@@ -1364,7 +1403,6 @@ public class XplatUIMine : XplatUIDriver
         }
         
         return true;
-        return driver.SetVisible(handle, visible, activate);
     }
 
     public override bool IsVisible(IntPtr handle)
@@ -1458,17 +1496,7 @@ public class XplatUIMine : XplatUIDriver
         Monitor.Enter(paintlock);
 
         // recreate bmp if needed
-        if (paint_hwnd.hwndbmp == null || paint_hwnd.hwndbmp.Width != paint_hwnd.width ||
-            paint_hwnd.hwndbmp.Height != paint_hwnd.height)
-        {
-                paint_hwnd.hwndbmp = new Bitmap(paint_hwnd.Width <= 0 ? 1 : paint_hwnd.Width,
-                    paint_hwnd.Height <= 0 ? 1 : paint_hwnd.Height);
-                paint_hwnd.hwndbmp.MakeTransparent(Color.Transparent);
-
-            paint_hwnd.hwndbmpNC = new Bitmap(paint_hwnd.Width <= 0 ? 1 : paint_hwnd.Width,
-          paint_hwnd.Height <= 0 ? 1 : paint_hwnd.Height);
-            paint_hwnd.hwndbmpNC.MakeTransparent(Color.Transparent);
-        }
+        CreateBackingGraphic(hwnd);
 
         Graphics dc;
 
@@ -1719,8 +1747,6 @@ public class XplatUIMine : XplatUIDriver
         SendMessage(hwnd.client_window, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
 
         return;
-        driver.SetWindowPos(handle, x, y, width, height);
-        //throw new NotImplementedException();
     }
 
     public override void GetWindowPos(IntPtr handle, bool is_toplevel, out int x, out int y, out int width, out int height,
@@ -1867,8 +1893,6 @@ public class XplatUIMine : XplatUIDriver
         }
 
         return;
-        driver.Activate(handle);
-        //throw new NotImplementedException();
     }
     /// <summary>
     /// The EnableWindow function enables or disables mouse and keyboard input to the specified window or control. When input is disabled, the window does not receive input such as mouse clicks and key presses. When input is enabled, the window receives all input.
@@ -1886,7 +1910,6 @@ public class XplatUIMine : XplatUIDriver
         }
 
         return;
-        driver.EnableWindow(handle, Enable);
     }
     // Modality support
     static Stack ModalWindows;		// Stack of our modal windows
@@ -1934,7 +1957,6 @@ public class XplatUIMine : XplatUIDriver
         }
 
         return;
-        driver.Invalidate(handle, rc, clear);
     }
 
     public override void InvalidateNC(IntPtr handle)
@@ -2121,8 +2143,6 @@ public class XplatUIMine : XplatUIDriver
         }
        
         return IntPtr.Zero;
-
-        return driver.DefWndProc(ref msg);
     }
 
     public override void HandleException(Exception e)
@@ -2282,9 +2302,9 @@ public class XplatUIMine : XplatUIDriver
             {
                 msg.hwnd = IntPtr.Zero;
                 msg.message = Msg.WM_ENTERIDLE;
-                Thread.Sleep(20);
+                RaiseIdle(new EventArgs());
+                Thread.Sleep(5);
                 return true;
-                return driver.GetMessage(queue_id, ref msg, hWnd, wFilterMin, wFilterMax); ;
             }
         }
 
@@ -2518,13 +2538,11 @@ public class XplatUIMine : XplatUIDriver
     public override bool TranslateMessage(ref MSG msg)
     {
         return false;
-        return driver.TranslateMessage(ref msg);
     }
 
     public override IntPtr DispatchMessage(ref MSG msg)
     {
         return NativeWindow.WndProc(msg.hwnd, msg.message, msg.wParam, msg.lParam);
-        return driver.DispatchMessage(ref msg);
     }
 
     private List<(IntPtr hwnd, IntPtr afterhwnd,bool top, bool bottom)> zorder = new List<(IntPtr hwnd, IntPtr afterhwnd, bool top, bool bottom)>();
@@ -3352,8 +3370,20 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
                         if(Control.FromHandle(h.Handle) is Form)
                             PostMessage(hwnd, Msg.WM_NCPAINT, IntPtr.Zero, IntPtr.Zero);
-                    } else
+                    }
+                    else
                     {
+                        PostMessage(Application.OpenForms[Application.OpenForms.Count - 1].Handle, Msg.WM_NCHITTEST, IntPtr.Zero, IntPtr.Zero);
+
+                        if(message == Msg.WM_LBUTTONUP)
+                        {
+                            PostMessage(Application.OpenForms[Application.OpenForms.Count - 1].Handle, Msg.WM_NCLBUTTONUP, wParam, lParam);
+                        }
+                        if (message == Msg.WM_LBUTTONDOWN)
+                        {
+                            PostMessage(Application.OpenForms[Application.OpenForms.Count - 1].Handle, Msg.WM_NCLBUTTONDOWN, wParam, lParam);
+                        }
+
                         PostMessage(Application.OpenForms[Application.OpenForms.Count - 1].Handle, Msg.WM_NCPAINT, IntPtr.Zero, IntPtr.Zero);
                     }
                 }
@@ -3398,7 +3428,9 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     if ((pos.flags & 0x1) == 0)
                     {
                         h = h2;
-                        SetWindowPos(h.ClientWindow, h.x, h.y, pos.cx, pos.cy);
+                        h.x = 0;
+                        h.y = 0;
+                        SetWindowPos(h.ClientWindow, h.x, h.y, pos.cx - h.x, pos.cy-h.y);
                         return IntPtr.Zero;
 
                         h2.Width = pos.cx;
@@ -3519,7 +3551,7 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
     public override void EndLoop(Thread thread)
     {
-        driver.EndLoop(thread);
+
     }
 
     public override void RequestNCRecalc(IntPtr hwnd)

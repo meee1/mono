@@ -127,7 +127,7 @@ namespace System.Windows.Forms
 
 		// to be categorized...
 		ControlCollection       child_controls; // our children
-		Control                 parent; // our parent control
+		public Control                 parent; // our parent control
 		BindingContext          binding_context;
 		RightToLeft             right_to_left; // drawing direction for control
 		ContextMenu             context_menu; // Context menu associated with the control
@@ -3623,8 +3623,10 @@ namespace System.Windows.Forms
 				this.CreateHandle();
 			}
 
-            return Graphics.FromImage(new Bitmap(this.Width, this.Height));
-            return Graphics.FromHwnd(this.window.Handle);
+			//return Graphics.FromImage(new Bitmap(this.Width, this.Height));
+			var hwnd = Hwnd.ObjectFromHandle(Handle);
+			return Graphics.FromImage(hwnd.hwndbmp);
+			return Graphics.FromHwnd(this.window.Handle);
 		}
 
 		public DragDropEffects DoDragDrop(object data, DragDropEffects allowedEffects) {
