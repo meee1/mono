@@ -22,17 +22,15 @@ public class XplatUIMine : XplatUIDriver
 
     public override void ShutdownDriver(IntPtr token)
     {
-        
+
     }
 
 
     public override Point MousePosition
     {
-        get
-        {
-            return mouse_position;
-        }
+        get { return mouse_position; }
     }
+
     public override int CaptionHeight => 20;
 
     public override Size CursorSize => throw new NotImplementedException();
@@ -61,13 +59,20 @@ public class XplatUIMine : XplatUIDriver
 
     public override bool MouseWheelPresent => throw new NotImplementedException();
 
-    public override Rectangle VirtualScreen => throw new NotImplementedException();
+    public override Rectangle VirtualScreen => _virtualScreen;
 
-    public override Rectangle WorkingArea => Rectangle.Empty;
+    public override Rectangle WorkingArea => _workingArea;
 
-    public override Screen[] AllScreens => new Screen[] {new Screen(true, "screen1", new Rectangle(0,0,1100,1100), new Rectangle(0, 0, 1100, 1100))};
 
-    public override bool ThemesEnabled => throw new NotImplementedException();
+    public override Screen[] AllScreens
+    {
+        get
+        {
+            return null;
+        }
+    }
+
+    public override bool ThemesEnabled => _themesEnabled;
 
     public override event EventHandler Idle;
 
@@ -98,6 +103,7 @@ public class XplatUIMine : XplatUIDriver
     }
     public XplatUIMine()
     {
+        Instance = this;
         // Handle singleton stuff first
         ref_count = 0;
 
@@ -127,6 +133,16 @@ public class XplatUIMine : XplatUIDriver
 
         ModalWindows = new Stack(3);
     }
+
+    static XplatUIMine Instance { get; set; } = null;
+
+    public static XplatUIMine GetInstance()
+    {
+        if (Instance == null)
+            return new XplatUIMine();
+        return Instance;
+    }
+
     public override void AudibleAlert(AlertType alert)
     {
         Console.Beep();
@@ -139,7 +155,7 @@ public class XplatUIMine : XplatUIDriver
 
     public override void EnableThemes()
     {
-        
+        _themesEnabled = true;
     }
 
     public override void GetDisplaySize(out Size size)
@@ -213,8 +229,8 @@ public class XplatUIMine : XplatUIDriver
         if (cp.control is Form && cp.X == int.MinValue && cp.Y == int.MinValue)
         {
             Point next = Hwnd.GetNextStackedFormLocation(cp);
-            X = next.X;
-            Y = next.Y;
+            X = 0;//next.X;
+            Y = 0;//next.Y;
         }
         ValueMask = SetWindowValuemask.BitGravity | SetWindowValuemask.WinGravity;
 
@@ -2899,6 +2915,10 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     }
     static IntPtr FocusWindow = IntPtr.Zero;
     private bool in_doevents;
+    private Screen[] _allScreens;
+    private bool _themesEnabled;
+    public Rectangle _virtualScreen = new Rectangle(0,0,1000,1000);
+    public Rectangle _workingArea = new Rectangle(0, 0, 1000, 1000);
 
     public override void SetFocus(IntPtr handle)
     {
@@ -2949,6 +2969,8 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
     public override IntPtr GetActive()
     {
+        if (Application.OpenForms.Count > 0)
+            return Application.OpenForms[Application.OpenForms.Count - 1].Handle;
         //throw new NotImplementedException();
         return IntPtr.Zero;
         

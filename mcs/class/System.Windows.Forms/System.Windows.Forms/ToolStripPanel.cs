@@ -617,5 +617,10 @@ namespace System.Windows.Forms
         {
            
         }
-    }
+
+        public ToolboxBitmapAttribute(Type empty)
+        {
+
+        }
+	}
 }
