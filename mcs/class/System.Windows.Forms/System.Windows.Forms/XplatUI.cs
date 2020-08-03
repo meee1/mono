@@ -126,7 +126,7 @@ namespace System.Windows.Forms {
 		//	} else 
             {
 				//driver=XplatUIWin32.GetInstance ();
-                driver = new XplatUIMine();
+                driver = XplatUIMine.GetInstance();
             }
             
 
