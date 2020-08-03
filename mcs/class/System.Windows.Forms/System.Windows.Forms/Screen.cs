@@ -89,13 +89,15 @@ namespace System.Windows.Forms {
 			get { return bits_per_pixel; }
 		}
 
-		public Rectangle Bounds {
-			get {
+		public Rectangle Bounds
+        {
+            get {
 				return this.bounds;
 			}
-		}
+            set => this.bounds = value;
+        }
 
-		public string DeviceName {
+        public string DeviceName {
 			get {
 				return this.name;
 			}
@@ -107,12 +109,15 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		public Rectangle WorkingArea {
-			get {
+		public Rectangle WorkingArea
+        {
+            get {
 				return this.workarea;
 			}
-		}
-		#endregion	// Public Instance Properties
+            set => this.workarea = value;
+        }
+
+        #endregion	// Public Instance Properties
 
 		#region Public Static Methods
 		public static Screen FromControl(Control control) {
