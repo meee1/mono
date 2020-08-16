@@ -125,7 +125,10 @@ namespace System.Windows.Forms {
 		}
 
 		internal virtual Rectangle MaximizedBounds {
-			get {
+			get
+            {
+                if (Form.Parent == null)
+                    return Screen.PrimaryScreen.Bounds;
 				return Form.Parent.ClientRectangle;
 			}
 		}
