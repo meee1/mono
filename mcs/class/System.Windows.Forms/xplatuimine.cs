@@ -124,6 +124,9 @@ public class XplatUIMine : XplatUIDriver
         scroll_height = 0;//Win32GetSystemMetrics(SystemMetrics.SM_CYHSCROLL);
         scroll_width = 0;//Win32GetSystemMetrics(SystemMetrics.SM_CXVSCROLL);
 
+        Caret.Timer = new Timer();
+        Keyboard = new keyboardimp();
+
         timer_list = new Hashtable();
         registered_classes = new Hashtable();
 
@@ -145,7 +148,13 @@ public class XplatUIMine : XplatUIDriver
 
     public override void AudibleAlert(AlertType alert)
     {
-        Console.Beep();
+        try
+        {
+            Console.Beep();
+        }
+        catch
+        {
+        }
     }
 
     public override void BeginMoveResize(IntPtr handle)
@@ -1992,9 +2001,9 @@ public class XplatUIMine : XplatUIDriver
         {
 
             case Msg.WM_IME_COMPOSITION:
-                //string s = Keyboard.GetCompositionString();
-                //foreach (char c in s)
-                    //SendMessage(msg.HWnd, Msg.WM_IME_CHAR, (IntPtr)c, msg.LParam);
+                string s = "";//Keyboard.GetCompositionString();
+                foreach (char c in s)
+                    SendMessage(msg.HWnd, Msg.WM_IME_CHAR, (IntPtr)c, msg.LParam);
                 return IntPtr.Zero;
 
             case Msg.WM_IME_CHAR:
@@ -2888,27 +2897,98 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
         }
         queue.timer_list.Remove(timer);
     }
-
-    public override void CreateCaret(IntPtr hwnd, int width, int height)
+    static CaretStruct	Caret;	
+    public override void CreateCaret(IntPtr handle, int width, int height)
     {
-        //throw new NotImplementedException();
+        XGCValues	gc_values;
+        Hwnd		hwnd;
+
+        hwnd = Hwnd.ObjectFromHandle(handle);
+
+        if (Caret.Hwnd != IntPtr.Zero) {
+            DestroyCaret(Caret.Hwnd);
+        }
+
+        Caret.Hwnd = handle;
+        Caret.Window = hwnd.client_window;
+        Caret.Width = width;
+        Caret.Height = height;
+        Caret.Visible = false;
+        Caret.On = false;
     }
 
-    public override void DestroyCaret(IntPtr hwnd)
+    public override void DestroyCaret(IntPtr handle)
     {
-        //throw new NotImplementedException();
+        if (Caret.Hwnd == handle) {
+            if (Caret.Visible) {
+                HideCaret ();
+                Caret.Timer.Stop();
+            }
+            if (Caret.gc != IntPtr.Zero) {
+                //XFreeGC(DisplayHandle, Caret.gc);
+                Caret.gc = IntPtr.Zero;
+            }
+            Caret.Hwnd = IntPtr.Zero;
+            Caret.Visible = false;
+            Caret.On = false;
+        }
     }
 
-    public override void SetCaretPos(IntPtr hwnd, int x, int y)
+    public override void SetCaretPos(IntPtr handle, int x, int y)
     {
-        //throw new NotImplementedException();
+        if (Caret.Hwnd == handle) {
+            Caret.Timer.Stop();
+            HideCaret();
+
+            Caret.X = x;
+            Caret.Y = y;
+
+            Keyboard.SetCaretPos (Caret, handle, x, y);
+
+            if (Caret.Visible == true) {
+                ShowCaret();
+                Caret.Timer.Start();
+            }
+        }
     }
 
-    public override void CaretVisible(IntPtr hwnd, bool visible)
+    public override void CaretVisible(IntPtr handle, bool visible)
     {
-        //throw new NotImplementedException();
+        if (Caret.Hwnd == handle) {
+            if (visible) {
+                if (!Caret.Visible) {
+                    Caret.Visible = true;
+                    ShowCaret();
+                    Caret.Timer.Start();
+                }
+            } else {
+                Caret.Visible = false;
+                Caret.Timer.Stop();
+                HideCaret();
+            }
+        }
+    }
+    void ShowCaret() {
+        if ((Caret.gc == IntPtr.Zero) || Caret.On) {
+            return;
+        }
+        Caret.On = true;
+
+       // lock (XlibLock) {
+            //XDrawLine(DisplayHandle, Caret.Window, Caret.gc, Caret.X, Caret.Y, Caret.X, Caret.Y + Caret.Height);
+       // }
     }
 
+    void HideCaret() {
+        if ((Caret.gc == IntPtr.Zero) || !Caret.On) {
+            return;
+        }
+        Caret.On = false;
+
+       // lock (XlibLock) {
+           // XDrawLine(DisplayHandle, Caret.Window, Caret.gc, Caret.X, Caret.Y, Caret.X, Caret.Y + Caret.Height);
+       // }
+    }
     public override IntPtr GetFocus()
     {
         return FocusWindow;
@@ -2941,9 +3021,10 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
         if (prev_focus_window != IntPtr.Zero)
         {
+            Keyboard.FocusOut(FocusWindow);
             SendMessage(prev_focus_window, Msg.WM_KILLFOCUS, FocusWindow, IntPtr.Zero);
         }
-        //Keyboard.FocusIn(FocusWindow);
+        Keyboard.FocusIn(FocusWindow);
 
         if (FocusWindow == IntPtr.Zero)
         {
@@ -3611,4 +3692,31 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     public override int KeyboardSpeed => throw new NotImplementedException();
 
     public override int KeyboardDelay => throw new NotImplementedException();
+
+    public KeyboardXplat Keyboard { get; set; }
+}
+
+public interface KeyboardXplat
+{
+    public void FocusIn(IntPtr focusWindow);
+    public void FocusOut(IntPtr focusWindow);
+    void SetCaretPos(CaretStruct caret, IntPtr handle, int x, int y);
+}
+
+internal class keyboardimp : KeyboardXplat
+{
+    public void FocusIn(IntPtr focusWindow)
+    {
+       
+    }
+
+    public void FocusOut(IntPtr focusWindow)
+    {
+       
+    }
+
+    public void SetCaretPos(CaretStruct caret, IntPtr handle, int x, int y)
+    {
+        
+    }
 }

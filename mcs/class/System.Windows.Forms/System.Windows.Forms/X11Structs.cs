@@ -1454,9 +1454,9 @@ namespace System.Windows.Forms {
 		internal int			height_inc;
 	}
 
-	internal struct CaretStruct {
+	public struct CaretStruct {
 		internal Timer	Timer;				// Blink interval
-		internal IntPtr	Hwnd;				// Window owning the caret
+		public IntPtr	Hwnd;				// Window owning the caret
 		internal IntPtr	Window;				// Actual X11 handle of the window
 		internal int	X;				// X position of the caret
 		internal int	Y;				// Y position of the caret
