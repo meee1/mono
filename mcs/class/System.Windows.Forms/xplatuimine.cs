@@ -169,7 +169,7 @@ public class XplatUIMine : XplatUIDriver
 
     public override void GetDisplaySize(out Size size)
     {
-        throw new NotImplementedException();
+        size = new Size(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height);
     }
     private IntPtr GetFosterParent()
     {
@@ -338,14 +338,23 @@ public class XplatUIMine : XplatUIDriver
         if (hwnd.hwndbmp == null || hwnd.hwndbmp.Width != hwnd.width ||
             hwnd.hwndbmp.Height != hwnd.height)
         {
+            var width = hwnd.Width;
+            var height = hwnd.Height;
+
+            if(width == 0 || height == 0)
+            {
+                width=1;
+                height = 1;
+            }
+
             //hwnd.hwndbmpbase = new Bitmap(hwnd.Width, hwnd.Height, PixelFormat.Format32bppArgb);
             //hwnd.hwndbmpbase.MakeTransparent(Color.Transparent);
             hwnd.hwndbmp = null;
             hwnd.hwndbmpNC = null;
 
-            hwnd.hwndbmp = new Bitmap(hwnd.Width, hwnd.Height);
+            hwnd.hwndbmp = new Bitmap(width, height);
             hwnd.hwndbmp.MakeTransparent(Color.Transparent);
-            hwnd.hwndbmpNC = new Bitmap(hwnd.Width, hwnd.Height);
+            hwnd.hwndbmpNC = new Bitmap(width, height);
             hwnd.hwndbmpNC.MakeTransparent(Color.Transparent);
 
             /*
@@ -1837,7 +1846,7 @@ public class XplatUIMine : XplatUIDriver
         rect = new Rectangle(ncp.rgrc1.left, ncp.rgrc1.top, ncp.rgrc1.right - ncp.rgrc1.left, ncp.rgrc1.bottom - ncp.rgrc1.top);
         hwnd.ClientRect = rect;
 
-        rect = TranslateClientRectangleToXClientRectangle(hwnd);
+        var rect2 = TranslateClientRectangleToXClientRectangle(hwnd);
 
         if (hwnd.visible)
         {
@@ -2313,7 +2322,10 @@ public class XplatUIMine : XplatUIDriver
         }
         else
         {
+            var now = DateTime.UtcNow;
             //UpdateMessageQueue((XEventQueue)queue_id);
+            if ((XEventQueue)queue_id != null)
+				CheckTimers (((XEventQueue)queue_id).timer_list, now);
 
             if (((XEventQueue) queue_id).Count > 0)
             {
@@ -3506,7 +3518,6 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     }
 
                     // This is the message we want to send at this point
-                    message = Msg.WM_MOUSE_ENTER;
 
                     prev_mouse_hwnd = hwnd;
 
@@ -3514,6 +3525,8 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     tme.size = Marshal.SizeOf(tme);
                     tme.hWnd = hwnd;
                     tme.dwFlags = TMEFlags.TME_LEAVE | TMEFlags.TME_HOVER;
+
+                    PostMessage(hwnd, Msg.WM_MOUSE_ENTER, wParam, lParam);
                 }
 
                 if (hwnd != IntPtr.Zero)
