@@ -6160,7 +6160,7 @@ namespace System.Windows.Forms
 			case FormBorderStyle.Fixed3D:
 			case FormBorderStyle.FixedDialog:
 			case FormBorderStyle.Sizable:
-				switch (form.WindowState) {
+				switch (form.WindowState) {/*
 					case FormWindowState.Normal:
 						buttons.MinimizeButton.Visible = true;
 						buttons.MaximizeButton.Visible = true;
@@ -6175,7 +6175,7 @@ namespace System.Windows.Forms
 						buttons.MinimizeButton.Visible = false;
 						buttons.MaximizeButton.Visible = true;
 						buttons.RestoreButton.Visible = true;
-						break;
+						break;*/
 				}
 				buttons.CloseButton.Visible = true;
 				break;
