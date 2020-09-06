@@ -238,8 +238,8 @@ public class XplatUIMine : XplatUIDriver
         if (cp.control is Form && cp.X == int.MinValue && cp.Y == int.MinValue)
         {
             Point next = Hwnd.GetNextStackedFormLocation(cp);
-            X = 0;//next.X;
-            Y = 0;//next.Y;
+            X = next.X;
+            Y = next.Y;
         }
         ValueMask = SetWindowValuemask.BitGravity | SetWindowValuemask.WinGravity;
 
@@ -327,6 +327,8 @@ public class XplatUIMine : XplatUIDriver
         {
             var frm = ((Form)Control.FromHandle(hwnd.Handle));            
             frm.window_manager = new FormWindowManager(frm);
+            RequestNCRecalc(hwnd.Handle);
+            AddExpose(hwnd, true, 0, 0, 1000, 1000);
         } 
 
         return hwnd.zombie ? IntPtr.Zero : hwnd.Handle;
@@ -2543,7 +2545,7 @@ public class XplatUIMine : XplatUIDriver
                 DriverDebug("GetMessage(): Window {0:X} Exposed area {1},{2} {3}x{4}",
                     hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
                     xevent.ExposeEvent.width, xevent.ExposeEvent.height);
-                /*if (Caret.Visible == true)
+                if (Caret.Visible == true)
                 {
                     Caret.Paused = true;
                     HideCaret();
@@ -2553,7 +2555,7 @@ public class XplatUIMine : XplatUIDriver
                 {
                     ShowCaret();
                     Caret.Paused = false;
-                }*/
+                }
                 msg.message = Msg.WM_PAINT;
                 break;
             }
