@@ -29,6 +29,7 @@
 using System.Collections;
 using System.Drawing;
 using System.Drawing.Imaging;
+using SkiaSharp;
 
 // NOTE: Possible optimization:
 // Several properties calculate dimensions on the fly; instead; they can 
@@ -92,14 +93,26 @@ namespace System.Windows.Forms
 		#endregion    // Local Variables
 
 		public Bitmap hwndbmpbase;
-		public Bitmap hwndbmp;
-		public Bitmap hwndbmpNC;
+		public SKImage hwndbmp;
 
-		// locks for some operations (used in XplatUIX11.cs)
-		internal object configure_lock = new object ();
+        public SKImage hwndbmpNC
+        {
+            get
+            {
+                if (_hwndbmpNc == null)
+                    _hwndbmpNc = new Bitmap(width, height);
+				if(_hwndbmpNc != null && (_hwndbmpNc.Width != width || _hwndbmpNc.Height != height))
+                    _hwndbmpNc = new Bitmap(width, height);
+                return _hwndbmpNc;
+            }
+        }
+
+        // locks for some operations (used in XplatUIX11.cs)
+        internal object configure_lock = new object ();
 		public object expose_lock = new object ();
+        private SKImage _hwndbmpNc;
 
-		#region Constructors and destructors
+        #region Constructors and destructors
 		public Hwnd() {
 			x = 0;
 			y = 0;
@@ -391,8 +404,8 @@ namespace System.Windows.Forms
 				if (bmp_g == null) {
 					//bmp = new Bitmap (1, 1, SKColorType.Bgra8888);
                     bmp = new Bitmap(1, 1, PixelFormat.Format32bppArgb);
-					bmp_g = Graphics.FromImage (bmp);
-				}
+                    bmp_g = Graphics.FromImage((Image) bmp);
+                }
 			
 				return bmp_g;
 			}

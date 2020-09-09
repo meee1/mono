@@ -33,7 +33,7 @@
     <DebugType>full</DebugType>
     <NoWarn>1699,618,612,809</NoWarn>
     <Optimize>false</Optimize>
-    <DefineConstants>TRACE;DEBUG;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;DriverDebug;NETSTANDARD2_0;NETSTANDARD2_0;DriverDebug</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;NETSTANDARD2_0;NETSTANDARD2_0;DriverDebugQQQ</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
