@@ -3625,7 +3625,7 @@ namespace System.Windows.Forms
 				this.CreateHandle();
 			}
 
-			//return Graphics.FromImage(new Bitmap(this.Width, this.Height));
+			return Graphics.FromImage(new Bitmap(this.Width, this.Height));
 			var hwnd = Hwnd.ObjectFromHandle(Handle);
 			return Graphics.FromSKImage(hwnd.hwndbmp);
 			return Graphics.FromHwnd(this.window.Handle);
