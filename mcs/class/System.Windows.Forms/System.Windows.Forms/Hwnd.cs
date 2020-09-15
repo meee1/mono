@@ -28,9 +28,13 @@
 
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Imaging;
+using OpenTK.Graphics;
+using OpenTK.Graphics.ES20;
+using OpenTK.Platform.Android;
 using SkiaSharp;
+using PixelFormat = System.Drawing.Imaging.PixelFormat;
 
 // NOTE: Possible optimization:
 // Several properties calculate dimensions on the fly; instead; they can 
@@ -94,17 +98,85 @@ namespace System.Windows.Forms
 		private static Graphics bmp_g;
 		#endregion    // Local Variables
 
-		public Bitmap hwndbmpbase;
-		public SKImage hwndbmp;
+        private const SKColorType colorType = SKColorType.Rgba8888;
+        private const GRSurfaceOrigin surfaceOrigin = GRSurfaceOrigin.BottomLeft;
+        private GRContext grContext;
+        private GRGlFramebufferInfo glInfo;
+        private GRBackendRenderTarget renderTarget;
+        private SKSurface surface;
+        private SKCanvas canvas;
+        private SKSizeI lastSize;
+
+        internal SKPictureRecorder picturerecorder = new SKPictureRecorder();
+        public SKImage hwndbmp
+        {
+            get
+            {
+                //if (this.parent == null)
+                {
+                    /*if (_hwndbmp == null)
+                        _hwndbmp = new Bitmap(width, height, SKColorType.Rgba8888);
+                    if(_hwndbmp != null && (_hwndbmp.Width != width || _hwndbmp.Height != height))
+                        _hwndbmp = new Bitmap(width, height, SKColorType.Rgba8888);
+					*/
+                    return _hwndbmp;
+                }
+
+                var info = new SKImageInfo(width,height, SKColorType.Rgba8888, SKAlphaType.Premul);
+
+                var x = 0;
+                var y = 0;
+
+                var window = XplatUI.Window(client_window);
+
+                XplatUI.driver.ClientToScreen(client_window, ref x, ref y);
+
+                var parent = this;
+
+                
+
+                var xp = 0;
+                var yp = 0;
+
+                while (parent.parent != null)
+                {
+                    parent = parent.parent;
+                }
+                XplatUI.driver.ClientToScreen(parent.client_window, ref xp, ref yp);
+
+                //var surface = SKSurface.Create(parent.hwndbmp.PeekPixels());
+                var pixels = parent.hwndbmp.PeekPixels();
+
+                var newx = x + 0 - xp;
+                var newy = y + 0 - yp;
+
+                if (pixels.BytesSize < info.BytesSize || newx < 0 || newy < 0)
+                {
+                    info.Height = Math.Min(info.Height, pixels.Height - newx);
+                    info.Width = Math.Min(info.Width, pixels.Width - newy);
+					//Debugger.Break();
+                }
+
+                var ans =  SKImage.FromPixels(info,
+                    new IntPtr(pixels.GetPixels(x + 0 - xp, y + 0-yp).ToInt64()), pixels.RowBytes);
+				if(ans == null)
+					Debugger.Break();
+                return ans;
+            }
+            set
+            {
+                _hwndbmp = value;
+            }
+        }
 
         public SKImage hwndbmpNC
         {
             get
             {
                 if (_hwndbmpNc == null)
-                    _hwndbmpNc = new Bitmap(width, height);
-				if(_hwndbmpNc != null && (_hwndbmpNc.Width != width || _hwndbmpNc.Height != height))
-                    _hwndbmpNc = new Bitmap(width, height);
+                    _hwndbmpNc = new Bitmap(width, height, SKColorType.Rgba8888);
+                if(_hwndbmpNc != null && (_hwndbmpNc.Width != width || _hwndbmpNc.Height != height))
+                    _hwndbmpNc = new Bitmap(width, height, SKColorType.Rgba8888);
                 return _hwndbmpNc;
             }
         }
@@ -112,6 +184,7 @@ namespace System.Windows.Forms
         // locks for some operations (used in XplatUIX11.cs)
         internal object configure_lock = new object ();
 		public object expose_lock = new object ();
+        private SKImage _hwndbmp;
         private SKImage _hwndbmpNc;
 
         #region Constructors and destructors
