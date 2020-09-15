@@ -294,8 +294,6 @@ public class XplatUIMine : XplatUIDriver
         hwnd.WholeWindow = WholeWindow;
         hwnd.ClientWindow = ClientWindow;
 
-        CreateBackingGraphic(hwnd);
-
         if (ExStyleSet(cp.ExStyle, WindowExStyles.WS_EX_TOPMOST))
             SetTopmost(hwnd.whole_window, true);
 
@@ -334,52 +332,6 @@ public class XplatUIMine : XplatUIDriver
         } 
 
         return hwnd.zombie ? IntPtr.Zero : hwnd.Handle;
-    }
-
-    void CreateBackingGraphic(Hwnd hwnd)    
-    {       
-        // create bmp
-        if (hwnd.hwndbmp == null || hwnd.hwndbmp.Width != hwnd.width ||
-            hwnd.hwndbmp.Height != hwnd.height)
-        {
-            var width = hwnd.Width;
-            var height = hwnd.Height;
-
-            if(width == 0 || height == 0)
-            {
-                width=1;
-                height = 1;
-            }
-
-            hwnd.hwndbmp = null;
-
-            hwnd.hwndbmp = new Bitmap(width, height);
-            //hwnd.hwndbmp.MakeTransparent(Color.Transparent);
-
-            /*
-            hwnd.hwndbmpbase = new Bitmap(hwnd.Width, hwnd.Height, PixelFormat.Format32bppArgb);
-            hwnd.hwndbmpbase.MakeTransparent(Color.Transparent);
-
-            
-            var bmpdata = hwnd.hwndbmpbase.LockBits(new Rectangle(0, 0, hwnd.Width, hwnd.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-
-            if(xWindowSize.Width != xClientRect.Width)
-            {
-                var deltaw = (xClientRect.Width - xWindowSize.Width);
-                var borderw = deltaw / 2;
-                var deltah = (xClientRect.Height - xWindowSize.Height);
-                var bordert = deltah - deltaw;
-
-                if (bordert > 0 && borderw > 0)
-                    hwnd.hwndbmp = new Bitmap(xWindowSize.Width, xWindowSize.Height, bmpdata.Stride, PixelFormat.Format32bppArgb, bmpdata.Scan0 + (bmpdata.Stride * bordert + borderw * 4));
-            }
-                        
-            if(hwnd.hwndbmp == null)
-                hwnd.hwndbmp = new Bitmap(bmpdata.Width, bmpdata.Height, bmpdata.Stride, PixelFormat.Format32bppArgb, bmpdata.Scan0);
-
-            hwnd.hwndbmpNC = new Bitmap(bmpdata.Width, bmpdata.Height, bmpdata.Stride, PixelFormat.Format32bppArgb, bmpdata.Scan0);
-            */
-        }
     }
 
     internal static Size TranslateWindowSizeToXWindowSize(CreateParams cp)
@@ -980,6 +932,8 @@ public class XplatUIMine : XplatUIDriver
         {
             SendMessage(h.Handle, Msg.WM_DESTROY, IntPtr.Zero, IntPtr.Zero);
             h.zombie = true;
+            h.hwndbmp?.Dispose();
+            h.Dispose();
         }
 
         //lock (XlibLock)
@@ -997,6 +951,7 @@ public class XplatUIMine : XplatUIDriver
                 //XDestroyWindow(DisplayHandle, hwnd.client_window);
             }
 
+       
         }
     }
 
@@ -1532,14 +1487,11 @@ public class XplatUIMine : XplatUIDriver
 
         Monitor.Enter(paintlock);
 
-        // recreate bmp if needed
-        CreateBackingGraphic(hwnd);
-
         Graphics dc;
 
         if (client)
         {
-            dc = Graphics.FromSKImage(paint_hwnd.hwndbmp);//Graphics.FromHwnd(paint_hwnd.client_window);
+            
 
             Region clip_region = new Region();
             clip_region.MakeEmpty();
@@ -1558,8 +1510,17 @@ public class XplatUIMine : XplatUIDriver
                 clip_region.Intersect(hwnd.UserClip);
             }
 
+            var newcanvas = paint_hwnd.picturerecorder.BeginRecording(SKRect.Empty);
+            if (paint_hwnd.hwndbmp != null)
+                if (!hwnd.Invalid.Contains(hwnd.ClientRect))
+                {
+                    var raster = paint_hwnd.hwndbmp.ToRasterImage();
+                    newcanvas.DrawImage(raster, 0, 0);
+                }
+
+            dc = Graphics.FromCanvas(newcanvas);
             dc.Clip = clip_region;
-            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = paint_hwnd.hwndbmp };
+            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { };
             hwnd.expose_pending = false;
 
             hwnd.ClearInvalidArea();
@@ -1592,154 +1553,16 @@ public class XplatUIMine : XplatUIDriver
 
         hwnd = Hwnd.ObjectFromHandle(msg.HWnd);
 
+        if (client)
+        {
+            hwnd.hwndbmp = SKImage.FromPicture(hwnd.picturerecorder.EndRecording(), new SKSizeI(hwnd.width, hwnd.height));
+        }
+        else
+        {
+
+        }
         pevent.Graphics.Dispose();
 
-        SKSurface surface;
-
-        {
-            var parent = hwnd;
-            while (parent.parent != null)
-            {
-                parent = parent.parent;
-            }
-
-            surface = SKSurface.Create(parent.hwndbmp.PeekPixels());
-        }
-
-        Func<IntPtr, bool> func = null;
-        func = (handle) =>
-        {
-            var hwnd = Hwnd.ObjectFromHandle(handle);
-
-            var x = 0;
-            var y = 0;
-
-            XplatUI.driver.ClientToScreen(hwnd.client_window, ref x, ref y);
-
-            var width = 0;
-            var height = 0;
-            var client_width = 0;
-            var client_height = 0;
-
-
-            if (hwnd.hwndbmp != null && hwnd.Mapped && hwnd.Visible)
-            {
-                // setup clip
-                var parent = hwnd;
-                surface.Canvas.ClipRect(
-                    SKRect.Create(0, 0, Screen.PrimaryScreen.Bounds.Width,
-                        Screen.PrimaryScreen.Bounds.Height), (SKClipOperation) 5);
-                var xp = 0;
-                var yp = 0;
-
-                while (parent.parent != null)
-                {
-                    parent = parent.parent;
-                }
-                XplatUI.driver.ClientToScreen(parent.client_window, ref xp, ref yp);
-
-                parent = hwnd;
-                while (parent != null)
-                {
-                    var xp2 = 0;
-                    var yp2 = 0;
-                    XplatUI.driver.ClientToScreen(parent.client_window, ref xp2, ref yp2);
-
-                    surface.Canvas.ClipRect(SKRect.Create(xp2 -xp, yp2 -yp, parent.Width, parent.Height),SKClipOperation.Intersect);
-                    /*
-                    surface.Canvas.DrawRect(xp, yp, parent.Width, parent.Height,
-                        new SKPaint()
-                        {
-
-                            Color = new SKColor(255, 0, 0),
-                            Style = SKPaintStyle.Stroke
-
-
-                        });
-                    */
-                    parent = parent.parent;
-                }
-
-                if (hwnd.ClientWindow != hwnd.WholeWindow)
-                {
-                    var frm = Control.FromHandle(hwnd.ClientWindow) as Form;
-
-                    Hwnd.Borders borders = new Hwnd.Borders();
-
-                    if (frm != null)
-                    {
-                        borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
-
-                        surface.Canvas.ClipRect(
-                            SKRect.Create(0, 0, Screen.PrimaryScreen.Bounds.Width,
-                                Screen.PrimaryScreen.Bounds.Height), (SKClipOperation) 5);
-
-                    }
-                    /*
-                    surface.Canvas.DrawImage(hwnd.hwndbmpNC,
-                        new SKPoint(x - borders.left, y - borders.top),
-                        new SKPaint() {FilterQuality = SKFilterQuality.Low});
-                    
-                    surface.Canvas.ClipRect(
-                        SKRect.Create(x, y, hwnd.width - borders.right - borders.left,
-                            hwnd.height - borders.top - borders.bottom), SKClipOperation.Intersect);
-                    */
-                           surface.Canvas.DrawImage(hwnd.hwndbmp,
-                               new SKPoint(x-xp, y-yp),
-                               new SKPaint() {FilterQuality = SKFilterQuality.Low});
-                    
-
-                }
-                else
-                {
-                    surface.Canvas.DrawImage(hwnd.hwndbmp,
-                        new SKPoint(x + 0 - xp, y + 0-yp),
-                        new SKPaint() {FilterQuality = SKFilterQuality.Low});
-                }
-
-               // surface.Canvas.DrawText(x + " " + y, x-xp, y+10-yp, new SKPaint() { Color =  SKColors.Red});
-
-            }
-
-            if (hwnd.Mapped && hwnd.Visible)
-            {
-                var enumer = Hwnd.windows.GetEnumerator();
-                while (enumer.MoveNext())
-                {
-                    var hwnd2 = (System.Collections.DictionaryEntry) enumer.Current;
-                    var Key = (IntPtr) hwnd2.Key;
-                    var Value = (Hwnd) hwnd2.Value;
-                    if (Value.ClientWindow == Key && Value.Parent == hwnd && Value.Visible && Value.Mapped)
-                        func(Value.ClientWindow);
-                }
-            }
-
-            return true;
-        };
-
-        /*
-        var ctl = Control.FromHandle(hwnd.client_window);
-
-        using (var file = File.OpenWrite("temp.png"))
-        {
-            hwnd.hwndbmp.Encode(SKEncodedImageFormat.Png, 100).SaveTo(file);
-        }
-        */
-        /*
-        if (hwnd.Parent != null)
-            func(hwnd.Parent.WholeWindow);
-        else
-            func(hwnd.client_window);
-        */
-        /*
-        using (var file = File.OpenWrite("temp.png"))
-        {
-            hwnd.hwndbmp.Encode(SKEncodedImageFormat.Png, 100).SaveTo(file);
-            file.Seek(0, SeekOrigin.Begin);
-            if (hwnd.Parent != null)
-                hwnd.Parent.hwndbmp.Encode(SKEncodedImageFormat.Png, 100).SaveTo(file);
-        }
-        */
         PaintPending = true;
 
         Monitor.Exit(paintlock);
@@ -2418,7 +2241,7 @@ public class XplatUIMine : XplatUIDriver
                 msg.hwnd = IntPtr.Zero;
                 msg.message = Msg.WM_ENTERIDLE;
                 RaiseIdle(new EventArgs());
-                Thread.Sleep(1);
+                Thread.Sleep(10);
                 return true;
             }
         }
@@ -2573,14 +2396,14 @@ public class XplatUIMine : XplatUIDriver
                     }
 
                         Monitor.Enter(paintlock);
-                        if (hwnd.hwndbmp != null)
+                        if (hwnd.hwndbmpNC != null)
                     switch (hwnd.border_style)
                     {
                         case FormBorderStyle.Fixed3D:
                         {
                             Graphics g;
 
-                            g = Graphics.FromSKImage(hwnd.hwndbmp);
+                            g = Graphics.FromSKImage(hwnd.hwndbmpNC);
                             if (hwnd.border_static)
                                 ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
                                     Border3DStyle.SunkenOuter);
@@ -2595,7 +2418,7 @@ public class XplatUIMine : XplatUIDriver
                         {
                             Graphics g;
 
-                            g = Graphics.FromSKImage(hwnd.hwndbmp);
+                            g = Graphics.FromSKImage(hwnd.hwndbmpNC);
                             ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
                                 ButtonBorderStyle.Solid);
                             g.Dispose();
@@ -3529,6 +3352,7 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
                     if(h == null)
                     {
+                        lock(Hwnd.windows)
                         foreach (Hwnd hw in Hwnd.windows.Values)
                         {
                             if (hw.topmost == true && hw.Mapped && hw.Visible)
