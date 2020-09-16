@@ -932,7 +932,6 @@ public class XplatUIMine : XplatUIDriver
         {
             SendMessage(h.Handle, Msg.WM_DESTROY, IntPtr.Zero, IntPtr.Zero);
             h.zombie = true;
-            h.hwndbmp?.Dispose();
             h.Dispose();
         }
 
