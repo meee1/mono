@@ -174,9 +174,9 @@ namespace System.Windows.Forms
             get
             {
                 if (_hwndbmpNc == null)
-                    _hwndbmpNc = new Bitmap(width, height, SKColorType.Rgba8888);
+                    _hwndbmpNc = SKImage.Create(new SKImageInfo(width, height, SKColorType.Rgba8888));
                 if(_hwndbmpNc != null && (_hwndbmpNc.Width != width || _hwndbmpNc.Height != height))
-                    _hwndbmpNc = new Bitmap(width, height, SKColorType.Rgba8888);
+                    _hwndbmpNc = SKImage.Create(new SKImageInfo(width, height, SKColorType.Rgba8888));
                 return _hwndbmpNc;
             }
         }
