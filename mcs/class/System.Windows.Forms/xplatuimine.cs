@@ -41,7 +41,7 @@ public class XplatUIMine : XplatUIDriver
 
     public override Size DragSize => Size.Empty;
 
-    public override Size FrameBorderSize => Size.Empty;
+    public override Size FrameBorderSize => new Size(4, 4);
 
     public override Size IconSize => throw new NotImplementedException();
 
@@ -51,7 +51,7 @@ public class XplatUIMine : XplatUIDriver
 
     public override Size MinimizedWindowSpacingSize => throw new NotImplementedException();
 
-    public override Size MinimumWindowSize => Size.Empty;
+    public override Size MinimumWindowSize => new Size(100, 20);
 
     public override Size SmallIconSize => throw new NotImplementedException();
 
@@ -1486,6 +1486,8 @@ public class XplatUIMine : XplatUIDriver
 
         Monitor.Enter(paintlock);
 
+        //Console.WriteLine("PaintEventStart " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name);
+
         Graphics dc;
 
         if (client)
@@ -1509,7 +1511,8 @@ public class XplatUIMine : XplatUIDriver
                 clip_region.Intersect(hwnd.UserClip);
             }
 
-            var newcanvas = paint_hwnd.picturerecorder.BeginRecording(SKRect.Empty);
+            var pic = new SKPictureRecorder();
+            var newcanvas = pic.BeginRecording(SKRect.Empty);
             if (paint_hwnd.hwndbmp != null)
                 if (!hwnd.Invalid.Contains(hwnd.ClientRect))
                 {
@@ -1519,7 +1522,7 @@ public class XplatUIMine : XplatUIDriver
 
             dc = Graphics.FromCanvas(newcanvas);
             dc.Clip = clip_region;
-            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { };
+            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = pic };
             hwnd.expose_pending = false;
 
             hwnd.ClearInvalidArea();
@@ -1551,10 +1554,21 @@ public class XplatUIMine : XplatUIDriver
         Hwnd hwnd;
 
         hwnd = Hwnd.ObjectFromHandle(msg.HWnd);
+        if (msg.HWnd == handle)
+        {
+
+        }
+        else
+        {
+            hwnd = Hwnd.ObjectFromHandle(handle);
+        }
+
+        //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name);
 
         if (client)
         {
-            hwnd.hwndbmp = SKImage.FromPicture(hwnd.picturerecorder.EndRecording(), new SKSizeI(hwnd.width, hwnd.height));
+            if(hwnd.Enabled && hwnd.Mapped && hwnd.Visible && !hwnd.zombie)
+                hwnd.hwndbmp = SKImage.FromPicture(((SKPictureRecorder)pevent.Tag).EndRecording(), new SKSizeI(hwnd.width, hwnd.height));
         }
         else
         {
@@ -1742,9 +1756,19 @@ public class XplatUIMine : XplatUIDriver
         ncp = (NCCALCSIZE_PARAMS)Marshal.PtrToStructure(ptr, typeof(NCCALCSIZE_PARAMS));
         Marshal.FreeHGlobal(ptr);
 
-
-        rect = new Rectangle(ncp.rgrc1.left, ncp.rgrc1.top, ncp.rgrc1.right - ncp.rgrc1.left, ncp.rgrc1.bottom - ncp.rgrc1.top);
-        hwnd.ClientRect = rect;
+        var ctl = Control.FromHandle(hwnd.client_window) as Form;
+        if (ctl != null && hwnd.parent == null && ctl.WindowState == FormWindowState.Maximized)
+        {
+            rect = new Rectangle(0,0, ncp.rgrc1.right,
+                ncp.rgrc1.bottom);
+            hwnd.ClientRect = rect;
+        }
+        else
+        {
+            rect = new Rectangle(ncp.rgrc1.left, ncp.rgrc1.top, ncp.rgrc1.right - ncp.rgrc1.left,
+                ncp.rgrc1.bottom - ncp.rgrc1.top);
+            hwnd.ClientRect = rect;
+        }
 
         var rect2 = TranslateClientRectangleToXClientRectangle(hwnd);
 
@@ -2395,6 +2419,7 @@ public class XplatUIMine : XplatUIDriver
                     }
 
                         Monitor.Enter(paintlock);
+                        hwnd.nc_expose_pending = false;
                         if (hwnd.hwndbmpNC != null)
                     switch (hwnd.border_style)
                     {
