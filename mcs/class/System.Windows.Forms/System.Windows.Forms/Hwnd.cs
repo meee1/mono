@@ -105,7 +105,6 @@ namespace System.Windows.Forms
         private SKCanvas canvas;
         private SKSizeI lastSize;
 
-        internal SKPictureRecorder picturerecorder = new SKPictureRecorder();
         public SKImage hwndbmp
         {
             get
@@ -213,6 +212,18 @@ namespace System.Windows.Forms
 			topmost = false;
 		}
 
+		~Hwnd()
+        {
+            try
+            {
+                Dispose();
+            }
+            catch
+            {
+
+            }
+        }
+
 		public void Dispose() {
 			expose_pending = false;
 			nc_expose_pending = false;
@@ -221,10 +232,12 @@ namespace System.Windows.Forms
 				windows.Remove(client_window);
 				windows.Remove(whole_window);
 			}
-			client_window = IntPtr.Zero;
+            client_window = IntPtr.Zero;
 			whole_window = IntPtr.Zero;
 			zombie = true;
-		}
+            _hwndbmp?.Dispose();
+            _hwndbmpNc?.Dispose();
+        }
 		#endregion
 
 		#region	Static Methods
@@ -841,7 +854,7 @@ namespace System.Windows.Forms
 			}
 		}
 
-		#endregion	// Instance properties
+        #endregion	// Instance properties
 
 		#region Methods
 		public void AddInvalidArea(int x, int y, int width, int height) {
