@@ -80,7 +80,12 @@ static class Consts
 #elif NET_1_0
 	#error Profile NET_1_0 is not supported.
 #else
-#error No profile symbols defined.
+	public const string FxVersion = "4.0.0.0";
+	public const string FxFileVersion = "4.6.57.0";
+	public const string EnvironmentVersion = "4.0.30319.42000";
+
+	public const string VsVersion = "0.0.0.0"; // Useless ?
+	public const string VsFileVersion = "11.0.0.0"; // TODO:
 #endif
 
 #if MOBILE
