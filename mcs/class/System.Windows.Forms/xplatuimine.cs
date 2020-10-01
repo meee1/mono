@@ -950,7 +950,7 @@ public class XplatUIMine : XplatUIDriver
                 //XDestroyWindow(DisplayHandle, hwnd.client_window);
             }
 
-       
+            PaintPending = true;
         }
     }
 
@@ -1392,6 +1392,8 @@ public class XplatUIMine : XplatUIDriver
         {
             UnmapWindow(hwnd, WindowType.Both);
         }
+
+        PaintPending = true;
         
         return true;
     }
@@ -3390,6 +3392,9 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                             }
                         }
                     }
+
+                    if(Application.OpenForms.Count == 0)
+                        return IntPtr.Zero;
 
                     if (ctl == null)
                     {
