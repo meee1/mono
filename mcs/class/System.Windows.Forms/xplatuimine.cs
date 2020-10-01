@@ -1533,16 +1533,19 @@ public class XplatUIMine : XplatUIDriver
         }
         else
         {
-            dc = Graphics.FromSKImage(paint_hwnd.hwndbmpNC);//Graphics.FromHwnd(paint_hwnd.whole_window);
+            //dc = Graphics.FromSKImage(paint_hwnd.hwndbmpNC);//Graphics.FromHwnd(paint_hwnd.whole_window);
+            var pic = new SKPictureRecorder();
+            var newcanvas = pic.BeginRecording(SKRect.Empty);
+            dc = Graphics.FromCanvas(newcanvas);
 
             if (!hwnd.nc_invalid.IsEmpty)
             {
                 dc.SetClip(hwnd.nc_invalid);
-                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = paint_hwnd.hwndbmpNC };
+                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = pic};
             }
             else
             {
-                paint_event = new PaintEventArgs(dc, new Rectangle(0, 0, hwnd.width, hwnd.height)) { Tag = paint_hwnd.hwndbmpNC };
+                paint_event = new PaintEventArgs(dc, new Rectangle(0, 0, hwnd.width, hwnd.height)) { Tag = pic };
             }
             hwnd.nc_expose_pending = false;
 
@@ -1569,13 +1572,15 @@ public class XplatUIMine : XplatUIDriver
 
         if (client)
         {
-            if(hwnd.Enabled && hwnd.Mapped && hwnd.Visible && !hwnd.zombie)
-                hwnd.hwndbmp = SKImage.FromPicture(((SKPictureRecorder)pevent.Tag).EndRecording(), new SKSizeI(hwnd.width, hwnd.height));
+            hwnd.hwndbmp = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),
+                new SKSizeI(hwnd.width, hwnd.height));
         }
         else
         {
-
+            hwnd.hwndbmpNC = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),
+                new SKSizeI(hwnd.width, hwnd.height));
         }
+
         pevent.Graphics.Dispose();
 
         PaintPending = true;
