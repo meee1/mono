@@ -2297,6 +2297,9 @@ public class XplatUIMine : XplatUIDriver
             goto ProcessNextMessage;
         }
 
+        if (xevent.ClientMessageEvent.ptr2 == (IntPtr)Msg.WM_QUIT)
+            return false;
+
         // We need to make sure we only allow DestroyNotify events through for zombie
         // hwnds, since much of the event handling code makes requests using the hwnd's
         // client_window, and that'll result in BadWindow errors if there's some lag
