@@ -178,6 +178,10 @@ namespace System.Windows.Forms
                     _hwndbmpNc = SKImage.Create(new SKImageInfo(width, height, SKColorType.Rgba8888));
                 return _hwndbmpNc;
             }
+            set
+            {
+                _hwndbmpNc = value;
+            }
         }
 
         // locks for some operations (used in XplatUIX11.cs)
