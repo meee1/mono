@@ -5633,7 +5633,7 @@ namespace System.Windows.Forms
 		public static Size TrackBarGetThumbSize ()
 		{
 			/* Draw thumb fixed 10x22 size */
-			return new Size (10, 22);
+			return new Size (40, 41);
 		}
 
 		public const int TrackBarVerticalTrackWidth = 4;
@@ -5805,19 +5805,22 @@ namespace System.Windows.Forms
 
 		protected virtual void TrackBarDrawVerticalThumb (Graphics dc, Rectangle thumb_pos, Brush br_thumb, Rectangle clippingArea, TrackBar trackBar)
 		{
+			//top and left
 			Pen pen = SystemPens.ControlLightLight;
-			dc.DrawLine (pen, thumb_pos.X, thumb_pos.Y, thumb_pos.X, thumb_pos.Y + 9);
-			dc.DrawLine (pen, thumb_pos.X, thumb_pos.Y, thumb_pos.X + 19, thumb_pos.Y);
+			dc.DrawLine (pen, thumb_pos.X, thumb_pos.Y, thumb_pos.X, thumb_pos.Bottom-1);
+			dc.DrawLine (pen, thumb_pos.X, thumb_pos.Y, thumb_pos.Right-1, thumb_pos.Y);
 
+			// right and bottom
 			pen = SystemPens.ControlDark;
-			dc.DrawLine (pen, thumb_pos.X + 1, thumb_pos.Y + 9, thumb_pos.X + 19, thumb_pos.Y + 9);
-			dc.DrawLine (pen, thumb_pos.X + 10, thumb_pos.Y + 1, thumb_pos.X + 19, thumb_pos.Y + 8);
+            dc.DrawLine (pen, thumb_pos.X + 1, thumb_pos.Bottom-1, thumb_pos.Right-1, thumb_pos.Bottom-1);
+			dc.DrawLine (pen, thumb_pos.Right-1, thumb_pos.Y + 1, thumb_pos.Right-1, thumb_pos.Bottom-1);
 
+			// shadow bottom and right
 			pen = SystemPens.ControlDarkDark;
-			dc.DrawLine (pen, thumb_pos.X, thumb_pos.Y + 10, thumb_pos.X + 20, thumb_pos.Y + 10);
-			dc.DrawLine (pen, thumb_pos.X + 20, thumb_pos.Y, thumb_pos.X + 20, thumb_pos.Y + 9);
+            dc.DrawLine (pen, thumb_pos.X, thumb_pos.Bottom, thumb_pos.Right, thumb_pos.Bottom);
+			dc.DrawLine (pen, thumb_pos.Right, thumb_pos.Y, thumb_pos.Right, thumb_pos.Right);
 
-			dc.FillRectangle (br_thumb, thumb_pos.X + 1, thumb_pos.Y + 1, 18, 8);
+			dc.FillRectangle (br_thumb, thumb_pos.X + 1, thumb_pos.Y + 1, thumb_pos.Width-2, thumb_pos.Height-2);
 		}
 		#endregion
 
