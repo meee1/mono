@@ -444,10 +444,14 @@ Example */
 			set {
 				if (width != value) {
 					if (value < minimumWidth) {
-						throw new ArgumentOutOfRangeException("Width is less than MinimumWidth");
+						width = minimumWidth;
 					}
-					width = value;
-					if (DataGridView != null)  {
+                    else
+                    {
+                        width = value;
+                    }
+
+                    if (DataGridView != null)  {
 						DataGridView.Invalidate ();
 						DataGridView.OnColumnWidthChanged(new DataGridViewColumnEventArgs(this));
 					}
