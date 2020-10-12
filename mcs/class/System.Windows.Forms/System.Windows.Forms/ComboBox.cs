@@ -456,7 +456,7 @@ namespace System.Windows.Forms
 		public int DropDownWidth {
 			get { 
 				if (dropdown_width == -1)
-					return Width;
+					return Width * 2;
 					
 				return dropdown_width; 
 			}
@@ -543,7 +543,7 @@ namespace System.Windows.Forms
 					SizeF sz = TextRenderer.MeasureString ("The quick brown Fox", Font);
 					item_height = (int) sz.Height;
 				}
-				return item_height;
+				return 30/*item_height*/;
 			}
 			set {
 				if (value < 1)
@@ -2545,7 +2545,7 @@ namespace System.Windows.Forms
 					SizeFromClientSize(Size.Empty);
 				Size = new Size (width, height + borderAdjustment.Height);
 				textarea_drawable = new Rectangle (ClientRectangle.Location,
-					new Size (width - borderAdjustment.Width, height));
+					new Size (width*2 - borderAdjustment.Width, height));
 
 				if (vscrollbar_ctrl != null && show_scrollbar)
 					textarea_drawable.Width -= vscrollbar_ctrl.Width;
@@ -2579,7 +2579,11 @@ namespace System.Windows.Forms
 							}
 						}
 
-						owner.HandleDrawItem (new DrawItemEventArgs (dc, owner.Font, item_rect,
+                        var newfont = SystemFonts.DefaultFont;
+                        newfont.Unit = GraphicsUnit.Pixel;
+                        newfont.Size = 16;
+
+						owner.HandleDrawItem (new DrawItemEventArgs (dc, newfont/*owner.Font*/, item_rect,
 							i, state, fore_color, back_color));
 					}
 				}
