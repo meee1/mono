@@ -2682,10 +2682,18 @@ public class XplatUIMine : XplatUIDriver
     {
         if (hw.Parent == null)
         {
-            if(hw.x > 0)
+            var frm = Control.FromHandle(hw.ClientWindow) as Form;
+
+            if (frm != null)
             {
-                //return (0, 0);
+                var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
+
+                if (frm.WindowState == FormWindowState.Maximized)
+                    return (hw.X + borders.left, hw.Y + borders.bottom);
+
+                return (hw.X + borders.left, hw.Y + borders.top);
             }
+
             return (hw.X, hw.Y);
         }
         var parent = GetParent2(hw.Parent);
@@ -2944,8 +2952,8 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     private bool in_doevents;
     private Screen[] _allScreens;
     private bool _themesEnabled;
-    public Rectangle _virtualScreen = new Rectangle(0,0,1000,1000);
-    public Rectangle _workingArea = new Rectangle(0, 0, 1000, 1000);
+    public Rectangle _virtualScreen = new Rectangle(0,0,960,540);
+    public Rectangle _workingArea = new Rectangle(0, 0, 960, 540);
 
     public override void SetFocus(IntPtr handle)
     {
@@ -3485,7 +3493,7 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                         h = h2;
                         h.x = 0;
                         h.y = 0;
-                        SetWindowPos(h.ClientWindow, h.x, h.y, pos.cx - h.x, pos.cy-h.y);
+                        SetWindowPos(h.ClientWindow, h.x-4, h.y-4, pos.cx - h.x, pos.cy-h.y-23);
                         return IntPtr.Zero;
 
                         h2.Width = pos.cx;
