@@ -299,13 +299,11 @@ namespace System.Windows.Forms {
 
 		public virtual void SetAllowDrop (IntPtr handle, bool value)
 		{
-			Console.Error.WriteLine ("Drag and Drop is currently " +
-					"not supported on this platform");
+			
 		}
 
 		public virtual DragDropEffects StartDrag(IntPtr handle, object data, DragDropEffects allowedEffects) {
-			Console.Error.WriteLine ("Drag and Drop is currently " +
-					"not supported on this platform");
+			
 			return DragDropEffects.None;
 		}
 
