@@ -109,56 +109,7 @@ namespace System.Windows.Forms
         {
             get
             {
-                //if (this.parent == null)
-                {
-                    /*if (_hwndbmp == null)
-                        _hwndbmp = new Bitmap(width, height, SKColorType.Rgba8888);
-                    if(_hwndbmp != null && (_hwndbmp.Width != width || _hwndbmp.Height != height))
-                        _hwndbmp = new Bitmap(width, height, SKColorType.Rgba8888);
-					*/
-                    return _hwndbmp;
-                }
-
-                var info = new SKImageInfo(width,height, SKColorType.Rgba8888, SKAlphaType.Premul);
-
-                var x = 0;
-                var y = 0;
-
-                var window = XplatUI.Window(client_window);
-
-                XplatUI.driver.ClientToScreen(client_window, ref x, ref y);
-
-                var parent = this;
-
-                
-
-                var xp = 0;
-                var yp = 0;
-
-                while (parent.parent != null)
-                {
-                    parent = parent.parent;
-                }
-                XplatUI.driver.ClientToScreen(parent.client_window, ref xp, ref yp);
-
-                //var surface = SKSurface.Create(parent.hwndbmp.PeekPixels());
-                var pixels = parent.hwndbmp.PeekPixels();
-
-                var newx = x + 0 - xp;
-                var newy = y + 0 - yp;
-
-                if (pixels.BytesSize < info.BytesSize || newx < 0 || newy < 0)
-                {
-                    info.Height = Math.Min(info.Height, pixels.Height - newx);
-                    info.Width = Math.Min(info.Width, pixels.Width - newy);
-					//Debugger.Break();
-                }
-
-                var ans =  SKImage.FromPixels(info,
-                    new IntPtr(pixels.GetPixels(x + 0 - xp, y + 0-yp).ToInt64()), pixels.RowBytes);
-				if(ans == null)
-					Debugger.Break();
-                return ans;
+                return _hwndbmp;
             }
             set
             {
@@ -170,10 +121,6 @@ namespace System.Windows.Forms
         {
             get
             {
-                if (_hwndbmpNc == null)
-                    _hwndbmpNc = SKImage.Create(new SKImageInfo(width, height, SKColorType.Rgba8888));
-                if(_hwndbmpNc != null && (_hwndbmpNc.Width != width || _hwndbmpNc.Height != height))
-                    _hwndbmpNc = SKImage.Create(new SKImageInfo(width, height, SKColorType.Rgba8888));
                 return _hwndbmpNc;
             }
             set
