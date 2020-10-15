@@ -1050,11 +1050,18 @@ namespace System.Windows.Forms {
 						}
 					}
 
-					List<DataGridViewRow> newRows = new List<DataGridViewRow> (value - rows.Count);
-					for (int i = rows.Count; i < value; i++)
-						newRows.Add ((DataGridViewRow) RowTemplateFull);
-					rows.AddRange (newRows.ToArray());
-				}
+                    if (VirtualMode)
+                    {
+						rows.Count = value;
+                    }
+                    else
+                    {
+                        List<DataGridViewRow> newRows = new List<DataGridViewRow>(value - rows.Count);
+                        for (int i = rows.Count; i < value; i++)
+                            newRows.Add((DataGridViewRow) RowTemplateFull);
+                        rows.AddRange(newRows.ToArray());
+                    }
+                }
 			}
 		}
 
@@ -2912,6 +2919,9 @@ namespace System.Windows.Forms {
 					rowindex = i;
 					break;
 				}
+
+                if (top > this.Height * 2)
+                    break;
 				
 				top += row.Height;
 			}
@@ -4420,6 +4430,7 @@ namespace System.Windows.Forms {
 					for (int r = 0; r < RowCount; r++) {
 						for (int c = 0; c < ColumnCount; c++) {
 							bool select = (r >= min_row && r <= max_row) && (c >= min_col && c <= max_col);
+                            break;
 							if (select != Rows [r].Cells [c].Selected)
 								SetSelectedCellCore (c, r, select);
 						}
