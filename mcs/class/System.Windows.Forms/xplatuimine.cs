@@ -2686,13 +2686,13 @@ public class XplatUIMine : XplatUIDriver
             var frm = Control.FromHandle(hw.ClientWindow) as Form;
 
             if (frm != null)
-            {/*
+            {
                 var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
 
                 if (frm.WindowState == FormWindowState.Maximized)
                     return (hw.X + borders.left, hw.Y + borders.bottom);
 
-                return (hw.X + borders.left, hw.Y + borders.top);*/
+                return (hw.X + borders.left, hw.Y + borders.top);
             }
 
             return (hw.X, hw.Y);
