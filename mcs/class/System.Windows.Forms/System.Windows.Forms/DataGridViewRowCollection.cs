@@ -45,9 +45,11 @@ namespace System.Windows.Forms
 			list = new ArrayList ();
 		}
 
+        private int _count = -1;
 		public int Count {
-			get { return list.Count; }
-		}
+			get { if(_count >= 0) return _count; return list.Count; }
+            internal set { _count = value; Add(); }
+        }
 
 		int ICollection.Count {
 			get { return Count; }
@@ -77,7 +79,13 @@ namespace System.Windows.Forms
 				// Accessing a System.Windows.Forms.DataGridViewRow with this indexer causes the row to become unshared. 
 				// To keep the row shared, use the System.Windows.Forms.DataGridViewRowCollection.SharedRow method. 
 				// For more information, see Best Practices for Scaling the Windows Forms DataGridView Control.
-				DataGridViewRow row = (DataGridViewRow) list [index];
+                if (_count > 0)
+                {
+                    ((DataGridViewRow) list[0]).SetIndex(index);
+                    return (DataGridViewRow) list[0];
+                }
+
+                DataGridViewRow row = (DataGridViewRow) list [index];
 				if (row.Index == -1) {
 					row = (DataGridViewRow) row.Clone ();
 					row.SetIndex (index);
@@ -518,8 +526,13 @@ namespace System.Windows.Forms
 		}
 
 		public DataGridViewRow SharedRow (int rowIndex)
-		{
-			return (DataGridViewRow) list [rowIndex];
+        {
+            if (_count > 0)
+            {
+				return     (DataGridViewRow) list [0];
+            }
+
+            return (DataGridViewRow) list [rowIndex];
 		}
 
 		internal int SharedRowIndexOf (DataGridViewRow row)

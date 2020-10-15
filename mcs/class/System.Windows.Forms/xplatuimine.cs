@@ -1518,7 +1518,7 @@ public class XplatUIMine : XplatUIDriver
             if (paint_hwnd.hwndbmp != null)
                 if (!hwnd.Invalid.Contains(hwnd.ClientRect))
                 {
-                    var raster = paint_hwnd.hwndbmp.ToRasterImage();
+                    var raster = paint_hwnd.hwndbmp;
                     newcanvas.DrawImage(raster, 0, 0);
                 }
 
@@ -2428,40 +2428,41 @@ public class XplatUIMine : XplatUIDriver
                         goto ProcessNextMessage;
                     }
 
-                        Monitor.Enter(paintlock);
-                        hwnd.nc_expose_pending = false;
-                        if (hwnd.hwndbmpNC != null)
-                    switch (hwnd.border_style)
-                    {
-                        case FormBorderStyle.Fixed3D:
+                    Monitor.Enter(paintlock);
+                    hwnd.nc_expose_pending = false;
+                    if (hwnd.hwndbmpNC != null)
+                        switch (hwnd.border_style)
                         {
-                            Graphics g;
+                            case FormBorderStyle.Fixed3D:
+                            {
+                                Graphics g;
 
-                            g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                            if (hwnd.border_static)
-                                ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                    Border3DStyle.SunkenOuter);
-                            else
-                                ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                    Border3DStyle.Sunken);
-                            g.Dispose();
-                            break;
+                                g = Graphics.FromSKImage(hwnd.hwndbmpNC);
+                                if (hwnd.border_static)
+                                    ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                        Border3DStyle.SunkenOuter);
+                                else
+                                    ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                        Border3DStyle.Sunken);
+                                g.Dispose();
+                                break;
+                            }
+
+                            case FormBorderStyle.FixedSingle:
+                            {
+                                Graphics g;
+
+                                g = Graphics.FromSKImage(hwnd.hwndbmpNC);
+                                ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
+                                    ButtonBorderStyle.Solid);
+                                g.Dispose();
+                                break;
+                            }
                         }
 
-                        case FormBorderStyle.FixedSingle:
-                        {
-                            Graphics g;
+                    Monitor.Exit(paintlock);
 
-                            g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                            ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
-                                ButtonBorderStyle.Solid);
-                            g.Dispose();
-                            break;
-                        }
-                    }
-                        Monitor.Exit(paintlock);
-
-                        DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
+                    DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
                         hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
                         xevent.ExposeEvent.width, xevent.ExposeEvent.height);
 
@@ -2470,11 +2471,11 @@ public class XplatUIMine : XplatUIDriver
                     Region region = new Region(rect);
                     //IntPtr hrgn = region.GetHrgn(null); // Graphics object isn't needed
                     msg.message = Msg.WM_NCPAINT;
-                    msg.wParam = (IntPtr)1;// hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
+                    msg.wParam = (IntPtr) 1; // hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
                     msg.refobject = region;
                     break;
                 }
-                
+
                 DriverDebug("GetMessage(): Window {0:X} Exposed area {1},{2} {3}x{4}",
                     hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
                     xevent.ExposeEvent.width, xevent.ExposeEvent.height);
@@ -2685,13 +2686,13 @@ public class XplatUIMine : XplatUIDriver
             var frm = Control.FromHandle(hw.ClientWindow) as Form;
 
             if (frm != null)
-            {
+            {/*
                 var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
 
                 if (frm.WindowState == FormWindowState.Maximized)
                     return (hw.X + borders.left, hw.Y + borders.bottom);
 
-                return (hw.X + borders.left, hw.Y + borders.top);
+                return (hw.X + borders.left, hw.Y + borders.top);*/
             }
 
             return (hw.X, hw.Y);
