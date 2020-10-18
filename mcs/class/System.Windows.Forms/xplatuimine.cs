@@ -76,6 +76,10 @@ public class XplatUIMine : XplatUIDriver
 
     public override bool ThemesEnabled => _themesEnabled;
 
+    public override int VerticalScrollBarWidth => 30;
+
+    public override int HorizontalScrollBarHeight => 30;
+
     public override event EventHandler Idle;
 
     private static int ref_count;
@@ -1595,22 +1599,6 @@ public class XplatUIMine : XplatUIDriver
 
     public static object paintlock = new object();
 
-    private IEnumerable<(IntPtr hwnd, IntPtr afterhwnd, bool top, bool bottom)> GetAllChildren(IntPtr handle)
-    {
-        var maxDepth = 20;
-
-        var query = zorder.Where(o => o.afterhwnd == handle);
-        var nextLevelQuery = query;
-
-        for (var i = 0; i < maxDepth; i++)
-        {
-            nextLevelQuery = nextLevelQuery.SelectMany(o => zorder.Where(o2 => o2.afterhwnd == o.hwnd));
-            query = query.Concat(nextLevelQuery);
-        }
-
-        return query;
-    }
-
     /// <summary>
     /// Changes the position and dimensions of the specified window. For a top-level window, the position and dimensions are relative to the upper-left corner of the screen. For a child window, they are relative to the upper-left corner of the parent window's client area.
     /// </summary>
@@ -1718,6 +1706,17 @@ public class XplatUIMine : XplatUIDriver
             y = hwnd.y;
             width = hwnd.width;
             height = hwnd.height;
+
+            if (width > WorkingArea.Width)
+            {
+                hwnd.width = WorkingArea.Width;
+                width = WorkingArea.Width;
+            }
+            if (height > WorkingArea.Height)
+            {
+                hwnd.height = WorkingArea.Height;
+                height = WorkingArea.Height;
+            }
 
             PerformNCCalc(hwnd);
 
@@ -2518,14 +2517,26 @@ public class XplatUIMine : XplatUIDriver
         return NativeWindow.WndProc(msg.hwnd, msg.message, msg.wParam, msg.lParam);
     }
 
-    private List<(IntPtr hwnd, IntPtr afterhwnd,bool top, bool bottom)> zorder = new List<(IntPtr hwnd, IntPtr afterhwnd, bool top, bool bottom)>();
+    private Dictionary<IntPtr, ( IntPtr afterhwnd, bool top, bool bottom)> zorder =
+        new Dictionary<IntPtr, ( IntPtr afterhwnd, bool top, bool bottom)>();
     public override bool SetZOrder(IntPtr hWnd, IntPtr AfterhWnd, bool Top, bool Bottom)
     {
-        var item = (hWnd, AfterhWnd, Top, Bottom);
-        if(!zorder.Contains(item))
-            zorder.Add(item);
+        var item = (AfterhWnd, Top, Bottom);
+        zorder[hWnd] = item;
         return true;
     }
+
+    /// <summary>
+    /// </summary>
+    /// <param name="handle"></param>
+    /// <returns></returns>
+    public (IntPtr afterhwnd, bool top, bool bottom) GetZOrder(IntPtr handle)
+    {
+        if(zorder.ContainsKey(handle))
+            return zorder[handle];
+        return (IntPtr.Zero, false, false);
+    }
+
 
     public override bool SetTopmost(IntPtr handle, bool enabled)
     {
