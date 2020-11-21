@@ -4794,7 +4794,8 @@ namespace System.Windows.Forms {
 			// Take borders into account
 			bounds.Inflate (-BorderWidth, -BorderWidth);
 
-            AutoResizeRows(AutoSizeRowsMode);
+			if(AutoSizeRowsMode != DataGridViewAutoSizeRowsMode.None)
+                AutoResizeRows(AutoSizeRowsMode);
 			
 			// Paint the top left cell
 			if (rowHeadersVisible && columnHeadersVisible && ColumnCount > 0) {
