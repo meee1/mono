@@ -334,6 +334,8 @@ namespace System.Windows.Forms
 					// UIA Framework Event: CanResize Changed
 					OnUIACanResizeChanged (EventArgs.Empty);
 
+                    UpdateLayout();
+
 					PerformLayout ();
 				}
 			}
@@ -363,6 +365,8 @@ namespace System.Windows.Forms
 
 					// UIA Framework Event: CanResize Changed
 					OnUIACanResizeChanged (EventArgs.Empty);
+
+                    UpdateLayout();
 
 					PerformLayout ();
 				}
@@ -606,8 +610,8 @@ namespace System.Windows.Forms
 		}
 
 		protected override void SetBoundsCore (int x, int y, int width, int height, BoundsSpecified specified)
-		{
-			base.SetBoundsCore (x, y, width, height, specified);
+        {
+            base.SetBoundsCore (x, y, width, height, specified);
 		}
 
 		protected override void WndProc (ref Message msg)
