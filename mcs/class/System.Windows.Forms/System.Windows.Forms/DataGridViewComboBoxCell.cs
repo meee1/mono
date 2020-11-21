@@ -26,8 +26,11 @@
 
 
 using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Linq;
+using System.Reflection;
 
 namespace System.Windows.Forms {
 
@@ -272,6 +275,47 @@ namespace System.Windows.Forms {
 
 		public override object ParseFormattedValue (object formattedValue, DataGridViewCellStyle cellStyle, TypeConverter formattedValueTypeConverter, TypeConverter valueTypeConverter)
 		{
+            if (DataSource != null && !String.IsNullOrEmpty(DisplayMember) && !String.IsNullOrEmpty(ValueMember))
+            {
+                Type type = null;
+
+                if (dataSource is Array)
+                    type = dataSource.GetType().GetElementType();
+
+                if (dataSource is IEnumerable)
+                {
+                    IEnumerator enumerator = ((IEnumerable) dataSource).GetEnumerator();
+                    if (enumerator.MoveNext() && enumerator.Current != null)
+                        type = enumerator.Current.GetType();
+
+                    if (dataSource is IList || dataSource.GetType() == typeof(IList<>))
+                    {
+                        PropertyInfo property = dataSource.GetType().GetProperty("Item");
+                        if (property != null) // `Item' could be interface-explicit, and thus private
+                            type = property.PropertyType;
+                    }
+                }
+
+                if (type != null)
+                {
+                    var display = type.GetProperty(DisplayMember);
+                    var val = type.GetProperty(ValueMember);
+
+                    if(display != null && val != null)
+                    {
+                        IEnumerator enumerator = ((IEnumerable) dataSource).GetEnumerator();
+                        while (enumerator.MoveNext() && enumerator.Current != null)
+                        {
+                            var invalue = display.GetValue(enumerator.Current);
+                            if (invalue.Equals(formattedValue))
+                            {
+                                return val.GetValue(enumerator.Current);
+                            }
+                        }
+                    }
+                }
+            }
+
 			return base.ParseFormattedValue (formattedValue, cellStyle, formattedValueTypeConverter, valueTypeConverter);
 		}
 
@@ -304,6 +348,47 @@ namespace System.Windows.Forms {
 
 		protected override object GetFormattedValue (object value, int rowIndex, ref DataGridViewCellStyle cellStyle, TypeConverter valueTypeConverter, TypeConverter formattedValueTypeConverter, DataGridViewDataErrorContexts context)
 		{
+            if (DataSource != null && !String.IsNullOrEmpty(DisplayMember) && !String.IsNullOrEmpty(ValueMember))
+            {
+                Type type = null;
+
+                if (dataSource is Array)
+                    type = dataSource.GetType().GetElementType();
+
+                if (dataSource is IEnumerable)
+                {
+                    IEnumerator enumerator = ((IEnumerable) dataSource).GetEnumerator();
+                    if (enumerator.MoveNext() && enumerator.Current != null)
+                        type = enumerator.Current.GetType();
+
+                    if (dataSource is IList || dataSource.GetType() == typeof(IList<>))
+                    {
+                        PropertyInfo property = dataSource.GetType().GetProperty("Item");
+                        if (property != null) // `Item' could be interface-explicit, and thus private
+                            type = property.PropertyType;
+                    }
+                }
+
+                if (type != null)
+                {
+                    var display = type.GetProperty(DisplayMember);
+                    var val = type.GetProperty(ValueMember);
+
+					if(display != null && val != null)
+                    {
+                        IEnumerator enumerator = ((IEnumerable) dataSource).GetEnumerator();
+                        while (enumerator.MoveNext() && enumerator.Current != null)
+                        {
+                            var invalue = val.GetValue(enumerator.Current);
+                            if (invalue.Equals(value))
+                            {
+                                return display.GetValue(enumerator.Current)?.ToString();
+                            }
+                        }
+                    }
+                }
+            }
+
 			return base.GetFormattedValue (value, rowIndex, ref cellStyle, valueTypeConverter, formattedValueTypeConverter, context);
 		}
 
