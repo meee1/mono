@@ -174,9 +174,13 @@ namespace System.Windows.Forms {
 		{
 			object o = FormattedValue;
 			
-			if (o != null) {
-				Size s = DataGridViewCell.MeasureTextSize (graphics, o.ToString (), cellStyle.Font, TextFormatFlags.Default);
+			if (o != null)
+            {
+                var height = DataGridViewCell.MeasureTextHeight(graphics, o.ToString(), cellStyle.Font,
+                    base.GetSize(rowIndex).Width, TextFormatFlags.Default);
+                var s = new Size(base.GetSize(rowIndex).Width, height);
 				s.Height = Math.Max (s.Height, 20);
+
 				s.Width += 2;
 				return s;
 			} else
