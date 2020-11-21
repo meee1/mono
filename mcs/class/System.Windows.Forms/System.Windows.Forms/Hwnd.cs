@@ -814,7 +814,7 @@ namespace System.Windows.Forms
 
 		public void AddInvalidArea(Rectangle rect) {
 			ArrayList tmp = new ArrayList ();
-			foreach (Rectangle r in invalid_list) {
+			foreach (Rectangle r in invalid_list.ToArray()) {
 				if (!rect.Contains (r)) {
 					tmp.Add (r);
 				}
