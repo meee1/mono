@@ -2270,7 +2270,7 @@ public class XplatUIMine : XplatUIDriver
                 msg.hwnd = IntPtr.Zero;
                 msg.message = Msg.WM_ENTERIDLE;
                 RaiseIdle(new EventArgs());
-                Thread.Sleep(10);
+                Thread.Sleep(30);
                 return true;
             }
         }
