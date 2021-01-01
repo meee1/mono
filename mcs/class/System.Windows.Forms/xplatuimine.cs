@@ -2964,8 +2964,8 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     private bool in_doevents;
     private Screen[] _allScreens;
     private bool _themesEnabled;
-    public Rectangle _virtualScreen = new Rectangle(0,0,960,540);
-    public Rectangle _workingArea = new Rectangle(0, 0, 960, 540);
+    public Rectangle _virtualScreen = new Rectangle(0,0,960,960);
+    public Rectangle _workingArea = new Rectangle(0, 0, 960, 960);
 
     public override void SetFocus(IntPtr handle)
     {
