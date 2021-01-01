@@ -414,7 +414,7 @@ namespace System.Windows.Forms {
 
 			private static void Initialize() {
 				AssemblyName	assembly;
-				AssemblyBuilder	assembly_builder;
+			
 
 				if (Initialized) {
 					return;
@@ -1013,45 +1013,6 @@ namespace System.Windows.Forms {
 			return true;
 		}
 
-		// Thanks, Martin
-		static MethodInfo CreateFuncPtrInterface(AssemblyBuilder assembly, string MethodName, Type ret_type, int param_count) {
-			ModuleBuilder	mb;
-			TypeBuilder	tb;
-			Type[]		il_param_types;
-			Type[]		param_types;
-
-			mb = assembly.DefineDynamicModule("XplatUIWin32.FuncInterface" + MethodName);
-			tb = mb.DefineType ("XplatUIWin32.FuncInterface" + MethodName, TypeAttributes.Public);
-
-			param_types = new Type[param_count];
-			il_param_types = new Type[param_count + 1];
-
-			il_param_types[param_count] = typeof(IntPtr);
-			for (int i = 0; i < param_count; i++) {
-				param_types[i] = typeof(IntPtr);
-				il_param_types[i] = typeof(IntPtr);
-			}
-
-			MethodBuilder method = tb.DefineMethod (
-				MethodName, MethodAttributes.Static | MethodAttributes.Public,
-				ret_type, il_param_types);
-
-			ILGenerator ig = method.GetILGenerator ();
-			if (param_count > 5) ig.Emit (OpCodes.Ldarg_S, 6);
-			if (param_count > 4) ig.Emit (OpCodes.Ldarg_S, 5);
-			if (param_count > 3) ig.Emit (OpCodes.Ldarg_S, 4);
-			if (param_count > 2) ig.Emit (OpCodes.Ldarg_3);
-			if (param_count > 1) ig.Emit (OpCodes.Ldarg_2);
-			if (param_count > 0) ig.Emit (OpCodes.Ldarg_1);
-			ig.Emit (OpCodes.Ldarg_0);
-		    ig.EmitCalli(OpCodes.Calli, System.Reflection.CallingConventions.Standard, ret_type, param_types, null);
-			ig.Emit (OpCodes.Ret);
-
-			Type t = tb.CreateTypeInfo ();
-			MethodInfo m = t.GetMethod (MethodName);
-
-			return m;
-		}
 
 		[DllImport ("ole32.dll", EntryPoint="RegisterDragDrop", CallingConvention=CallingConvention.StdCall)]
 		private extern static uint Win32RegisterDragDrop(IntPtr Window, IntPtr pDropTarget);
