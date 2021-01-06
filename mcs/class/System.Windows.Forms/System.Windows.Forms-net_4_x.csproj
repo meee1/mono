@@ -1211,9 +1211,4 @@
     <ProjectReference Include="..\Accessibility\Accessibility-net_4_x.csproj" />
     <ProjectReference Include="..\System.Runtime.Serialization.Formatters.Soap\System.Runtime.Serialization.Formatters.Soap-net_4_x.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Reference Include="OpenTK-1.0">
-      <HintPath>..\..\..\..\OpenTK-1.0.dll</HintPath>
-    </Reference>
-  </ItemGroup>
 </Project>
