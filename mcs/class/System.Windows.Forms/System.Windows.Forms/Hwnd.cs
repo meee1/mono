@@ -29,9 +29,6 @@
 using System.Collections;
 using System.Diagnostics;
 using System.Drawing;
-using OpenTK.Graphics;
-using OpenTK.Graphics.ES20;
-using OpenTK.Platform.Android;
 using SkiaSharp;
 using PixelFormat = System.Drawing.Imaging.PixelFormat;
 
