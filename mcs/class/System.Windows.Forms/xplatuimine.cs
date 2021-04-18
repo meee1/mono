@@ -61,6 +61,11 @@ public class XplatUIMine : XplatUIDriver
 
     public override bool MouseWheelPresent => throw new NotImplementedException();
 
+    public override MouseButtons MouseButtons
+    {
+        get { return mouse_state; }
+    }
+
     public override Rectangle VirtualScreen => _virtualScreen;
 
     public override Rectangle WorkingArea => _workingArea;
@@ -2269,8 +2274,11 @@ public class XplatUIMine : XplatUIDriver
             {
                 msg.hwnd = IntPtr.Zero;
                 msg.message = Msg.WM_ENTERIDLE;
+                var s = DateTime.Now;
                 RaiseIdle(new EventArgs());
-                Thread.Sleep(30);
+                var delta = DateTime.Now - s;
+                if(delta.TotalMilliseconds < 30)
+                    Thread.Sleep(30);
                 return true;
             }
         }
@@ -2504,7 +2512,7 @@ public class XplatUIMine : XplatUIDriver
 
     static void DriverDebug(string format, params object[] args)
     {
-        //Console.WriteLine(String.Format(format, args));
+        Console.WriteLine(String.Format(format, args));
     }
 
     public override bool TranslateMessage(ref MSG msg)
@@ -3462,11 +3470,39 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     }
                 }
 
+                if (message == Msg.WM_LBUTTONDOWN)
+                {
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
+                }
+                if (message == Msg.WM_LBUTTONUP)
+                {
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
+                }
+
+                if (message == Msg.WM_RBUTTONDOWN )
+                {
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
+                }     
+                if ( message == Msg.WM_RBUTTONUP)
+                {
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
+                }
+
+                if (message == Msg.WM_MBUTTONDOWN )
+                {
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
+                }  
+                if (message == Msg.WM_MBUTTONUP)
+                {
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
+                }
+
+
                 if (hwnd != prev_mouse_hwnd && message == Msg.WM_MOUSEMOVE)
                 {
                     TRACKMOUSEEVENT tme;
 
-                    mouse_state = Control.FromParamToMouseButtons((int)lParam.ToInt32());
+                    mouse_state = Control.FromParamToMouseButtons((int)wParam.ToInt32());
 
                     // The current message will be sent out next time around
                     //StoreMessage(ref msg);
