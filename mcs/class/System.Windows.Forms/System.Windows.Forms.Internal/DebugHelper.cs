@@ -90,16 +90,23 @@ namespace System.Windows.Forms
 			Debug.Unindent ();
 		}
 
-		[Conditional("DEBUG")]
-		internal static void Enter ()
-		{
-			StackTrace trace = new StackTrace();
-			methods.Push (new Data (trace.GetFrame(1).GetMethod(), null));
-			Print ();
-			Debug.Indent ();
-		}
+        [Conditional("DEBUG")]
+        internal static void Enter()
+        {
+            StackTrace trace = new StackTrace();
+            try
+            {
+                methods.Push(new Data(trace.GetFrame(1).GetMethod(), null));
+            }
+            catch
+            {
+            }
 
-		[Conditional("DEBUG")]
+            Print();
+            Debug.Indent();
+        }
+
+        [Conditional("DEBUG")]
 		internal static void Enter (object[] args) 
 		{
 			StackTrace trace = new StackTrace();
