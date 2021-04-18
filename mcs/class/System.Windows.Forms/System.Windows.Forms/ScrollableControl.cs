@@ -571,7 +571,39 @@ namespace System.Windows.Forms {
 			base.OnMouseWheel(e);
 		}
 
-		[EditorBrowsable(EditorBrowsableState.Advanced)]
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if((MouseButtons & MouseButtons.Left) != 0) { 
+                var delta = e.Y - _mouseLastPosition.Y;
+                //HandleDelta(delta);
+                try
+                {
+                    if (vscrollbar.Minimum < (vscrollbar.Value - delta))
+                    {
+                        vscrollbar.Value -= delta;
+                    }
+                    else if (vscrollbar.Maximum > (vscrollbar.Value + delta))
+                    {
+                        vscrollbar.Value += delta;
+                    }
+                } catch {}
+
+                _mouseLastPosition = e.Location;
+            }
+            base.OnMouseMove(e);
+        }
+
+        private Point _mouseLastPosition;
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left) {
+                _mouseLastPosition = e.Location;
+            }
+            base.OnMouseDown(e);
+        }
+
+        [EditorBrowsable(EditorBrowsableState.Advanced)]
 		protected override void OnVisibleChanged(EventArgs e) {
 			if (Visible) {
 				UpdateChildrenZOrder ();
