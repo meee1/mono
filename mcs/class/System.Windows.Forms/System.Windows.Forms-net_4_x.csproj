@@ -7,7 +7,6 @@
    <SignAssembly>true</SignAssembly>
    <DelaySign>false</DelaySign>
    <PublicSign>true</PublicSign>
-   <GenerateResourceUsePreserializedResources>false</GenerateResourceUsePreserializedResources>
     <OutputType>Library</OutputType>
     <NoWarn>1699,618,612,809</NoWarn>
     <LangVersion>latest</LangVersion>
@@ -30,7 +29,7 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
+    <DebugType>portable</DebugType>
     <NoWarn>1699,618,612,809</NoWarn>
     <Optimize>false</Optimize>
     <DefineConstants>TRACE;DEBUG;NET_4_6;MONO;WIN_PLATFORM;MULTIPLEX_OS;NETSTANDARD2_0;NETSTANDARD2_0;DriverDebugQQQ</DefineConstants>
