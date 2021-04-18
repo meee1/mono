@@ -305,9 +305,17 @@ namespace System.Windows.Forms
 		}
 
 		public static string ExecutablePath {
-			get {
-				return Path.GetFullPath (Environment.GetCommandLineArgs ()[0]);
-			}
+			get
+            {
+                try
+                {
+                    return Path.GetFullPath(Environment.GetCommandLineArgs()[0]);
+                }
+                catch
+                {
+                    return Path.GetFullPath("ExecutablePath.exe");
+                }
+            }
 		}
 
 		public static string LocalUserAppDataPath {
