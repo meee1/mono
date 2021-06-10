@@ -833,6 +833,11 @@ namespace System.Windows.Forms
 			}
 		}
 
+		/// <summary>
+		/// set when it need to be rendered to screen
+		/// </summary>
+        public bool DrawNeeded { get; set; }
+
         #endregion	// Instance properties
 
 		#region Methods
