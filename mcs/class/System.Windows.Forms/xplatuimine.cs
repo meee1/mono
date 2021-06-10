@@ -1594,6 +1594,9 @@ public class XplatUIMine : XplatUIDriver
 
         PaintPending = true;
 
+        // this needs to be drawn
+        hwnd.DrawNeeded = true;
+
         Monitor.Exit(paintlock);
 
         //driver.PaintEventEnd(ref msg, handle, client, pevent);
