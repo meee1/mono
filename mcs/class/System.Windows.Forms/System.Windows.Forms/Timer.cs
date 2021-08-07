@@ -131,7 +131,7 @@ namespace System.Windows.Forms {
 			Enabled = false;
 		}
 
-		public DateTime Expires {
+		public long Expires {
 			get {
 				return expires;
 			}
@@ -144,7 +144,7 @@ namespace System.Windows.Forms {
 			return base.ToString () + ", Interval: " + Interval;
 		}
 
-		public void Update (DateTime update)
+		public void Update (long update)
 		{
 			expires = update + (interval > Minimum ? interval : Minimum);
 		}
