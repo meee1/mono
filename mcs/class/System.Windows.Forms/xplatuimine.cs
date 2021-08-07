@@ -2190,7 +2190,7 @@ public class XplatUIMine : XplatUIDriver
             }
         }
 
-        CheckTimers(queue.timer_list, DateTime.UtcNow);
+        CheckTimers(queue.timer_list, Timer.StopWatchNowMilliseconds);
 
         if (!pending)
         {
@@ -2200,7 +2200,7 @@ public class XplatUIMine : XplatUIDriver
     }
 
 
-    void CheckTimers(ArrayList timers, DateTime now)
+    void CheckTimers(ArrayList timers, long now)
     {
         int count;
 
@@ -2260,7 +2260,7 @@ public class XplatUIMine : XplatUIDriver
         }
         else
         {
-            var now = DateTime.UtcNow;
+            var now = Timer.StopWatchNowMilliseconds;
             //UpdateMessageQueue((XEventQueue)queue_id);
             if ((XEventQueue)queue_id != null)
 				CheckTimers (((XEventQueue)queue_id).timer_list, now);
