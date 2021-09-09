@@ -1186,6 +1186,9 @@ public class XplatUIMine : XplatUIDriver
         hwnd = Hwnd.ObjectFromHandle(handle);
         SetHwndStyles(hwnd, cp);
         SetWMStyles(hwnd, cp);
+
+        RequestNCRecalc(hwnd.Handle);
+        AddExpose(hwnd, true, 0, 0, hwnd.Width, hwnd.Height);
     }
     void SetHwndStyles(Hwnd hwnd, CreateParams cp)
     {

@@ -578,14 +578,16 @@ namespace System.Windows.Forms {
                 //HandleDelta(delta);
                 try
                 {
-                    if (vscrollbar.Minimum < (vscrollbar.Value - delta))
-                    {
-                        vscrollbar.Value -= delta;
-                    }
-                    else if (vscrollbar.Maximum > (vscrollbar.Value + delta))
-                    {
-                        vscrollbar.Value += delta;
-                    }
+					if (vscrollbar.Visible) { 
+						if (vscrollbar.Minimum < (vscrollbar.Value - delta))
+						{
+							vscrollbar.Value -= delta;
+						}
+						else if (vscrollbar.Maximum > (vscrollbar.Value + delta))
+						{
+							vscrollbar.Value += delta;
+						}
+					}
                 } catch {}
 
                 _mouseLastPosition = e.Location;
