@@ -546,6 +546,8 @@ public class XplatUIMine : XplatUIDriver
 
         client_rect = TranslateClientRectangleToXClientRectangle(hwnd);
 
+        Invalidate(hwnd.Handle, client_rect, false);
+        InvalidateNC(hwnd.Handle);
     }
 
     public static Rectangle TranslateClientRectangleToXClientRectangle(Hwnd hwnd)
