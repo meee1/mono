@@ -338,7 +338,7 @@ public class XplatUIMine : XplatUIDriver
             frm.window_manager = new FormWindowManager(frm);
             RequestNCRecalc(hwnd.Handle);
             AddExpose(hwnd, true, 0, 0, 1000, 1000);
-        } 
+        }
 
         return hwnd.zombie ? IntPtr.Zero : hwnd.Handle;
     }
@@ -1911,6 +1911,10 @@ public class XplatUIMine : XplatUIDriver
         Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
         Control ctrl = Control.FromHandle(handle);
         SetWMStyles(hwnd, ctrl.GetCreateParams());
+
+        int width = hwnd.width;
+        SetWindowPos(hwnd.Handle, hwnd.x, hwnd.y, width + 1, hwnd.height);
+        SetWindowPos(hwnd.Handle, hwnd.x, hwnd.y, width, hwnd.height);
     }
     /// <summary>
     /// The InvalidateRect function adds a rectangle to the specified window's update region. The update region represents the portion of the window's client area that must be redrawn.
