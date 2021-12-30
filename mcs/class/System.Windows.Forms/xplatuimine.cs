@@ -1536,6 +1536,7 @@ public class XplatUIMine : XplatUIDriver
                     newcanvas.DrawImage(raster, 0, 0);
                 }
 
+            newcanvas.ClipRegion(clip_region);
             dc = Graphics.FromCanvas(newcanvas);
             dc.Clip = clip_region;
             paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = pic };
@@ -1582,18 +1583,27 @@ public class XplatUIMine : XplatUIDriver
             hwnd = Hwnd.ObjectFromHandle(handle);
         }
 
-        //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name);
-
         if (client)
         {
-            hwnd.hwndbmp = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),
-                new SKSizeI(hwnd.width, hwnd.height));
+            var pic = ((SKPictureRecorder)pevent.Tag).EndRecording();
+            var img = SKImage.FromPicture(pic, new SKSizeI(hwnd.width, hwnd.height));
+            var bmp = SKBitmap.FromImage(img);
+            pic.Dispose();
+            img.Dispose();
+
+            if(hwnd.hwndbmp != null)
+                hwnd.hwndbmp.Dispose();
+
+            hwnd.hwndbmp = SKImage.FromBitmap(bmp);
+            //hwnd.hwndbmp = img;
         }
         else
         {
             hwnd.hwndbmpNC = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),
                 new SKSizeI(hwnd.width, hwnd.height));
         }
+
+        //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name + " " + hwnd.hwndbmp.ColorType);
 
         pevent.Graphics.Dispose();
 
