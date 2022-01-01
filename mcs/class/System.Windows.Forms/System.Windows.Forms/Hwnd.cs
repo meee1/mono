@@ -102,7 +102,7 @@ namespace System.Windows.Forms
         private SKCanvas canvas;
         private SKSizeI lastSize;
 
-        public SKImage hwndbmp
+        public SKDrawable hwndbmp
         {
             get
             {
@@ -129,11 +129,12 @@ namespace System.Windows.Forms
         // locks for some operations (used in XplatUIX11.cs)
         internal object configure_lock = new object ();
 		public object expose_lock = new object ();
-        private SKImage _hwndbmp;
+        private SKDrawable _hwndbmp;
         private SKImage _hwndbmpNc;
+        internal SKPictureRecorder pic;
 
         #region Constructors and destructors
-		public Hwnd() {
+        public Hwnd() {
 			x = 0;
 			y = 0;
 			width = 0;
