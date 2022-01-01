@@ -334,7 +334,7 @@ public class XplatUIMine : XplatUIDriver
 
         if ((Control.FromHandle(hwnd.Handle) is Form))
         {
-            var frm = ((Form)Control.FromHandle(hwnd.Handle));            
+            var frm = ((Form)Control.FromHandle(hwnd.Handle));
             frm.window_manager = new FormWindowManager(frm);
             RequestNCRecalc(hwnd.Handle);
             AddExpose(hwnd, true, 0, 0, 1000, 1000);
@@ -507,7 +507,7 @@ public class XplatUIMine : XplatUIDriver
         }
         else
         {
-           // window_type = _NET_WM_WINDOW_TYPE_NORMAL;
+            // window_type = _NET_WM_WINDOW_TYPE_NORMAL;
         }
 
         if (!cp.IsSet(WindowExStyles.WS_EX_APPWINDOW))
@@ -1047,7 +1047,7 @@ public class XplatUIMine : XplatUIDriver
 
         maximized = 0;
         minimized = false;
-       
+
 
         return FormWindowState.Normal;
     }
@@ -1070,49 +1070,49 @@ public class XplatUIMine : XplatUIDriver
         switch (state)
         {
             case FormWindowState.Normal:
-            {
-                //lock (XlibLock)
                 {
-                    if (current_state == FormWindowState.Minimized)
+                    //lock (XlibLock)
                     {
-                        MapWindow(hwnd, WindowType.Both);
+                        if (current_state == FormWindowState.Minimized)
+                        {
+                            MapWindow(hwnd, WindowType.Both);
+                        }
+                        else if (current_state == FormWindowState.Maximized)
+                        {
+                            // SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)2 /* toggle */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                        }
                     }
-                    else if (current_state == FormWindowState.Maximized)
-                    {
-                       // SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)2 /* toggle */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
-                    }
+                    Activate(handle);
+                    return;
                 }
-                Activate(handle);
-                return;
-            }
 
             case FormWindowState.Minimized:
-            {
-               // lock (XlibLock)
                 {
-                    if (current_state == FormWindowState.Maximized)
+                    // lock (XlibLock)
                     {
-                        //SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)2 /* toggle */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                        if (current_state == FormWindowState.Maximized)
+                        {
+                            //SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)2 /* toggle */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                        }
+                        //XIconifyWindow(DisplayHandle, hwnd.whole_window, ScreenNo);
                     }
-                    //XIconifyWindow(DisplayHandle, hwnd.whole_window, ScreenNo);
+                    return;
                 }
-                return;
-            }
 
             case FormWindowState.Maximized:
-            {
-               // lock (XlibLock)
                 {
-                    if (current_state == FormWindowState.Minimized)
+                    // lock (XlibLock)
                     {
-                        MapWindow(hwnd, WindowType.Both);
-                    }
+                        if (current_state == FormWindowState.Minimized)
+                        {
+                            MapWindow(hwnd, WindowType.Both);
+                        }
 
-                    //SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)1 /* Add */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                        //SendNetWMMessage(hwnd.whole_window, _NET_WM_STATE, (IntPtr)1 /* Add */, _NET_WM_STATE_MAXIMIZED_HORZ, _NET_WM_STATE_MAXIMIZED_VERT);
+                    }
+                    Activate(handle);
+                    return;
                 }
-                Activate(handle);
-                return;
-            }
         }
     }
 
@@ -1408,7 +1408,7 @@ public class XplatUIMine : XplatUIDriver
         }
 
         PaintPending = true;
-        
+
         return true;
     }
 
@@ -1483,7 +1483,7 @@ public class XplatUIMine : XplatUIDriver
         PaintEventArgs paint_event;
         Hwnd hwnd;
         Hwnd paint_hwnd;
-         
+
 
         // 
         // handle  (and paint_hwnd) refers to the window that is should be painted.
@@ -1508,7 +1508,7 @@ public class XplatUIMine : XplatUIDriver
 
         if (client)
         {
-            
+
 
             Region clip_region = new Region();
             clip_region.MakeEmpty();
@@ -1527,19 +1527,20 @@ public class XplatUIMine : XplatUIDriver
                 clip_region.Intersect(hwnd.UserClip);
             }
 
-            var pic = new SKPictureRecorder();
-            var newcanvas = pic.BeginRecording(SKRect.Empty);
+            if(hwnd.pic == null)
+                hwnd.pic = new SKPictureRecorder();
+            var newcanvas = hwnd.pic.BeginRecording(SKRect.Empty);
             if (paint_hwnd.hwndbmp != null)
                 if (!hwnd.Invalid.Contains(hwnd.ClientRect))
                 {
-                    var raster = paint_hwnd.hwndbmp;
-                    newcanvas.DrawImage(raster, 0, 0);
+                    var raster = paint_hwnd.hwndbmp.Snapshot();
+                    newcanvas.DrawPicture(raster, 0, 0);                    
                 }
 
             newcanvas.ClipRegion(clip_region);
             dc = Graphics.FromCanvas(newcanvas);
             dc.Clip = clip_region;
-            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = pic };
+            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = hwnd.pic };
             hwnd.expose_pending = false;
 
             hwnd.ClearInvalidArea();
@@ -1556,7 +1557,7 @@ public class XplatUIMine : XplatUIDriver
             if (!hwnd.nc_invalid.IsEmpty)
             {
                 dc.SetClip(hwnd.nc_invalid);
-                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = pic};
+                paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = pic };
             }
             else
             {
@@ -1585,27 +1586,30 @@ public class XplatUIMine : XplatUIDriver
 
         if (client)
         {
-            var pic = ((SKPictureRecorder)pevent.Tag).EndRecording();
-            var img = SKImage.FromPicture(pic, new SKSizeI(hwnd.width, hwnd.height));
+            var pic = ((SKPictureRecorder)pevent.Tag).EndRecordingAsDrawable();
+            var img = SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height));
             var bmp = SKBitmap.FromImage(img);
-            pic.Dispose();
-            img.Dispose();
+            //pic.Dispose();
+            //img.Dispose();
 
-            if(hwnd.hwndbmp != null)
-                hwnd.hwndbmp.Dispose();
+            hwnd.hwndbmp = pic;
+            
+            //hwnd.hwndbmp = pic;
 
-            hwnd.hwndbmp = SKImage.FromBitmap(bmp);
-            //hwnd.hwndbmp = img;
+            //using (var st = File.OpenWrite(hwnd.Handle.ToString() + DateTime.Now.ToString("s") + ".skp"))
+            //pic.Serialize(st);
+
+            //using (var st = File.OpenWrite(hwnd.Handle.ToString() + DateTime.Now.ToString("s").Replace(":","-") + ".jpg"))
+            //SKImage.FromPicture(pic, new SKSizeI(hwnd.width, hwnd.height)).Encode().SaveTo(st);
         }
         else
         {
-            hwnd.hwndbmpNC = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),
-                new SKSizeI(hwnd.width, hwnd.height));
+            hwnd.hwndbmpNC = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),                new SKSizeI(hwnd.width, hwnd.height));
         }
 
         //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name + " " + hwnd.hwndbmp.ColorType);
 
-        pevent.Graphics.Dispose();
+        //pevent.Graphics.Dispose();
 
         PaintPending = true;
 
@@ -1639,6 +1643,14 @@ public class XplatUIMine : XplatUIDriver
         if (hwnd == null)
         {
             return;
+        }
+
+        if (Control.FromHandle(handle) is Form && (Control.FromHandle(handle) as Form).WindowState == FormWindowState.Maximized)
+        {
+            x = -4;
+            y = -4;
+            width = (Control.FromHandle(handle) as Form).Width + 4;
+            height = (Control.FromHandle(handle) as Form).Height + 4;
         }
 
         // Win32 automatically changes negative width/height to 0.
@@ -1702,8 +1714,8 @@ public class XplatUIMine : XplatUIDriver
                         hwnd.resizing_or_moving = true;
                     }
                     if (hwnd.resizing_or_moving)
-                    if (hwnd.resizing_or_moving)
-                        SendMessage(form.Handle, Msg.WM_ENTERSIZEMOVE, IntPtr.Zero, IntPtr.Zero);
+                        if (hwnd.resizing_or_moving)
+                            SendMessage(form.Handle, Msg.WM_ENTERSIZEMOVE, IntPtr.Zero, IntPtr.Zero);
                 }
 
                 PerformNCCalc(hwnd);
@@ -1788,7 +1800,7 @@ public class XplatUIMine : XplatUIDriver
         var ctl = Control.FromHandle(hwnd.client_window) as Form;
         if (ctl != null && hwnd.parent == null && ctl.WindowState == FormWindowState.Maximized)
         {
-            rect = new Rectangle(0,0, ncp.rgrc1.right,
+            rect = new Rectangle(0, 0, ncp.rgrc1.right,
                 ncp.rgrc1.bottom);
             hwnd.ClientRect = rect;
         }
@@ -2013,7 +2025,7 @@ public class XplatUIMine : XplatUIDriver
                     {
                         hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
 
-                        if(hwnd == null)
+                        if (hwnd == null)
                             return IntPtr.Zero;
 
                         NCCALCSIZE_PARAMS ncp;
@@ -2132,7 +2144,7 @@ public class XplatUIMine : XplatUIDriver
                     return (IntPtr)1;
                 }
         }
-       
+
         return IntPtr.Zero;
     }
 
@@ -2199,8 +2211,8 @@ public class XplatUIMine : XplatUIDriver
             // otherwise we go to sleep on the socket
             //if (XPending(DisplayHandle) != 0)
             {
-         //       UpdateMessageQueue((XEventQueue)queue_id);
-           //     pending = true;
+                //       UpdateMessageQueue((XEventQueue)queue_id);
+                //     pending = true;
             }
             //else
             if (((XEventQueue)queue_id).Paint.Count > 0)
@@ -2271,26 +2283,26 @@ public class XplatUIMine : XplatUIDriver
         bool client;
         Hwnd hwnd;
 
-        ProcessNextMessage:
+    ProcessNextMessage:
 
-        if (((XEventQueue) queue_id).Count > 0)
+        if (((XEventQueue)queue_id).Count > 0)
         {
-            xevent = (XEvent) ((XEventQueue) queue_id).Dequeue();
+            xevent = (XEvent)((XEventQueue)queue_id).Dequeue();
         }
         else
         {
             var now = Timer.StopWatchNowMilliseconds;
             //UpdateMessageQueue((XEventQueue)queue_id);
             if ((XEventQueue)queue_id != null)
-				CheckTimers (((XEventQueue)queue_id).timer_list, now);
+                CheckTimers(((XEventQueue)queue_id).timer_list, now);
 
-            if (((XEventQueue) queue_id).Count > 0)
+            if (((XEventQueue)queue_id).Count > 0)
             {
-                xevent = (XEvent) ((XEventQueue) queue_id).Dequeue();
+                xevent = (XEvent)((XEventQueue)queue_id).Dequeue();
             }
-            else if (((XEventQueue) queue_id).Paint.Count > 0)
+            else if (((XEventQueue)queue_id).Paint.Count > 0)
             {
-                xevent = ((XEventQueue) queue_id).Paint.Dequeue();
+                xevent = ((XEventQueue)queue_id).Paint.Dequeue();
             }
             else
             {
@@ -2299,7 +2311,7 @@ public class XplatUIMine : XplatUIDriver
                 var s = DateTime.Now;
                 RaiseIdle(new EventArgs());
                 var delta = DateTime.Now - s;
-                if(delta.TotalMilliseconds < 30)
+                if (delta.TotalMilliseconds < 30)
                     Thread.Sleep(30);
                 return true;
             }
@@ -2383,9 +2395,9 @@ public class XplatUIMine : XplatUIDriver
             IntPtr root, child;
             keys_buttons = 0;
             //XQueryPointer(DisplayHandle, hwnd.Handle, out root, out child, out root_x, out root_y, out win_x, out win_y, out keys_buttons);
-            if ((keys_buttons & (int) MouseKeyMasks.Button1Mask) == 0 &&
-                (keys_buttons & (int) MouseKeyMasks.Button2Mask) == 0 &&
-                (keys_buttons & (int) MouseKeyMasks.Button3Mask) == 0)
+            if ((keys_buttons & (int)MouseKeyMasks.Button1Mask) == 0 &&
+                (keys_buttons & (int)MouseKeyMasks.Button2Mask) == 0 &&
+                (keys_buttons & (int)MouseKeyMasks.Button3Mask) == 0)
             {
                 hwnd.resizing_or_moving = false;
                 SendMessage(hwnd.Handle, Msg.WM_EXITSIZEMOVE, IntPtr.Zero, IntPtr.Zero);
@@ -2395,142 +2407,142 @@ public class XplatUIMine : XplatUIDriver
         switch (xevent.type)
         {
             case XEventName.KeyPress:
-            {
+                {
 
-                goto ProcessNextMessage;
-            }
+                    goto ProcessNextMessage;
+                }
 
             case XEventName.ClientMessage:
-            {
-                if (xevent.ClientMessageEvent.message_type == AsyncAtom)
                 {
-                    XplatUIDriverSupport.ExecuteClientMessage((GCHandle)xevent.ClientMessageEvent.ptr1);
+                    if (xevent.ClientMessageEvent.message_type == AsyncAtom)
+                    {
+                        XplatUIDriverSupport.ExecuteClientMessage((GCHandle)xevent.ClientMessageEvent.ptr1);
+                        goto ProcessNextMessage;
+                    }
+
+                    if (xevent.ClientMessageEvent.message_type == (IntPtr)PostAtom)
+                    {
+                        DebugHelper.Indent();
+                        DebugHelper.WriteLine(String.Format(
+                            "Posted message:" + (Msg)xevent.ClientMessageEvent.ptr2.ToInt32() + " for 0x{0:x}",
+                            xevent.ClientMessageEvent.ptr1.ToInt32()));
+                        DebugHelper.Unindent();
+                        msg.hwnd = xevent.ClientMessageEvent.ptr1;
+                        msg.message = (Msg)xevent.ClientMessageEvent.ptr2.ToInt32();
+                        msg.wParam = xevent.ClientMessageEvent.ptr3;
+                        msg.lParam = xevent.ClientMessageEvent.ptr4;
+                        if (msg.message == (Msg)Msg.WM_QUIT)
+                            return false;
+                        else
+                            return true;
+                    }
+
                     goto ProcessNextMessage;
                 }
-
-                if (xevent.ClientMessageEvent.message_type == (IntPtr) PostAtom)
-                {
-                    DebugHelper.Indent();
-                    DebugHelper.WriteLine(String.Format(
-                        "Posted message:" + (Msg) xevent.ClientMessageEvent.ptr2.ToInt32() + " for 0x{0:x}",
-                        xevent.ClientMessageEvent.ptr1.ToInt32()));
-                    DebugHelper.Unindent();
-                    msg.hwnd = xevent.ClientMessageEvent.ptr1;
-                    msg.message = (Msg) xevent.ClientMessageEvent.ptr2.ToInt32();
-                    msg.wParam = xevent.ClientMessageEvent.ptr3;
-                    msg.lParam = xevent.ClientMessageEvent.ptr4;
-                    if (msg.message == (Msg) Msg.WM_QUIT)
-                        return false;
-                    else
-                        return true;
-                }
-
-                goto ProcessNextMessage;
-            }
             case XEventName.Expose:
-            {
-                if (!hwnd.Mapped)
                 {
-                    if (client)
+                    if (!hwnd.Mapped)
                     {
-                        hwnd.expose_pending = false;
-                    }
-                    else
-                    {
-                        hwnd.nc_expose_pending = false;
-                    }
-
-                    goto ProcessNextMessage;
-                }
-
-                if (client)
-                {
-                    if (!hwnd.expose_pending)
-                    {
-                        goto ProcessNextMessage;
-                    }
-                }
-                else
-                {
-                    if (!hwnd.nc_expose_pending)
-                    {
-                        goto ProcessNextMessage;
-                    }
-
-                    Monitor.Enter(paintlock);
-                    hwnd.nc_expose_pending = false;
-                    if (hwnd.hwndbmpNC != null)
-                        switch (hwnd.border_style)
+                        if (client)
                         {
-                            case FormBorderStyle.Fixed3D:
-                            {
-                                Graphics g;
-
-                                g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                                if (hwnd.border_static)
-                                    ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                        Border3DStyle.SunkenOuter);
-                                else
-                                    ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                        Border3DStyle.Sunken);
-                                g.Dispose();
-                                break;
-                            }
-
-                            case FormBorderStyle.FixedSingle:
-                            {
-                                Graphics g;
-
-                                g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                                ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
-                                    ButtonBorderStyle.Solid);
-                                g.Dispose();
-                                break;
-                            }
+                            hwnd.expose_pending = false;
+                        }
+                        else
+                        {
+                            hwnd.nc_expose_pending = false;
                         }
 
-                    Monitor.Exit(paintlock);
+                        goto ProcessNextMessage;
+                    }
 
-                    DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
+                    if (client)
+                    {
+                        if (!hwnd.expose_pending)
+                        {
+                            goto ProcessNextMessage;
+                        }
+                    }
+                    else
+                    {
+                        if (!hwnd.nc_expose_pending)
+                        {
+                            goto ProcessNextMessage;
+                        }
+
+                        Monitor.Enter(paintlock);
+                        hwnd.nc_expose_pending = false;
+                        if (hwnd.hwndbmpNC != null)
+                            switch (hwnd.border_style)
+                            {
+                                case FormBorderStyle.Fixed3D:
+                                    {
+                                        Graphics g;
+
+                                        g = Graphics.FromSKImage(hwnd.hwndbmpNC);
+                                        if (hwnd.border_static)
+                                            ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                                Border3DStyle.SunkenOuter);
+                                        else
+                                            ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                                Border3DStyle.Sunken);
+                                        g.Dispose();
+                                        break;
+                                    }
+
+                                case FormBorderStyle.FixedSingle:
+                                    {
+                                        Graphics g;
+
+                                        g = Graphics.FromSKImage(hwnd.hwndbmpNC);
+                                        ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
+                                            ButtonBorderStyle.Solid);
+                                        g.Dispose();
+                                        break;
+                                    }
+                            }
+
+                        Monitor.Exit(paintlock);
+
+                        DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
+                            hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
+                            xevent.ExposeEvent.width, xevent.ExposeEvent.height);
+
+                        Rectangle rect = new Rectangle(xevent.ExposeEvent.x, xevent.ExposeEvent.y, xevent.ExposeEvent.width,
+                            xevent.ExposeEvent.height);
+                        Region region = new Region(rect);
+                        //IntPtr hrgn = region.GetHrgn(null); // Graphics object isn't needed
+                        msg.message = Msg.WM_NCPAINT;
+                        msg.wParam = (IntPtr)1; // hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
+                        msg.refobject = region;
+                        break;
+                    }
+
+                    DriverDebug("GetMessage(): Window {0:X} Exposed area {1},{2} {3}x{4}",
                         hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
                         xevent.ExposeEvent.width, xevent.ExposeEvent.height);
+                    if (Caret.Visible == true)
+                    {
+                        Caret.Paused = true;
+                        HideCaret();
+                    }
 
-                    Rectangle rect = new Rectangle(xevent.ExposeEvent.x, xevent.ExposeEvent.y, xevent.ExposeEvent.width,
-                        xevent.ExposeEvent.height);
-                    Region region = new Region(rect);
-                    //IntPtr hrgn = region.GetHrgn(null); // Graphics object isn't needed
-                    msg.message = Msg.WM_NCPAINT;
-                    msg.wParam = (IntPtr) 1; // hrgn == IntPtr.Zero ? (IntPtr) 1 : hrgn;
-                    msg.refobject = region;
+                    if (Caret.Visible == true)
+                    {
+                        ShowCaret();
+                        Caret.Paused = false;
+                    }
+                    msg.message = Msg.WM_PAINT;
                     break;
                 }
 
-                DriverDebug("GetMessage(): Window {0:X} Exposed area {1},{2} {3}x{4}",
-                    hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
-                    xevent.ExposeEvent.width, xevent.ExposeEvent.height);
-                if (Caret.Visible == true)
-                {
-                    Caret.Paused = true;
-                    HideCaret();
-                }
-
-                if (Caret.Visible == true)
-                {
-                    ShowCaret();
-                    Caret.Paused = false;
-                }
-                msg.message = Msg.WM_PAINT;
-                break;
-            }
-
             default:
-            {
-                goto ProcessNextMessage;
-            }
+                {
+                    goto ProcessNextMessage;
+                }
         }
 
         return true;
-    }
+    }    
 
     static void DriverDebug(string format, params object[] args)
     {
