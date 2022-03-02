@@ -1508,8 +1508,6 @@ public class XplatUIMine : XplatUIDriver
 
         if (client)
         {
-
-
             Region clip_region = new Region();
             clip_region.MakeEmpty();
 
@@ -1531,15 +1529,26 @@ public class XplatUIMine : XplatUIDriver
                 hwnd.pic = new SKPictureRecorder();
             var newcanvas = hwnd.pic.BeginRecording(SKRect.Empty);
             if (paint_hwnd.hwndbmp != null)
-                if (!hwnd.Invalid.Contains(hwnd.ClientRect))
+                if (!hwnd.Invalid.Contains(hwnd.ClientRect) )// && (hwnd.ClientRect.Width != hwnd.Invalid.Width && hwnd.ClientRect.Height != hwnd.Invalid.Height))
                 {
                     var raster = paint_hwnd.hwndbmp.Snapshot();
                     newcanvas.DrawPicture(raster, 0, 0);                    
                 }
 
             newcanvas.ClipRegion(clip_region);
+
             dc = Graphics.FromCanvas(newcanvas);
             dc.Clip = clip_region;
+            if (hwnd.WholeWindow != hwnd.ClientWindow)
+            {
+                var frm = Form.FromHandle(hwnd.Handle);
+                if (frm != null)
+                {
+                    var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
+                    newcanvas.Discard();
+                    newcanvas.ClipRect(new SKRect(0, 0, hwnd.width - borders.left - borders.right, hwnd.height - borders.bottom - borders.top), (SKClipOperation) 5);
+                }
+            }
             paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = hwnd.pic };
             hwnd.expose_pending = false;
 
@@ -1819,6 +1828,7 @@ public class XplatUIMine : XplatUIDriver
         }
 
         AddExpose(hwnd, hwnd.WholeWindow == hwnd.ClientWindow, 0, 0, hwnd.Width, hwnd.Height);
+        AddExpose(hwnd, hwnd.WholeWindow != hwnd.ClientWindow, 0, 0, hwnd.Width, hwnd.Height);
     }
 
 
