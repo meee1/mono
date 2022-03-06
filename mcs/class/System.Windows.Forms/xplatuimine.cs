@@ -1721,6 +1721,8 @@ public class XplatUIMine : XplatUIDriver
                     {
                         SendMessage(form.Handle, Msg.WM_SYSCOMMAND, (IntPtr)SystemCommands.SC_SIZE, IntPtr.Zero);
                         hwnd.resizing_or_moving = true;
+                        // ensure we dont window copy the previous draw, and is exposed bellow
+                        hwnd.hwndbmp = null;
                     }
                     if (hwnd.resizing_or_moving)
                         if (hwnd.resizing_or_moving)
