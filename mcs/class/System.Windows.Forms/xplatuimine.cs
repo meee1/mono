@@ -1830,7 +1830,6 @@ public class XplatUIMine : XplatUIDriver
         }
 
         AddExpose(hwnd, hwnd.WholeWindow == hwnd.ClientWindow, 0, 0, hwnd.Width, hwnd.Height);
-        AddExpose(hwnd, hwnd.WholeWindow != hwnd.ClientWindow, 0, 0, hwnd.Width, hwnd.Height);
     }
 
 
