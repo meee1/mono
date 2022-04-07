@@ -1593,11 +1593,17 @@ public class XplatUIMine : XplatUIDriver
             hwnd = Hwnd.ObjectFromHandle(handle);
         }
 
+        if (((SKPictureRecorder)pevent.Tag).RecordingCanvas == null)
+        {
+            Monitor.Exit(paintlock);
+            return;
+        }
+
         if (client)
         {
             var pic = ((SKPictureRecorder)pevent.Tag).EndRecordingAsDrawable();
-            var img = SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height));
-            var bmp = SKBitmap.FromImage(img);
+            //var img = SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height));
+            //var bmp = SKBitmap.FromImage(img);
             //pic.Dispose();
             //img.Dispose();
 
