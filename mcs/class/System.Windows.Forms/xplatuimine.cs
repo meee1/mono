@@ -1466,7 +1466,7 @@ public class XplatUIMine : XplatUIDriver
 
         hwnd = Hwnd.ObjectFromHandle(handle);
 
-        if (hwnd == null || !hwnd.visible || !hwnd.expose_pending) // || !hwnd.Mapped)
+        if (hwnd == null || !hwnd.visible || !hwnd.expose_pending || hwnd.inonpaint) // || !hwnd.Mapped)
         {
             return;
         }
@@ -1501,6 +1501,8 @@ public class XplatUIMine : XplatUIDriver
         }
 
         Monitor.Enter(paintlock);
+
+        hwnd.inonpaint = true;
 
         //Console.WriteLine("PaintEventStart " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name);
 
@@ -1619,6 +1621,8 @@ public class XplatUIMine : XplatUIDriver
         //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name + " " + hwnd.hwndbmp.ColorType);
 
         //pevent.Graphics.Dispose();
+
+        hwnd.inonpaint = false;
 
         PaintPending = true;
 
