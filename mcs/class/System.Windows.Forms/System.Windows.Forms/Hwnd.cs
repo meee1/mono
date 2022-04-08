@@ -134,6 +134,7 @@ namespace System.Windows.Forms
         private SKDrawable _hwndbmp;
         private SKImage _hwndbmpNc;
         internal SKPictureRecorder pic;
+        public bool inonpaint;
 
         #region Constructors and destructors
         public Hwnd() {
