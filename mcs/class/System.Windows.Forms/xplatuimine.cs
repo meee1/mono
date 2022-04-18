@@ -2,11 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using SkiaSharp;
@@ -66,9 +62,23 @@ public class XplatUIMine : XplatUIDriver
         get { return mouse_state; }
     }
 
-    public override Rectangle VirtualScreen => _virtualScreen;
+    public override Rectangle VirtualScreen
+    {
+        get
+        {
+            if (Screen.AllScreens == null || Screen.AllScreens.Length == 0) return new Rectangle(0, 0, 960, 960);
+            return Screen.PrimaryScreen.WorkingArea;
+        }
+    }
 
-    public override Rectangle WorkingArea => _workingArea;
+    public override Rectangle WorkingArea
+    {
+        get
+        {
+            if (Screen.AllScreens == null || Screen.AllScreens.Length == 0) return new Rectangle(0, 0, 960, 960);
+            return Screen.PrimaryScreen.WorkingArea;
+        }
+    }
 
 
     public override Screen[] AllScreens
@@ -1618,7 +1628,7 @@ public class XplatUIMine : XplatUIDriver
             hwnd.hwndbmpNC = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),                new SKSizeI(hwnd.width, hwnd.height));
         }
 
-        //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name + " " + hwnd.hwndbmp.ColorType);
+        //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name + " " + hwnd.hwndbmp);
 
         //pevent.Graphics.Dispose();
 
@@ -1662,8 +1672,8 @@ public class XplatUIMine : XplatUIDriver
         {
             x = -4;
             y = -4;
-            width = (Control.FromHandle(handle) as Form).Width + 4;
-            height = (Control.FromHandle(handle) as Form).Height + 4;
+            //width = (Control.FromHandle(handle) as Form).Width + 4;
+            //height = (Control.FromHandle(handle) as Form).Height + 4;
         }
 
         // Win32 automatically changes negative width/height to 0.
@@ -1726,7 +1736,8 @@ public class XplatUIMine : XplatUIDriver
                         SendMessage(form.Handle, Msg.WM_SYSCOMMAND, (IntPtr)SystemCommands.SC_SIZE, IntPtr.Zero);
                         hwnd.resizing_or_moving = true;
                         // ensure we dont window copy the previous draw, and is exposed bellow
-                        hwnd.hwndbmp = null;
+                        lock(paintlock)
+                            hwnd.hwndbmp = null;
                     }
                     if (hwnd.resizing_or_moving)
                         if (hwnd.resizing_or_moving)
@@ -2485,11 +2496,13 @@ public class XplatUIMine : XplatUIDriver
                         }
 
                         Monitor.Enter(paintlock);
-                        hwnd.nc_expose_pending = false;
-                        if (hwnd.hwndbmpNC != null)
-                            switch (hwnd.border_style)
-                            {
-                                case FormBorderStyle.Fixed3D:
+                        try
+                        {
+                            hwnd.nc_expose_pending = false;
+                            if (hwnd.hwndbmpNC != null)
+                                switch (hwnd.border_style)
+                                {
+                                    case FormBorderStyle.Fixed3D:
                                     {
                                         Graphics g;
 
@@ -2504,19 +2517,27 @@ public class XplatUIMine : XplatUIDriver
                                         break;
                                     }
 
-                                case FormBorderStyle.FixedSingle:
+                                    case FormBorderStyle.FixedSingle:
                                     {
                                         Graphics g;
 
                                         g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                                        ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height), Color.Black,
+                                        ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
+                                            Color.Black,
                                             ButtonBorderStyle.Solid);
                                         g.Dispose();
                                         break;
                                     }
-                            }
-
-                        Monitor.Exit(paintlock);
+                                }
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(e);
+                        }
+                        finally
+                        {
+                            Monitor.Exit(paintlock);
+                        }
 
                         DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
                             hwnd.client_window.ToInt32(), xevent.ExposeEvent.x, xevent.ExposeEvent.y,
@@ -3021,8 +3042,6 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
     private bool in_doevents;
     private Screen[] _allScreens;
     private bool _themesEnabled;
-    public Rectangle _virtualScreen = new Rectangle(0,0,960,960);
-    public Rectangle _workingArea = new Rectangle(0, 0, 960, 960);
 
     public override void SetFocus(IntPtr handle)
     {
@@ -3585,6 +3604,12 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     var h2 = Hwnd.ObjectFromHandle(Application.OpenForms[0].Handle);
                     var pos = new tagWINDOWPOS();
                     pos = (tagWINDOWPOS)Marshal.PtrToStructure(lParam, typeof(tagWINDOWPOS));
+                    //SWP_NOSIZE 0x0001
+                    //SWP_NOMOVE 0x0002
+                    //SWP_NOZORDER 0x0004
+                    //SWP_NOREDRAW 0x0008
+                    //
+
                     if ((pos.flags & 0x1) == 0)
                     {
                         h = h2;
