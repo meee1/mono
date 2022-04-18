@@ -3430,7 +3430,7 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
     delegate IntPtr WndProcDelegate(IntPtr hwnd, Msg message, IntPtr wParam, IntPtr lParam);
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    struct tagWINDOWPOS
+    public struct tagWINDOWPOS
     {
        public IntPtr hwndInsertAfter;
        public IntPtr hwnd;
@@ -3615,9 +3615,11 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     //SWP_NOZORDER 0x0004
                     //SWP_NOREDRAW 0x0008
                     //
+                    Console.WriteLine("SendMessage => WM_WINDOWPOSCHANGED  maybe - flags: " + pos.flags);
 
                     if ((pos.flags & 0x1) == 0)
                     {
+                        Console.WriteLine("SendMessage => WM_WINDOWPOSCHANGED");
                         h = h2;
                         h.x = 0;
                         h.y = 0;
