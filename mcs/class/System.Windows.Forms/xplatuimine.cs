@@ -1558,7 +1558,7 @@ public class XplatUIMine : XplatUIDriver
                 {
                     var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
                     newcanvas.Discard();
-                    newcanvas.ClipRect(new SKRect(0, 0, hwnd.width - borders.left - borders.right, hwnd.height - borders.bottom - borders.top), (SKClipOperation) 5);
+                    newcanvas.ClipRect(new SKRect(0, 0, hwnd.width - borders.left - borders.right, hwnd.height - borders.bottom - borders.top), SKClipOperation.Intersect);
                 }
             }
             paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = hwnd.pic };
