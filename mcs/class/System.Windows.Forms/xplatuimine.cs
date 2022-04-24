@@ -1543,14 +1543,14 @@ public class XplatUIMine : XplatUIDriver
             if (paint_hwnd.hwndbmp != null)
                 if (!hwnd.Invalid.Contains(hwnd.ClientRect) )// && (hwnd.ClientRect.Width != hwnd.Invalid.Width && hwnd.ClientRect.Height != hwnd.Invalid.Height))
                 {
-                    var raster = paint_hwnd.hwndbmp.Snapshot();
-                    newcanvas.DrawPicture(raster, 0, 0);                    
+                    var raster = paint_hwnd.hwndbmp;
+                    newcanvas.DrawBitmap(raster, 0, 0);                    
                 }
 
             newcanvas.ClipRegion(clip_region);
 
             dc = Graphics.FromCanvas(newcanvas);
-            dc.Clip = clip_region;
+            //dc.Clip = clip_region;
             if (hwnd.WholeWindow != hwnd.ClientWindow)
             {
                 var frm = Form.FromHandle(hwnd.Handle);
@@ -1558,7 +1558,7 @@ public class XplatUIMine : XplatUIDriver
                 {
                     var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
                     newcanvas.Discard();
-                    newcanvas.ClipRect(new SKRect(0, 0, hwnd.width - borders.left - borders.right, hwnd.height - borders.bottom - borders.top), SKClipOperation.Intersect);
+                    //newcanvas.ClipRect(new SKRect(0, 0, hwnd.width - borders.left - borders.right, hwnd.height - borders.bottom - borders.top), SKClipOperation.Intersect);
                 }
             }
             paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = hwnd.pic };
@@ -1577,7 +1577,7 @@ public class XplatUIMine : XplatUIDriver
 
             if (!hwnd.nc_invalid.IsEmpty)
             {
-                dc.SetClip(hwnd.nc_invalid);
+                //dc.SetClip(hwnd.nc_invalid);
                 paint_event = new PaintEventArgs(dc, hwnd.nc_invalid) { Tag = pic };
             }
             else
@@ -1614,12 +1614,12 @@ public class XplatUIMine : XplatUIDriver
         if (client)
         {
             var pic = ((SKPictureRecorder)pevent.Tag).EndRecordingAsDrawable();
-            //var img = SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height));
-            //var bmp = SKBitmap.FromImage(img);
+            var img = SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height));
+            var bmp = SKBitmap.FromImage(img);
             //pic.Dispose();
             //img.Dispose();
 
-            hwnd.hwndbmp = pic;
+            hwnd.hwndbmp = bmp;
             
             //hwnd.hwndbmp = pic;
 
@@ -2772,7 +2772,8 @@ public class XplatUIMine : XplatUIDriver
 
     public override void SetCursorPos(IntPtr hwnd, int x, int y)
     {
-        throw new NotImplementedException();
+        mouse_position.X = x;
+        mouse_position.Y = y;
     }
     (int X, int Y) GetParent2(Hwnd hw)
     {

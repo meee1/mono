@@ -102,7 +102,7 @@ namespace System.Windows.Forms
         private SKCanvas canvas;
         private SKSizeI lastSize;
 
-        public SKDrawable hwndbmp
+        public SKBitmap hwndbmp
         {
             get
             {
@@ -129,7 +129,7 @@ namespace System.Windows.Forms
         // locks for some operations (used in XplatUIX11.cs)
         internal object configure_lock = new object ();
 		public object expose_lock = new object ();
-        private SKDrawable _hwndbmp;
+        private SKBitmap _hwndbmp;
         private SKImage _hwndbmpNc;
         internal SKPictureRecorder pic;
         public bool inonpaint;

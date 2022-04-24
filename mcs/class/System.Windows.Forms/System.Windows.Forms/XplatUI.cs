@@ -57,7 +57,7 @@ namespace System.Windows.Forms {
 		[Conditional ("DriverDebug")]
 		static void DriverDebug (string format, params object [] args)
 		{
-			//Console.WriteLine (String.Format (format, args));
+			Console.WriteLine (String.Format (format, args));
             //System.Diagnostics.Debug.WriteLine(String.Format(format, args));
         }
 		
@@ -924,8 +924,9 @@ namespace System.Windows.Forms {
 		}
 
 		internal static void SendAsyncMethod (AsyncMethodData data)
-		{
-			DriverDebug ("SendAsyncMethod ({0}): Called", data);
+        {
+            DriverDebug("SendAsyncMethod ({0}): Called {1}", data,
+                data.Method.Method.DeclaringType.FullName + "." + data.Method.Method.Name);
 			driver.SendAsyncMethod (data);
 		}
 

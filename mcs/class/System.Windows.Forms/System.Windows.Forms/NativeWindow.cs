@@ -194,8 +194,9 @@ namespace System.Windows.Forms
 
 		#region Protected Instance Methods
 		~NativeWindow()
-		{
-		}
+        {
+            Console.WriteLine("~NativeWindow() " + XplatUI.Window(Handle));
+        }
 
 		protected virtual void OnHandleChange()
 		{
