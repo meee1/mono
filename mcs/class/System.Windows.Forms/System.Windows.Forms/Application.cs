@@ -825,7 +825,10 @@ namespace System.Windows.Forms
 			}
 
             thread.MessageLoop = true;
-            return;
+
+            RunLoopProcess();
+
+			return;
 			RunLoopProcess();
 #if DebugRunLoop
 				Console.WriteLine ("   RunLoop loop left");
@@ -844,8 +847,8 @@ namespace System.Windows.Forms
 			bool quit = false;
 
             queue_id = XplatUI.StartLoop(Thread.CurrentThread);
-
-            do
+            int a = 0;
+            while(a++ < 20)
             {
 
 
@@ -987,7 +990,7 @@ namespace System.Windows.Forms
                         }
                     }
                 }
-            } while (false);
+            }
         }
 
         private static void RunLoopExit(bool Modal, ApplicationContext context, MWFThread thread, Queue toplevels,
