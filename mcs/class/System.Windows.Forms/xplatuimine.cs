@@ -1547,7 +1547,7 @@ public class XplatUIMine : XplatUIDriver
                     newcanvas.DrawBitmap(raster, 0, 0);                    
                 }
 
-            newcanvas.ClipRegion(clip_region);
+            //newcanvas.ClipRegion(clip_region);
 
             dc = Graphics.FromCanvas(newcanvas);
             //dc.Clip = clip_region;
