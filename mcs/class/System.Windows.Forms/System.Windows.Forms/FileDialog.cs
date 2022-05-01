@@ -124,7 +124,9 @@ namespace System.Windows.Forms
 		private readonly char [] wildcard_chars = new char [] { '*', '?' };
 
 		private bool disable_form_closed_event;
-		
+
+        public static string CustomDirectory { get; set; } = null;
+
 		internal FileDialog ()
 		{
 			form = new DialogForm (this);
@@ -3618,8 +3620,20 @@ namespace System.Windows.Forms
 				FSEntry myNetworkFSEntry = GetMyNetworkFSEntry ();
 				
 				directories_out.Add (myNetworkFSEntry);
-				
-				ArrayList d_out = null;
+
+				// add custom folder
+                if (FileDialog.CustomDirectory != null && Directory.Exists(FileDialog.CustomDirectory))
+                    directories_out.Add(GetDirectoryFSEntry(
+                        new DirectoryInfo(FileDialog.CustomDirectory),
+                        GetDesktopFSEntry()));
+
+				// add folder above personal
+                directories_out.Add(GetDirectoryFSEntry(
+                    new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal),
+                        "..")),
+                    GetDesktopFSEntry()));
+
+                ArrayList d_out = null;
 				ArrayList f_out = null;
 				GetNormalFolderContent (ThemeEngine.Current.Places (UIIcon.PlacesDesktop), filters, out d_out, out f_out);
 				directories_out.AddRange (d_out);
@@ -3645,8 +3659,8 @@ namespace System.Windows.Forms
 				GetNormalFolderContent (currentFolderFSEntry.FullName, filters, out directories_out, out files_out);
 			}
 		}
-		
-		public ArrayList GetFoldersOnly ()
+
+        public ArrayList GetFoldersOnly ()
 		{
 			ArrayList directories_out = new ArrayList ();
 			
@@ -3662,7 +3676,13 @@ namespace System.Windows.Forms
 				FSEntry myNetworkFSEntry = GetMyNetworkFSEntry ();
 				
 				directories_out.Add (myNetworkFSEntry);
-				
+
+                // add custom folder
+                if (FileDialog.CustomDirectory != null && Directory.Exists(FileDialog.CustomDirectory))
+                    directories_out.Add(GetDirectoryFSEntry(
+                        new DirectoryInfo(FileDialog.CustomDirectory),
+                        GetDesktopFSEntry()));
+
 				ArrayList d_out = GetNormalFolders (ThemeEngine.Current.Places (UIIcon.PlacesDesktop));
 				directories_out.AddRange (d_out);
 				
@@ -4096,7 +4116,7 @@ namespace System.Windows.Forms
 					
 					fsEntry.FullName = mount.mount_point;
 					
-					fsEntry.Name = "HDD (" +  mount.fsType + ", " + mount.device_short + ")";
+					fsEntry.Name = "HDD (" + mount.mount_point + ")";
 					
 					fsEntry.FsType = mount.fsType;
 					fsEntry.DeviceShort = mount.device_short;
@@ -4106,8 +4126,9 @@ namespace System.Windows.Forms
 					fsEntry.Attributes = FileAttributes.Directory;
 					
 					fsEntry.MainTopNode = GetMyComputerFSEntry ();
-					
-					my_computer_content_arraylist.Add (fsEntry);
+
+                    if (Directory.Exists(fsEntry.FullName))
+                        my_computer_content_arraylist.Add(fsEntry);
 					
 					if (!MWFVFS.MyComputerDevicesPrefix.Contains (fsEntry.FullName + "://"))
 						MWFVFS.MyComputerDevicesPrefix.Add (fsEntry.FullName + "://", fsEntry);
