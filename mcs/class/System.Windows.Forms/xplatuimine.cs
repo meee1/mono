@@ -3460,7 +3460,7 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                 if (Grab.Hwnd != IntPtr.Zero)
                 {
                     hwnd = Grab.Hwnd;
-                    h = Hwnd.ObjectFromHandle(hwnd);
+                    h = Hwnd.ObjectFromHandle(hwnd); 
 
                     var x = lParam.ToInt32() & 0xffff;
                     var y = lParam.ToInt32() >> 16;
@@ -3508,8 +3508,53 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
                     if (ctl == null)
                     {
-                        XplatUI.driver.ScreenToClient(Application.OpenForms[Application.OpenForms.Count - 1].Handle, ref x, ref y);
-                        ctl = FindControlAtPoint(Application.OpenForms[Application.OpenForms.Count - 1], new Point(x, y));
+                        // handle mlutple subwindows
+                        var cnt = Application.OpenForms.Count;
+                        while (cnt > 0 && ctl == null)
+                        {
+                            x = lParam.ToInt32() & 0xffff;
+                            y = lParam.ToInt32() >> 16;
+
+                            // check if we are in this From via the hwnd/nc
+                            var hwnd2 = Hwnd.ObjectFromHandle(Application.OpenForms[cnt - 1].Handle);
+                            if (x < hwnd2.X || y < hwnd2.Y || x > hwnd2.x + hwnd2.width || y > hwnd2.y + hwnd2.height)
+                            {
+                                cnt--;
+                                continue;
+                            }
+
+                            XplatUI.driver.ScreenToClient(Application.OpenForms[cnt - 1].Handle,
+                                ref x, ref y);
+
+                            ctl = XplatUIMine.FindControlAtPoint(Application.OpenForms[cnt - 1],
+                                new Point(x, y));
+                            if (ctl == null)
+                            {
+                                // if we are in here we are over a form/nc but no control on that form
+
+                                ctl = Application.OpenForms[cnt - 1];
+
+                                if (message == Msg.WM_MOUSEMOVE)
+                                    message = Msg.WM_NCMOUSEMOVE;
+
+                                if (message == Msg.WM_LBUTTONDOWN)
+                                    message = Msg.WM_NCLBUTTONDOWN;
+
+                                if (message == Msg.WM_LBUTTONUP)
+                                    message = Msg.WM_NCLBUTTONUP;
+
+                                if (message == Msg.WM_RBUTTONDOWN)
+                                    message = Msg.WM_NCRBUTTONDOWN;
+
+                                if (message == Msg.WM_RBUTTONUP)
+                                    message = Msg.WM_NCRBUTTONUP;
+
+                                hwnd = ctl.Handle;
+                                if (hwnd != IntPtr.Zero)
+                                    PostMessage(hwnd, message, wParam, lParam);
+                                return IntPtr.Zero;
+                            }
+                        }
                     }
 
                     if (ctl != null)
