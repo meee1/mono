@@ -1678,8 +1678,8 @@ public class XplatUIMine : XplatUIDriver
         {
             x = -4;
             y = -4;
-            //width = (Control.FromHandle(handle) as Form).Width + 4;
-            //height = (Control.FromHandle(handle) as Form).Height + 4;
+            width = Screen.PrimaryScreen.WorkingArea.Width + 8;
+            height = Screen.PrimaryScreen.WorkingArea.Height + 8;
         }
 
         // Win32 automatically changes negative width/height to 0.
@@ -1774,12 +1774,12 @@ public class XplatUIMine : XplatUIDriver
             width = hwnd.width;
             height = hwnd.height;
 
-            if (width > WorkingArea.Width)
+            if (width > WorkingArea.Width+8)
             {
                 hwnd.width = WorkingArea.Width;
                 width = WorkingArea.Width;
             }
-            if (height > WorkingArea.Height)
+            if (height > WorkingArea.Height+8)
             {
                 hwnd.height = WorkingArea.Height;
                 height = WorkingArea.Height;
