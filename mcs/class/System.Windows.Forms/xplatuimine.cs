@@ -35,7 +35,7 @@ public class XplatUIMine : XplatUIDriver
 
     public override bool DragFullWindows => throw new NotImplementedException();
 
-    public override Size DragSize => Size.Empty;
+    public override Size DragSize => new Size(5, 5);
 
     public override Size FrameBorderSize => new Size(4, 4);
 
