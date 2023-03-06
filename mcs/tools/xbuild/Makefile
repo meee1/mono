@@ -73,10 +73,10 @@ install-frameworks:
 	$(INSTALL_DATA) frameworks/net_4.5.2.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.5.2/RedistList/FrameworkList.xml
 	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.6/RedistList
 	$(INSTALL_DATA) frameworks/net_4.6.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.6/RedistList/FrameworkList.xml
-	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.6.1/RedistList
-	$(INSTALL_DATA) frameworks/net_4.6.1.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.6.1/RedistList/FrameworkList.xml
-	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.6.2/RedistList
-	$(INSTALL_DATA) frameworks/net_4.6.2.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.6.2/RedistList/FrameworkList.xml
+	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7.2/RedistList
+	$(INSTALL_DATA) frameworks/net_4.6.1.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7.2/RedistList/FrameworkList.xml
+	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7.2/RedistList
+	$(INSTALL_DATA) frameworks/net_4.6.2.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7.2/RedistList/FrameworkList.xml
 	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7/RedistList
 	$(INSTALL_DATA) frameworks/net_4.7.xml $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7/RedistList/FrameworkList.xml
 	$(MKINSTALLDIRS) $(DESTDIR)$(NETFRAMEWORK_DIR)/v4.7.1/RedistList

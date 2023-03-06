@@ -15,7 +15,7 @@
     <NoStdLib>True</NoStdLib>
     <NoConfig>True</NoConfig>
     <AssemblyName>Mono.CompilerServices.SymbolWriter</AssemblyName>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>../mono.pub</AssemblyOriginatorKeyFile>
   </PropertyGroup>
@@ -89,14 +89,14 @@
     <ProjectReference Include="../corlib/corlib.csproj" />
   </ItemGroup>
   <ItemGroup Condition=" '$(Platform)' == 'monodroid_tools' ">
-    <Reference Include="./../../../external/binary-reference-assemblies/v4.6/System.dll">
+    <Reference Include="./../../../external/binary-reference-assemblies/v4.7.2/System.dll">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>./../../../external/binary-reference-assemblies/v4.6/System.dll</HintPath>
+      <HintPath>./../../../external/binary-reference-assemblies/v4.7.2/System.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="./../../../external/binary-reference-assemblies/v4.6/mscorlib.dll">
+    <Reference Include="./../../../external/binary-reference-assemblies/v4.7.2/mscorlib.dll">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>./../../../external/binary-reference-assemblies/v4.6/mscorlib.dll</HintPath>
+      <HintPath>./../../../external/binary-reference-assemblies/v4.7.2/mscorlib.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
