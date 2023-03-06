@@ -39,8 +39,8 @@ install-local:
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.5.1/*.dll $(PROFILE_DIR)/4.5.1-api
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.5.2/*.dll $(PROFILE_DIR)/4.5.2-api
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.6/*.dll $(PROFILE_DIR)/4.6-api
-	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.6.1/*.dll $(PROFILE_DIR)/4.6.1-api
-	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.6.2/*.dll $(PROFILE_DIR)/4.6.2-api
+	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.2/*.dll $(PROFILE_DIR)/4.6.1-api
+	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.2/*.dll $(PROFILE_DIR)/4.6.2-api
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7/*.dll $(PROFILE_DIR)/4.7-api
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.1/*.dll $(PROFILE_DIR)/4.7.1-api
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.2/*.dll $(PROFILE_DIR)/4.7.2-api
@@ -49,8 +49,8 @@ install-local:
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.5.1/Facades/*.dll $(PROFILE_DIR)/4.5.1-api/Facades
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.5.2/Facades/*.dll $(PROFILE_DIR)/4.5.2-api/Facades
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.6/Facades/*.dll $(PROFILE_DIR)/4.6-api/Facades
-	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.6.1/Facades/*.dll $(PROFILE_DIR)/4.6.1-api/Facades
-	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.6.2/Facades/*.dll $(PROFILE_DIR)/4.6.2-api/Facades
+	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.2/Facades/*.dll $(PROFILE_DIR)/4.6.1-api/Facades
+	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.2/Facades/*.dll $(PROFILE_DIR)/4.6.2-api/Facades
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7/Facades/*.dll $(PROFILE_DIR)/4.7-api/Facades
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.1/Facades/*.dll $(PROFILE_DIR)/4.7.1-api/Facades
 	$(INSTALL_LIB) ../../../external/binary-reference-assemblies/v4.7.2/Facades/*.dll $(PROFILE_DIR)/4.7.2-api/Facades
@@ -80,8 +80,8 @@ DISTFILES =	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.7.2/Facades/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.7.1/Facades/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.7/Facades/*.dll)	\
-	$(wildcard ../../../external/binary-reference-assemblies/v4.6.2/Facades/*.dll)	\
-	$(wildcard ../../../external/binary-reference-assemblies/v4.6.1/Facades/*.dll)	\
+	$(wildcard ../../../external/binary-reference-assemblies/v4.7.2/Facades/*.dll)	\
+	$(wildcard ../../../external/binary-reference-assemblies/v4.7.2/Facades/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.6/Facades/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.5.2/Facades/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.5.1/Facades/*.dll)	\
@@ -89,8 +89,8 @@ DISTFILES =	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.7.2/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.7.1/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.7/*.dll)	\
-	$(wildcard ../../../external/binary-reference-assemblies/v4.6.2/*.dll)	\
-	$(wildcard ../../../external/binary-reference-assemblies/v4.6.1/*.dll)	\
+	$(wildcard ../../../external/binary-reference-assemblies/v4.7.2/*.dll)	\
+	$(wildcard ../../../external/binary-reference-assemblies/v4.7.2/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.6/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.5.2/*.dll)	\
 	$(wildcard ../../../external/binary-reference-assemblies/v4.5.1/*.dll)	\
@@ -102,8 +102,8 @@ DISTFILES =	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.2/Facades/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.1/Facades/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7/Facades/*.cs)	\
-	$(wildcard ../../../external/binary-reference-assemblies/src/v4.6.2/Facades/*.cs)	\
-	$(wildcard ../../../external/binary-reference-assemblies/src/v4.6.1/Facades/*.cs)	\
+	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.2/Facades/*.cs)	\
+	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.2/Facades/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.6/Facades/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.5.2/Facades/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.5.1/Facades/*.cs)	\
@@ -111,8 +111,8 @@ DISTFILES =	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.2/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.1/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7/*.cs)	\
-	$(wildcard ../../../external/binary-reference-assemblies/src/v4.6.2/*.cs)	\
-	$(wildcard ../../../external/binary-reference-assemblies/src/v4.6.1/*.cs)	\
+	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.2/*.cs)	\
+	$(wildcard ../../../external/binary-reference-assemblies/src/v4.7.2/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.6/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.5.2/*.cs)	\
 	$(wildcard ../../../external/binary-reference-assemblies/src/v4.5.1/*.cs)	\
@@ -124,8 +124,8 @@ DISTFILES =	\
 	../../../external/binary-reference-assemblies/v4.7.2/Makefile	\
 	../../../external/binary-reference-assemblies/v4.7.1/Makefile	\
 	../../../external/binary-reference-assemblies/v4.7/Makefile	\
-	../../../external/binary-reference-assemblies/v4.6.2/Makefile	\
-	../../../external/binary-reference-assemblies/v4.6.1/Makefile	\
+	../../../external/binary-reference-assemblies/v4.7.2/Makefile	\
+	../../../external/binary-reference-assemblies/v4.7.2/Makefile	\
 	../../../external/binary-reference-assemblies/v4.6/Makefile	\
 	../../../external/binary-reference-assemblies/v4.5.2/Makefile	\
 	../../../external/binary-reference-assemblies/v4.5.1/Makefile	\

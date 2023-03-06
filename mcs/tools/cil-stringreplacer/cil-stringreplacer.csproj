@@ -12,7 +12,7 @@
     <NoStdLib>False</NoStdLib>
     <NoConfig>True</NoConfig>
     <AssemblyName>cil-stringreplacer</AssemblyName>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <OutputPath>./../../build</OutputPath>
     <IntermediateOutputPath>./../../class/obj/$(AssemblyName)-tmp</IntermediateOutputPath>
     <DefineConstants>NET_4_0;NET_4_5;MONO;WIN_PLATFORM</DefineConstants>
