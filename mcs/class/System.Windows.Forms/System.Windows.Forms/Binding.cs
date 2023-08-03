@@ -457,7 +457,7 @@ namespace System.Windows.Forms {
 		private void PositionChangedHandler (object sender, EventArgs e)
 		{
 			Check ();
-			PushData ();
+			//PushData ();
 		}
 
 		EventDescriptor GetPropertyChangedEvent (object o, string property_name)
