@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -2578,8 +2579,9 @@ public class XplatUIMine : XplatUIDriver
         }
 
         return true;
-    }    
+    }
 
+    [Conditional("DriverDebug")]
     static void DriverDebug(string format, params object[] args)
     {
         Console.WriteLine(String.Format(format, args));
@@ -3093,9 +3095,16 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
     public override IntPtr GetActive()
     {
-        if (Application.OpenForms.Count > 0)
-            return Application.OpenForms[Application.OpenForms.Count - 1].Handle;
-        //throw new NotImplementedException();
+        var cnt = Application.OpenForms.Count;
+        while (cnt > 0)
+        {
+            if (Application.OpenForms[cnt - 1].IsDisposed)
+            {
+                cnt--;
+                continue;
+            }
+            return Application.OpenForms[cnt - 1].Handle;
+        }
         return IntPtr.Zero;
         
     }
@@ -3391,8 +3400,15 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
     public override SizeF GetAutoScaleSize(Font font)
     {
-        // 5.3, 13
-        return new SizeF(5.3f, 13);
+        Graphics g;
+        float width;
+        string magic_string = "The quick brown fox jumped over the lazy dog.";
+        double magic_number = 44.549996948242189;
+
+        g = Graphics.FromHwnd(GetFosterParent());
+
+        width = (float)(g.MeasureString(magic_string, font).Width / magic_number);
+        return new SizeF(width, font.Height);
     }
 
     public static Control FindControlAtPoint(Control container, Point pos)
@@ -3510,6 +3526,11 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                             y = lParam.ToInt32() >> 16;
 
                             // check if we are in this From via the hwnd/nc
+                            if(Application.OpenForms[cnt - 1].IsDisposed)
+                            {
+                                cnt--;
+                                continue;
+                            }
                             var hwnd2 = Hwnd.ObjectFromHandle(Application.OpenForms[cnt - 1].Handle);
                             if (x < hwnd2.X || y < hwnd2.Y || x > hwnd2.x + hwnd2.width || y > hwnd2.y + hwnd2.height)
                             {
@@ -3654,11 +3675,11 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                     //SWP_NOZORDER 0x0004
                     //SWP_NOREDRAW 0x0008
                     //
-                    Console.WriteLine("SendMessage => WM_WINDOWPOSCHANGED  maybe - flags: " + pos.flags);
+                    DriverDebug("SendMessage => WM_WINDOWPOSCHANGED  maybe - flags: " + pos.flags);
 
                     if ((pos.flags & 0x1) == 0)
                     {
-                        Console.WriteLine("SendMessage => WM_WINDOWPOSCHANGED");
+                        DriverDebug("SendMessage => WM_WINDOWPOSCHANGED");
                         h = h2;
                         h.x = 0;
                         h.y = 0;
