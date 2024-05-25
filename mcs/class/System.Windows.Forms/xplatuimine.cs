@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -717,10 +718,24 @@ public class XplatUIMine : XplatUIDriver
                 if ((windows & WindowType.Whole) != 0)
                 {
                     //XMapWindow(DisplayHandle, hwnd.whole_window);
+                    //var ctrl = Control.FromHandle(hwnd.Handle);
+                    //ctrl.Invalidate(true);
+                    hwnd.DrawNeeded = true;
+
+                    foreach (Hwnd item in hwnd.children)
+                    {
+                        Hwnd.ObjectFromHandle(item.Handle).DrawNeeded = true;
+                    }
                 }
                 if ((windows & WindowType.Client) != 0)
                 {
                     //XMapWindow(DisplayHandle, hwnd.client_window);
+                    hwnd.DrawNeeded = true;
+
+                    foreach (Hwnd item in hwnd.children)
+                    {
+                        Hwnd.ObjectFromHandle(item.Handle).DrawNeeded = true;
+                    }
                 }
             }
 
@@ -1627,8 +1642,8 @@ public class XplatUIMine : XplatUIDriver
             //using (var st = File.OpenWrite(hwnd.Handle.ToString() + DateTime.Now.ToString("s") + ".skp"))
             //pic.Serialize(st);
 
-            //using (var st = File.OpenWrite(hwnd.Handle.ToString() + DateTime.Now.ToString("s").Replace(":","-") + ".jpg"))
-            //SKImage.FromPicture(pic, new SKSizeI(hwnd.width, hwnd.height)).Encode().SaveTo(st);
+            //using (var st = File.OpenWrite(hwnd.Handle.ToString() /*+ DateTime.Now.ToString("s").Replace(":","-")*/ + ".jpg"))
+                //SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height)).Encode().SaveTo(st);
         }
         else
         {
