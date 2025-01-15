@@ -133,6 +133,7 @@ namespace System.Windows.Forms
         private SKImage _hwndbmpNc;
         internal SKPictureRecorder pic;
         public bool inonpaint;
+        public string Text;
 
         #region Constructors and destructors
         public Hwnd() {
