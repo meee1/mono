@@ -1383,14 +1383,18 @@ public class XplatUIMine : XplatUIDriver
 
     public override bool GetText(IntPtr handle, out string text)
     {
-        throw new NotImplementedException();
+        var obj = Hwnd.ObjectFromHandle(handle);
+        text = obj.Text;
+        return true;
     }
 
     public override bool Text(IntPtr handle, string text)
     {
-        //throw new NotImplementedException();
+        var obj = Hwnd.ObjectFromHandle(handle);
+        obj.Text = text;
         return true;
     }
+
     /// <summary>
     /// Sets the specified window's show state.
     /// </summary>
