@@ -23,6 +23,7 @@
     <RootNamespace>
     </RootNamespace>
     <AssemblyName>System.Windows.Forms</AssemblyName>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
  <TargetFramework>netstandard2.0</TargetFramework>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
