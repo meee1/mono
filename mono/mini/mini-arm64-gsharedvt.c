@@ -21,7 +21,6 @@
 void
 mono_arm_gsharedvt_init (void)
 {
-	mono_aot_register_jit_icall ("mono_arm_start_gsharedvt_call", mono_arm_start_gsharedvt_call);
 }
 
 gboolean
@@ -34,7 +33,7 @@ mono_arch_gsharedvt_sig_supported (MonoMethodSignature *sig)
 	return TRUE;
 }
 
-static inline void
+static void
 add_to_map (GPtrArray *map, int src, int dst)
 {
 	g_ptr_array_add (map, GUINT_TO_POINTER (src));
@@ -48,19 +47,19 @@ add_to_map (GPtrArray *map, int src, int dst)
  * 17..  - stack slots
  */
 
-static inline int
+static int
 map_reg (int reg)
 {
 	return reg;
 }
 
-static inline int
+static int
 map_freg (int reg)
 {
 	return reg + NUM_GSHAREDVT_ARG_GREGS;
 }
 
-static inline int
+static int
 map_stack_slot (int slot)
 {
 	return slot + NUM_GSHAREDVT_ARG_GREGS + NUM_GSHAREDVT_ARG_FREGS;
@@ -230,7 +229,7 @@ mono_arch_get_gsharedvt_call_info (gpointer addr, MonoMethodSignature *normal_si
 		}
 		if (ainfo2->storage == ArgVtypeByRef && ainfo2->gsharedvt) {
 			/* Pass the address of the first src slot in a reg */
-			if (ainfo->storage != ArgVtypeByRef) {
+			if (ainfo->storage != ArgVtypeByRef && ainfo->storage != ArgVtypeByRefOnStack) {
 				if (ainfo->storage == ArgHFA && ainfo->esize == 4) {
 					arg_marshal = GSHAREDVT_ARG_BYVAL_TO_BYREF_HFAR4;
 					g_assert (src [0] < 64);
@@ -245,7 +244,7 @@ mono_arch_get_gsharedvt_call_info (gpointer addr, MonoMethodSignature *normal_si
 			dst [0] = map_reg (ainfo2->reg);
 		} else if (ainfo2->storage == ArgVtypeByRefOnStack && ainfo2->gsharedvt) {
 			/* Pass the address of the first src slot in a stack slot */
-			if (ainfo->storage != ArgVtypeByRef)
+			if (ainfo->storage != ArgVtypeByRef && ainfo->storage != ArgVtypeByRefOnStack)
 				arg_marshal = GSHAREDVT_ARG_BYVAL_TO_BYREF;
 			ndst = 1;
 			dst = g_new0 (int, 1);

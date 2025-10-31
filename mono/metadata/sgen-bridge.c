@@ -55,10 +55,18 @@ volatile gboolean mono_bridge_processing_in_progress = FALSE;
 void
 mono_gc_wait_for_bridge_processing (void)
 {
+	MONO_ENTER_GC_UNSAFE;
+	mono_gc_wait_for_bridge_processing_internal ();
+	MONO_EXIT_GC_UNSAFE;
+}
+
+void
+mono_gc_wait_for_bridge_processing_internal (void)
+{
 	if (!mono_bridge_processing_in_progress)
 		return;
 
-	mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_GC, "GC_BRIDGE waiting for bridge processing to finish");
+	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_GC, "GC_BRIDGE waiting for bridge processing to finish");
 
 	sgen_gc_lock ();
 	sgen_gc_unlock ();
@@ -319,7 +327,7 @@ dump_processor_state (SgenBridgeProcessor *p)
 		printf ("\tSCC %d:", i);
 		for (j = 0; j < scc->num_objs; ++j) {
 			MonoObject *obj = scc->objs [j];
-			printf (" %p", obj);
+			printf (" %p(%s)", obj, SGEN_LOAD_VTABLE (obj)->klass->name);
 		}
 		printf ("\n");
 	}
@@ -431,8 +439,8 @@ sgen_compare_bridge_processor_results (SgenBridgeProcessor *a, SgenBridgeProcess
 		b_xrefs [i].dst_scc_index = *scc_index_ptr;
 	}
 
-	qsort (a_xrefs, a->num_xrefs, sizeof (MonoGCBridgeXRef), compare_xrefs);
-	qsort (b_xrefs, a->num_xrefs, sizeof (MonoGCBridgeXRef), compare_xrefs);
+	mono_qsort (a_xrefs, a->num_xrefs, sizeof (MonoGCBridgeXRef), compare_xrefs);
+	mono_qsort (b_xrefs, a->num_xrefs, sizeof (MonoGCBridgeXRef), compare_xrefs);
 
 	for (i = 0; i < a->num_xrefs; ++i) {
 		g_assert (a_xrefs [i].src_scc_index == b_xrefs [i].src_scc_index);
@@ -476,7 +484,7 @@ sgen_bridge_processing_finish (int generation)
 	if (compare_bridge_processors ())
 		compare_to_bridge_processor.processing_after_callback (generation);
 
-	mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_GC, "GC_BRIDGE: Complete, was running for %.2fms", mono_time_since_last_stw () / 10000.0f);
+	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_GC, "GC_BRIDGE: Complete, was running for %.2fms", mono_time_since_last_stw () / 10000.0f);
 
 	mono_bridge_processing_in_progress = FALSE;
 }
@@ -516,7 +524,8 @@ static const char *bridge_class;
 static MonoGCBridgeObjectKind
 bridge_test_bridge_class_kind (MonoClass *klass)
 {
-	if (!strcmp (bridge_class, m_class_get_name (klass)))
+	if (!strcmp (bridge_class, m_class_get_name (klass)) ||
+			(m_class_get_parent (klass) && !strcmp (bridge_class, m_class_get_name (m_class_get_parent (klass)))))
 		return GC_BRIDGE_TRANSPARENT_BRIDGE_CLASS;
 	return GC_BRIDGE_TRANSPARENT_CLASS;
 }
@@ -708,6 +717,7 @@ sgen_bridge_handle_gc_debug (const char *opt)
 		if (selection != BRIDGE_PROCESSOR_INVALID) {
 			// Compare processor doesn't get config
 			init_bridge_processor (&compare_to_bridge_processor, selection);
+			bridge_processor_config.disable_non_bridge_scc = TRUE;
 		} else {
 			g_warning ("Invalid bridge implementation to compare against - ignoring.");
 		}
@@ -733,6 +743,11 @@ volatile gboolean mono_bridge_processing_in_progress = FALSE;
 
 void
 mono_gc_wait_for_bridge_processing (void)
+{
+}
+
+void
+mono_gc_wait_for_bridge_processing_internal (void)
 {
 }
 

@@ -11,10 +11,13 @@
 #if defined(HOST_WIN32)
 #include <winsock2.h>
 #include <windows.h>
-#include "mono/metadata/mono-security-windows-internals.h"
 #include <mono/metadata/handle.h>
+#include <mono/utils/mono-error.h>
+#include <mono/utils/mono-error-internals.h>
+#include <mono/metadata/object-internals.h>
+#include <mono/utils/w32subset.h>
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
+#if HAVE_API_SUPPORT_WIN32_SECURITY
 #include <aclapi.h>
 #include <accctrl.h>
 #endif
@@ -23,7 +26,7 @@
 #define PROTECTED_DACL_SECURITY_INFORMATION	0x80000000L
 #endif
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
+#if HAVE_API_SUPPORT_WIN32_SECURITY
 
 static gunichar2*
 GetSidName (gunichar2 *server, PSID sid, gint32 *size)
@@ -33,14 +36,14 @@ GetSidName (gunichar2 *server, PSID sid, gint32 *size)
 	DWORD cchDomain = 0;
 	SID_NAME_USE peUse; /* out */
 
-	LookupAccountSid (server, sid, NULL, &cchName, NULL,
+	LookupAccountSidW (server, sid, NULL, &cchName, NULL,
 		&cchDomain, &peUse);
 
 	if ((cchName > 0) && (cchDomain > 0)) {
 		gunichar2 *user = g_malloc0 ((cchName + 1) * 2);
 		gunichar2 *domain = g_malloc0 ((cchDomain + 1) * 2);
 
-		LookupAccountSid (server, sid, user, &cchName, domain,
+		LookupAccountSidW (server, sid, user, &cchName, domain,
 			&cchDomain, &peUse);
 
 		if (cchName > 0) {
@@ -110,7 +113,35 @@ mono_security_win_get_token_name (gpointer token, gunichar2 ** uniname, MonoErro
 
 	return size;
 }
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+#elif !HAVE_EXTERN_DEFINED_WIN32_SECURITY
+static void
+mono_security_win_not_supported (const char *functions, MonoError *error)
+{
+	g_unsupported_api (functions);
+	mono_error_set_not_supported (error, G_UNSUPPORTED_API, functions);
+	SetLastError (ERROR_NOT_SUPPORTED);
+}
+
+gpointer
+mono_security_principal_windows_identity_get_current_token (MonoError *error)
+{
+	mono_security_win_not_supported ("OpenThreadToken, OpenProcessToken", error);
+	return NULL;
+}
+
+gpointer
+ves_icall_System_Security_Principal_WindowsIdentity_GetCurrentToken (MonoError *error)
+{
+	return mono_security_principal_windows_identity_get_current_token (error);
+}
+
+gint32
+mono_security_win_get_token_name (gpointer token, gunichar2 **uniname, MonoError *error)
+{
+	mono_security_win_not_supported ("GetTokenInformation", error);
+	return 0;
+}
+#endif /* HAVE_API_SUPPORT_WIN32_SECURITY */
 
 MonoStringHandle
 ves_icall_System_Security_Principal_WindowsIdentity_GetTokenName (gpointer token, MonoError *error)
@@ -151,15 +182,15 @@ ves_icall_System_Security_Principal_WindowsIdentity_GetUserToken (MonoStringHand
 	return token;
 }
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
-MonoArray*
-ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token)
+#if HAVE_API_SUPPORT_WIN32_SECURITY
+MonoArrayHandle
+ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token, MonoError *error)
 {
-	ERROR_DECL (error);
-	MonoArray *array = NULL;
+	MonoArrayHandle array;
+	MonoStringHandle str_h;
 	MonoDomain *domain = mono_domain_get ();
-
 	gint32 size = 0;
+	gboolean created = FALSE;
 
 	GetTokenInformation (token, TokenGroups, NULL, size, (PDWORD)&size);
 	if (size > 0) {
@@ -168,25 +199,27 @@ ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token)
 			int i=0;
 			int num = tg->GroupCount;
 
-			array = mono_array_new_checked (domain, mono_get_string_class (), num, error);
-			if (mono_error_set_pending_exception (error)) {
+			array = mono_array_new_handle (domain, mono_get_string_class (), num, error);
+			if (!is_ok (error)) {
 				g_free (tg);
-				return NULL;
+				return NULL_HANDLE_ARRAY;
 			}
+			created = TRUE;
 
+			str_h = MONO_HANDLE_NEW (MonoString, NULL);
 			for (i=0; i < num; i++) {
 				gint32 size = 0;
 				gunichar2 *uniname = GetSidName (NULL, tg->Groups [i].Sid, &size);
 
 				if (uniname) {
 					MonoString *str = mono_string_new_utf16_checked (domain, uniname, size, error);
+					MONO_HANDLE_ASSIGN_RAW (str_h, str);
 					if (!is_ok (error)) {
 						g_free (uniname);
 						g_free (tg);
-						mono_error_set_pending_exception (error);
-						return NULL;
+						return NULL_HANDLE_ARRAY;
 					}
-					mono_array_setref_internal (array, i, str);
+					MONO_HANDLE_ARRAY_SETREF (array, i, str_h);
 					g_free (uniname);
 				}
 			}
@@ -194,14 +227,22 @@ ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token)
 		g_free (tg);
 	}
 
-	if (!array) {
+	if (!created) {
 		/* return empty array of string, i.e. string [0] */
-		array = mono_array_new_checked (domain, mono_get_string_class (), 0, error);
-		mono_error_set_pending_exception (error);
+		array = mono_array_new_handle (domain, mono_get_string_class (), 0, error);
+		return_val_if_nok (error, NULL_HANDLE_ARRAY);
 	}
 	return array;
 }
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+#elif !HAVE_EXTERN_DEFINED_WIN32_SECURITY
+MonoArray*
+ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token, MonoError *error)
+{
+	mono_security_win_not_supported ("GetTokenInformation", error);
+	mono_error_set_pending_exception (error);
+	return NULL;
+}
+#endif /* HAVE_API_SUPPORT_WIN32_SECURITY */
 
 MonoBoolean
 ves_icall_System_Security_Principal_WindowsImpersonationContext_CloseToken (gpointer token, MonoError *error)
@@ -209,14 +250,21 @@ ves_icall_System_Security_Principal_WindowsImpersonationContext_CloseToken (gpoi
 	return !!CloseHandle (token);
 }
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
+#if HAVE_API_SUPPORT_WIN32_SECURITY
 gpointer
 ves_icall_System_Security_Principal_WindowsImpersonationContext_DuplicateToken (gpointer token, MonoError *error)
 {
 	gpointer dupe = NULL;
 	return DuplicateToken (token, SecurityImpersonation, &dupe) ? dupe : NULL;
 }
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+#elif !HAVE_EXTERN_DEFINED_WIN32_SECURITY
+gpointer
+ves_icall_System_Security_Principal_WindowsImpersonationContext_DuplicateToken (gpointer token, MonoError *error)
+{
+	mono_security_win_not_supported ("DuplicateToken", error);
+	return NULL;
+}
+#endif /* HAVE_API_SUPPORT_WIN32_SECURITY */
 
 MonoBoolean
 ves_icall_System_Security_Principal_WindowsPrincipal_IsMemberOfGroupId (gpointer user, gpointer group, MonoError *error)
@@ -234,7 +282,7 @@ ves_icall_System_Security_Principal_WindowsPrincipal_IsMemberOfGroupName (gpoint
 	return FALSE;
 }
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
+#if HAVE_API_SUPPORT_WIN32_SECURITY
 
 static PSID
 GetSidHelper (const SID_IDENTIFIER_AUTHORITY *authority, BYTE subAuthorityCount, DWORD subAuthority0, DWORD subAuthority1)
@@ -289,10 +337,10 @@ static ACCESS_MASK
 GetRightsFromSid (PSID sid, PACL acl)
 {
 	ACCESS_MASK rights = 0;
-	TRUSTEE trustee;
+	TRUSTEEW trustee;
 
 	BuildTrusteeWithSidW (&trustee, sid);
-	if (GetEffectiveRightsFromAcl (acl, &trustee, &rights) != ERROR_SUCCESS)
+	if (GetEffectiveRightsFromAclW (acl, &trustee, &rights) != ERROR_SUCCESS)
 		return 0;
 
 	return rights;
@@ -366,7 +414,7 @@ mono_security_win_protect_machine (const gunichar2 *path, MonoError *error)
 
 	if (pEveryoneSid && pAdminsSid) {
 		PACL pDACL = NULL;
-		EXPLICIT_ACCESS ea [2];
+		EXPLICIT_ACCESSW ea [2];
 		ZeroMemory (&ea, sizeof (ea));
 
 		/* grant all access to the BUILTIN\Administrators group */
@@ -385,7 +433,7 @@ mono_security_win_protect_machine (const gunichar2 *path, MonoError *error)
 		ea [1].Trustee.TrusteeForm = TRUSTEE_IS_SID;
 		ea [1].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
 
-		retval = SetEntriesInAcl (2, ea, NULL, &pDACL);
+		retval = SetEntriesInAclW (2, ea, NULL, &pDACL);
 		if (retval == ERROR_SUCCESS) {
 			/* with PROTECTED_DACL_SECURITY_INFORMATION we */
 			/* remove any existing ACL (like inherited ones) */
@@ -411,7 +459,7 @@ mono_security_win_protect_user (const gunichar2 *path, MonoError *error)
 	PSID const pCurrentSid = GetCurrentUserSid (error);
 	if (pCurrentSid) {
 		PACL pDACL = NULL;
-		EXPLICIT_ACCESS ea;
+		EXPLICIT_ACCESSW ea;
 		ZeroMemory (&ea, sizeof (EXPLICIT_ACCESS));
 
 		/* grant exclusive access to the current user */
@@ -422,7 +470,7 @@ mono_security_win_protect_user (const gunichar2 *path, MonoError *error)
 		ea.Trustee.TrusteeForm = TRUSTEE_IS_SID;
 		ea.Trustee.TrusteeType = TRUSTEE_IS_USER;
 
-		retval = SetEntriesInAcl (1, &ea, NULL, &pDACL);
+		retval = SetEntriesInAclW (1, &ea, NULL, &pDACL);
 		if (retval == ERROR_SUCCESS) {
 			/* with PROTECTED_DACL_SECURITY_INFORMATION we
 			   remove any existing ACL (like inherited ones) */
@@ -437,11 +485,38 @@ mono_security_win_protect_user (const gunichar2 *path, MonoError *error)
 
 	return retval == ERROR_SUCCESS;
 }
+#elif !HAVE_EXTERN_DEFINED_WIN32_SECURITY
+gboolean
+mono_security_win_is_machine_protected (const gunichar2 *path, MonoError *error)
+{
+	mono_security_win_not_supported ("GetNamedSecurityInfo, LocalFree", error);
+	return FALSE;
+}
 
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+gboolean
+mono_security_win_is_user_protected (const gunichar2 *path, MonoError *error)
+{
+	mono_security_win_not_supported ("GetNamedSecurityInfo, LocalFree", error);
+	return FALSE;
+}
+
+gboolean
+mono_security_win_protect_machine (const gunichar2 *path, MonoError *error)
+{
+	mono_security_win_not_supported ("BuildTrusteeWithSid, SetEntriesInAcl, SetNamedSecurityInfo, LocalFree, FreeSid", error);
+	return FALSE;
+}
+
+gboolean
+mono_security_win_protect_user (const gunichar2 *path, MonoError *error)
+{
+	mono_security_win_not_supported ("BuildTrusteeWithSid, SetEntriesInAcl, SetNamedSecurityInfo, LocalFree", error);
+	return FALSE;
+}
+#endif /* HAVE_API_SUPPORT_WIN32_SECURITY */
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_CanSecure (const gunichar2 *root, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_CanSecure (const gunichar2 *root)
 {
 	DWORD flags = 0;
 
@@ -452,31 +527,44 @@ ves_icall_Mono_Security_Cryptography_KeyPairPersistence_CanSecure (const gunicha
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsMachineProtected (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsMachineProtected (const gunichar2 *path)
 {
 	/* no one, but the owner, should have write access to the directory */
-	return (MonoBoolean)mono_security_win_is_machine_protected (path, error);
+	ERROR_DECL (error);
+	MonoBoolean result = (MonoBoolean)mono_security_win_is_machine_protected (path, error);
+	mono_error_set_pending_exception (error);
+	return result;
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsUserProtected (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsUserProtected (const gunichar2 *path)
 {
 	/* no one, but the user, should have access to the directory */
-	return (MonoBoolean)mono_security_win_is_user_protected (path, error);
+	ERROR_DECL (error);
+	MonoBoolean result = (MonoBoolean)mono_security_win_is_user_protected (path, error);
+	mono_error_set_pending_exception (error);
+	return result;
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectMachine (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectMachine (const gunichar2 *path)
 {
 	/* read/write to owner, read to everyone else */
-	return (MonoBoolean)mono_security_win_protect_machine (path, error);
+	ERROR_DECL (error);
+	MonoBoolean result = (MonoBoolean)mono_security_win_protect_machine (path, error);
+	mono_error_set_pending_exception (error);
+	return result;
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectUser (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectUser (const gunichar2 *path)
 {
 	/* read/write to user, no access to everyone else */
-	return (MonoBoolean)mono_security_win_protect_user (path, error);
+	ERROR_DECL (error);
+	MonoBoolean result = (MonoBoolean)mono_security_win_protect_user (path, error);
+	mono_error_set_pending_exception (error);
+	return result;
+
 }
 
 #endif /* HOST_WIN32 */

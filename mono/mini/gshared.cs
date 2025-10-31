@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
-struct Foo {
+public struct Foo {
 	public int i, j, k, l, m, n;
 }
 
@@ -1031,6 +1031,28 @@ public class Tests
 		Two
 	};
 
+	class GetHashBase1 {
+		public override int GetHashCode () {
+			return 1;
+		}
+	}
+
+	class GetHashClass1 : GetHashBase1 {
+		public override int GetHashCode () {
+			return 2;
+		}
+	}
+
+	interface GetHashIFace {
+		int get_hash<T, T2> (T t, T2 t2);
+	}
+
+	class GetHashImpl : GetHashIFace {
+		public int get_hash<T, T2> (T t, T2 t2) {
+			return t.GetHashCode ();
+		}
+	}
+
 	public static int test_0_constrained_tostring () {
 		if (to_string<int, int> (1, 1) != "1")
 			return 1;
@@ -1055,6 +1077,9 @@ public class Tests
 			return 3;
 		if (get_hash<string, int> ("A", 1) != "A".GetHashCode ())
 			return 4;
+		GetHashIFace iface = new GetHashImpl ();
+		if (iface.get_hash<GetHashBase1, int> (new GetHashClass1 (), 1) != 2)
+			return 5;
 		return 0;
 	}
 
@@ -1107,7 +1132,7 @@ public class Tests
 	interface IConstrainedCalls {
 		Pair<int, int> vtype_ret<T, T2>(T t, T2 t2) where T: IReturnVType;
 		AnEnum enum_ret<T, T2>(T t, T2 t2) where T: IReturnVType;
-		int normal_args<T, T2> (T t, T2 t2, int i1, int i2, string s, ref int i3) where T : IConstrained2;
+		int normal_args<T, T2> (T t, T2 t2, int i1, int i2, string s, ref int i3, Foo foo) where T : IConstrained2;
 	}
 
 	public interface IReturnVType {
@@ -1116,7 +1141,7 @@ public class Tests
 	}
 
 	public interface IConstrained2 {
-		int normal_args (int i1, int i2, string s, ref int i3);
+		int normal_args (int i1, int i2, string s, ref int i3, Foo foo);
 	}
 
 	public class CConstrainedCalls : IConstrainedCalls {
@@ -1130,8 +1155,8 @@ public class Tests
 			return t.return_enum ();
 		}
 
-		public int normal_args<T, T2> (T t, T2 t2, int i1, int i2, string s, ref int i3) where T : IConstrained2 {
-			return t.normal_args (i1, i2, s, ref i3);
+		public int normal_args<T, T2> (T t, T2 t2, int i1, int i2, string s, ref int i3, Foo foo) where T : IConstrained2 {
+			return t.normal_args (i1, i2, s, ref i3, foo);
 		}
 	}
 
@@ -1145,9 +1170,9 @@ public class Tests
 	}
 
 	class ConstrainedCalls : IConstrained2 {
-		public int normal_args (int i1, int i2, string s, ref int i3) {
+		public int normal_args (int i1, int i2, string s, ref int i3, Foo foo) {
 			i3 = i3 + 1;
-			return i1 + i2 + i3 + s.Length;
+			return i1 + i2 + i3 + s.Length + foo.i + foo.n;
 		}
 	}
 
@@ -1167,11 +1192,12 @@ public class Tests
 		return 0;
 	}
 
-	public static int test_14_constrained_normal_args () {
+	public static int test_25_constrained_normal_args () {
 		IConstrainedCalls c = new CConstrainedCalls ();
 
+		Foo foo = new Foo () { i = 5, n = 6 };
 		int val = 3;
-		var r = c.normal_args<ConstrainedCalls, int> (new ConstrainedCalls (), 0, 1, 2, "ABC", ref val);
+		var r = c.normal_args<ConstrainedCalls, int> (new ConstrainedCalls (), 0, 1, 2, "ABC", ref val, foo);
 		return r + val;
 	}
 
@@ -1348,8 +1374,6 @@ public class Tests
 		}
 	}
 
-	// FIXME: The runtime-invoke wrapper used by BeginInvoke is not found
-	[Category ("!FULLAOT")]
 	// FIXME: Wasm is single threaded and can't handle blocking waits
 	[Category ("!WASM")]
 	public static int test_0_begin_end_invoke () {
@@ -1894,6 +1918,84 @@ public class Tests
 		return obj.foo<IFaceTest, int> (ref t);
 	}
 
+
+	class MyBaseTest<TOutput> {
+		public void Verify<TInput> (Func<TInput, TOutput> convert, TInput[] testValues, TOutput[] expectedValues) {
+			MyAssert.Equal (expectedValues.Length, testValues.Length);
+
+			for (int i = 0; i < testValues.Length; i++) {
+				TOutput result = convert (testValues[i]);
+				MyAssert.Equal (expectedValues[i], result);
+			}
+		}
+	}
+
+	class MyAssert {
+		public static void Equal<T>(T expected, T actual) {
+			if (!GetEqualityComparer<T> ().Equals (expected, actual))
+				throw new MyEqualException (expected, actual);
+		}
+
+		static IEqualityComparer<T> GetEqualityComparer<T>() {
+			return new AssertEqualityComparer<T>();
+		}
+	}
+
+	class AssertEqualityComparer<T> : IEqualityComparer<T> {
+		public AssertEqualityComparer() { }
+
+		public bool Equals(T x, T y) {
+			var equatable = x as IEquatable<T>;
+			if (equatable != null)
+				return equatable.Equals (y);
+			throw new NotImplementedException( );
+		}
+
+		public int GetHashCode(T obj) {
+			throw new NotImplementedException();
+		}
+	}
+
+	class MyEqualException : Exception {
+		public MyEqualException (object expected, object actual) {
+			Console.WriteLine ("MyEqualException: expected = " + expected + " vs. actual = " + actual);
+		}
+	}
+
+	class SByteTestClass : MyBaseTest<sbyte> {
+		public static int execute () {
+			Int32[] testValues = { 100, -100, 0 };
+			SByte[] expectedValues = { 100, -100, 0 };
+			try {
+				new SByteTestClass ().Verify (Convert.ToSByte, testValues, expectedValues);
+				return 0;
+			} catch (MyEqualException) {
+				return 1;
+			}
+			return 2;
+		}
+	}
+	static int test_0_out_sbyte () {
+		return SByteTestClass.execute ();
+	}
+
+	class Int16TestClass : MyBaseTest<Int16> {
+		public static int execute () {
+			Int32[] testValues = { 100, -100, 0 };
+			Int16[] expectedValues = { 100, -100, 0 };
+			try {
+				new Int16TestClass ().Verify (Convert.ToInt16, testValues, expectedValues);
+				return 0;
+			} catch (MyEqualException) {
+				return 1;
+			}
+			return 2;
+		}
+	}
+	static int test_0_out_int16 () {
+		return Int16TestClass.execute ();
+	}
+
 	// Sign extension tests
 	// 0x55   == 85    == 01010101
 	// 0xAA   == 170   == 10101010
@@ -2115,6 +2217,59 @@ public class Tests
 		var s = new AStruct () { a = 1, b = 2 };
 		return iface.foo<AStruct> (s);
 	}
+
+	interface IFaceOpenDel {
+		object AMethod<T> ();
+	}
+
+	class ClassOpenDel : IFaceOpenDel {
+		public Nullable<int> field;
+
+		public Nullable<int> getField () {
+			return field;
+		}
+
+		public object AMethod<T> () {
+			var d = (Func<ClassOpenDel, T>)Delegate.CreateDelegate (typeof (Func<ClassOpenDel, T>), typeof (ClassOpenDel).GetMethod ("getField"));
+			return d (this);
+		}
+	}
+
+	// Open instance delegate returning a gsharedvt value
+	public static int test_0_open_delegate () {
+		IFaceOpenDel iface = new ClassOpenDel () { field = 42 };
+		var res = (Nullable<int>)iface.AMethod<Nullable<int>> ();
+		return res == 42 ? 0 : 1;
+	}
+
+#if !__MonoCS__
+	public static int test_0_gsharedvt_out_dim () {
+		var c = new Outer<object>();
+		c.prop = new H ();
+		return (c.Foo () == "abcd") ? 0 : 1;
+	}
+#endif
+
+	class KvpList<T> {
+		public T[] array = new T[4];
+		int size = 0;
+
+		[MethodImpl(MethodImplOptions.NoInlining)]
+		public void MyAdd(T item) {
+			if (size < (uint)array.Length) {
+				array [size] = item;
+				size++;
+			}
+		}
+	}
+
+	public static int test_0_regress_18455 () {
+		var p = new KvpList<KeyValuePair<int, KeyValuePair<int,int>>> ();
+		KeyValuePair<int, KeyValuePair<int,int>> kvp = new KeyValuePair<int, KeyValuePair<int,int>> (3, new KeyValuePair<int,int> (1, 2));
+
+		p.MyAdd (kvp);
+		return p.array [1].Key == 0 ? 0 : 1;
+	}
 }
 
 // #13191
@@ -2160,6 +2315,29 @@ internal struct SparseArrayBuilder<T>
 
 	public ArrayBuilder<Marker> Markers => _markers;
 }
+
+// #18276
+#if !__MonoCS__
+public class Outer<Q> {
+	public interface ID {
+		string Foo () {
+			return null;
+		}
+	}
+
+	public ID prop;
+
+	public string Foo () {
+		return prop?.Foo();
+	}
+}
+
+public class H : Outer<object>.ID {
+	string Outer<object>.ID.Foo () {
+		return "abcd";
+	}
+}
+#endif
 
 #if !__MOBILE__
 public class GSharedTests : Tests {

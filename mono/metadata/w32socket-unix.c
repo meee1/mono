@@ -42,9 +42,7 @@
 #ifdef HAVE_SYS_SOCKIO_H
 #include <sys/sockio.h>    /* defines SIOCATMARK */
 #endif
-#ifndef HAVE_MSG_NOSIGNAL
 #include <signal.h>
-#endif
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
 #endif
@@ -193,7 +191,7 @@ mono_w32socket_accept (SOCKET sock, struct sockaddr *addr, socklen_t *addrlen, g
 }
 
 int
-mono_w32socket_connect (SOCKET sock, const struct sockaddr *addr, int addrlen, gboolean blocking)
+mono_w32socket_connect (SOCKET sock, const struct sockaddr *addr, socklen_t addrlen, gboolean blocking)
 {
 	SocketHandle *sockethandle;
 	gint ret;
@@ -577,7 +575,7 @@ mono_w32socket_sendbuffers (SOCKET sock, WSABUF *buffers, guint32 count, guint32
 #define SF_BUFFER_SIZE	16384
 
 BOOL
-mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, TRANSMIT_FILE_BUFFERS *buffers, guint32 flags, gboolean blocking)
+mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, gpointer lpTransmitBuffers, guint32 flags, gboolean blocking)
 {
 	MonoThreadInfo *info;
 	SocketHandle *sockethandle;
@@ -588,6 +586,7 @@ mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, TRANSMIT_FILE_B
 #else
 	gpointer buffer;
 #endif
+	TRANSMIT_FILE_BUFFERS *buffers = (TRANSMIT_FILE_BUFFERS *)lpTransmitBuffers;
 
 	if (!mono_fdhandle_lookup_and_ref(sock, (MonoFDHandle**) &sockethandle)) {
 		mono_w32error_set_last (WSAENOTSOCK);
@@ -1463,6 +1462,7 @@ mono_w32socket_convert_error (gint error)
 #ifdef ECONNRESET
 	case ECONNRESET: return WSAECONNRESET;
 #endif
+	case EDOM: return WSAEINVAL; /* not a precise match, best wecan do. */
 	case EFAULT: return WSAEFAULT;
 #ifdef EHOSTUNREACH
 	case EHOSTUNREACH: return WSAEHOSTUNREACH;
@@ -1472,23 +1472,23 @@ mono_w32socket_convert_error (gint error)
 #endif
 	case EINTR: return WSAEINTR;
 	case EINVAL: return WSAEINVAL;
-	/*FIXME: case EIO: return WSAE????; */
+	case EIO: return WSA_INVALID_HANDLE; /* not a precise match, best we can do. */
 #ifdef EISCONN
 	case EISCONN: return WSAEISCONN;
 #endif
-	/* FIXME: case ELOOP: return WSA????; */
+	case ELOOP: return WSAELOOP;
+	case ENFILE: return WSAEMFILE; /* not a precise match, best we can do. */
 	case EMFILE: return WSAEMFILE;
 #ifdef EMSGSIZE
 	case EMSGSIZE: return WSAEMSGSIZE;
 #endif
-	/* FIXME: case ENAMETOOLONG: return WSAEACCES; */
+	case ENAMETOOLONG: return WSAENAMETOOLONG;
 #ifdef ENETUNREACH
 	case ENETUNREACH: return WSAENETUNREACH;
 #endif
 #ifdef ENOBUFS
 	case ENOBUFS: return WSAENOBUFS; /* not documented */
 #endif
-	/* case ENOENT: return WSAE????; */
 	case ENOMEM: return WSAENOBUFS;
 #ifdef ENOPROTOOPT
 	case ENOPROTOOPT: return WSAENOPROTOOPT;
@@ -1499,7 +1499,7 @@ mono_w32socket_convert_error (gint error)
 #ifdef ENOTCONN
 	case ENOTCONN: return WSAENOTCONN;
 #endif
-	/*FIXME: case ENOTDIR: return WSAE????; */
+	case ENOTDIR: return WSA_INVALID_PARAMETER; /* not a precise match, best we can do. */
 #ifdef ENOTSOCK
 	case ENOTSOCK: return WSAENOTSOCK;
 #endif
@@ -1546,15 +1546,20 @@ mono_w32socket_convert_error (gint error)
 #ifdef ENXIO
 	case ENXIO: return WSAENXIO;
 #endif
+#ifdef ENONET
+	case ENONET: return WSAENETUNREACH;
+#endif
+#ifdef ENOKEY
+	case ENOKEY: return WSAENETUNREACH;
+#endif
 	default:
 		g_error ("%s: no translation into winsock error for (%d) \"%s\"", __func__, error, g_strerror (error));
 	}
 }
 
 MonoBoolean
-ves_icall_System_Net_Sockets_Socket_SupportPortReuse (MonoProtocolType proto, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_SupportPortReuse_icall (MonoProtocolType proto)
 {
-	error_init (error);
 #if defined (SO_REUSEPORT)
 	return TRUE;
 #else

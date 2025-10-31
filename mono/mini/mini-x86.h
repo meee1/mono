@@ -11,10 +11,7 @@
 
 #ifdef HOST_WIN32
 #include <windows.h>
-/* use SIG* defines if possible */
-#ifdef HAVE_SIGNAL_H
 #include <signal.h>
-#endif
 
 typedef void MONO_SIG_HANDLER_SIGNATURE ((*MonoW32ExceptionHandler));
 
@@ -189,6 +186,9 @@ typedef struct {
 /* Enables OP_LSHL, OP_LSHL_IMM, OP_LSHR, OP_LSHR_IMM, OP_LSHR_UN, OP_LSHR_UN_IMM */
 #define MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS
 
+#define MONO_ARCH_EMULATE_FCONV_TO_U8 1
+#define MONO_ARCH_EMULATE_FCONV_TO_U4 1
+
 #define MONO_ARCH_NEED_DIV_CHECK 1
 #define MONO_ARCH_HAVE_IS_INT_OVERFLOW 1
 #define MONO_ARCH_HAVE_INVALIDATE_METHOD 1
@@ -201,6 +201,10 @@ typedef struct {
 #define MONO_ARCH_GOT_REG X86_EBX
 #define MONO_ARCH_HAVE_GET_TRAMPOLINES 1
 #define MONO_ARCH_HAVE_GENERAL_RGCTX_LAZY_FETCH_TRAMPOLINE 1
+
+#define MONO_ARCH_INTERPRETER_SUPPORTED 1
+#define MONO_ARCH_HAVE_INTERP_NATIVE_TO_MANAGED 1
+#define MONO_ARCH_HAVE_INTERP_PINVOKE_TRAMP 1
 
 #define MONO_ARCH_HAVE_CMOV_OPS 1
 
@@ -239,14 +243,14 @@ typedef struct {
 /* Used for optimization, not complete */
 #define MONO_ARCH_IS_OP_MEMBASE(opcode) ((opcode) == OP_X86_PUSH_MEMBASE)
 
-#define MONO_ARCH_EMIT_BOUNDS_CHECK(cfg, array_reg, offset, index_reg) do { \
+#define MONO_ARCH_EMIT_BOUNDS_CHECK(cfg, array_reg, offset, index_reg, ex_name) do { \
             MonoInst *inst; \
             MONO_INST_NEW ((cfg), inst, OP_X86_COMPARE_MEMBASE_REG); \
             inst->inst_basereg = array_reg; \
             inst->inst_offset = offset; \
             inst->sreg2 = index_reg; \
             MONO_ADD_INS ((cfg)->cbb, inst); \
-			MONO_EMIT_NEW_COND_EXC (cfg, LE_UN, "IndexOutOfRangeException"); \
+			MONO_EMIT_NEW_COND_EXC (cfg, LE_UN, ex_name); \
 	} while (0)
 
 // Does the ABI have a volatile non-parameter register, so tailcall
@@ -330,6 +334,17 @@ struct CallInfo {
 	ArgInfo args [1];
 };
 
+typedef struct {
+	/* EAX:EDX */
+	host_mgreg_t eax;
+	host_mgreg_t edx;
+	/* Floating point return value read from the top of x86 fpstack */
+	double fret;
+	/* Stack usage, used for passing params on stack */
+	guint32 stack_size;
+	guint8 *stack;
+} CallContext;
+
 guint32
 mono_x86_get_this_arg_offset (MonoMethodSignature *sig);
 
@@ -341,7 +356,7 @@ void
 mono_x86_throw_corlib_exception (host_mgreg_t *regs, guint32 ex_token_index,
 								 host_mgreg_t eip, gint32 pc_offset);
 
-void 
+void
 mono_x86_patch (unsigned char* code, gpointer target);
 
 gpointer

@@ -15,6 +15,7 @@ using NUnit.Framework;
 namespace MonoTests.System.Net.Sockets
 {
 	[TestFixture]
+	[Category("NotWasm")]
 	public class MulticastOptionTest
 	{
 		[Test] // .ctor (IPAddress)
@@ -201,6 +202,9 @@ namespace MonoTests.System.Net.Sockets
 		}
 
 		[Test]
+#if FEATURE_NO_BSD_SOCKETS
+		[ExpectedException (typeof (PlatformNotSupportedException))]
+#endif
 		public void Group ()
 		{
 			IPAddress group;
@@ -234,6 +238,9 @@ namespace MonoTests.System.Net.Sockets
 		}
 
 		[Test]
+#if FEATURE_NO_BSD_SOCKETS
+		[ExpectedException (typeof (PlatformNotSupportedException))]
+#endif
 		public void InterfaceIndex ()
 		{
 			IPAddress group;
@@ -296,6 +303,9 @@ namespace MonoTests.System.Net.Sockets
 		}
 
 		[Test]
+#if FEATURE_NO_BSD_SOCKETS
+		[ExpectedException (typeof (PlatformNotSupportedException))]
+#endif
 		public void LocalAddress ()
 		{
 			IPAddress group;

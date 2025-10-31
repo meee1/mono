@@ -67,6 +67,12 @@ mono_gc_max_generation (void)
 	return 0;
 }
 
+guint64
+mono_gc_get_allocated_bytes_for_current_thread (void)
+{
+	return 0;
+}
+
 int
 mono_gc_get_generation  (MonoObject *object)
 {
@@ -77,6 +83,18 @@ int
 mono_gc_collection_count (int generation)
 {
 	return 0;
+}
+
+void
+mono_gc_stop_world ()
+{
+	g_assert ("mono_gc_stop_world is not supported in null GC");
+}
+
+void
+mono_gc_restart_world ()
+{
+	g_assert ("mono_gc_restart_world is not supported in null GC");
 }
 
 void
@@ -198,6 +216,12 @@ mono_gc_alloc_obj (MonoVTable *vtable, size_t size)
 }
 
 MonoArray*
+mono_gc_alloc_pinned_vector (MonoVTable *vtable, size_t size, uintptr_t max_length)
+{
+	return mono_gc_alloc_vector (vtable, size, max_length);
+}
+
+MonoArray*
 mono_gc_alloc_vector (MonoVTable *vtable, size_t size, uintptr_t max_length)
 {
 	MonoArray *obj = g_calloc (1, size);
@@ -259,13 +283,13 @@ mono_gc_wbarrier_set_arrayref_internal (MonoArray *arr, gpointer slot_ptr, MonoO
 }
 
 void
-mono_gc_wbarrier_arrayref_copy_internal (gpointer dest_ptr, gpointer src_ptr, int count)
+mono_gc_wbarrier_arrayref_copy_internal (gpointer dest_ptr, gconstpointer src_ptr, int count)
 {
 	mono_gc_memmove_aligned (dest_ptr, src_ptr, count * sizeof (gpointer));
 }
 
 void
-mono_gc_wbarrier_generic_store_internal (gpointer ptr, MonoObject* value)
+mono_gc_wbarrier_generic_store_internal (void volatile* ptr, MonoObject* value)
 {
 	*(void**)ptr = value;
 }
@@ -282,7 +306,7 @@ mono_gc_wbarrier_generic_nostore_internal (gpointer ptr)
 }
 
 void
-mono_gc_wbarrier_value_copy_internal (gpointer dest, gpointer src, int count, MonoClass *klass)
+mono_gc_wbarrier_value_copy_internal (gpointer dest, gconstpointer src, int count, MonoClass *klass)
 {
 	mono_gc_memmove_atomic (dest, src, count * mono_class_value_size (klass, NULL));
 }
@@ -306,6 +330,11 @@ mono_gc_thread_attach (MonoThreadInfo* info)
 {
 	info->handle_stack = mono_handle_stack_alloc ();
 	return info;
+}
+
+void
+mono_gc_thread_detach (MonoThreadInfo *p)
+{
 }
 
 void
@@ -598,6 +627,25 @@ gboolean
 mono_gc_ephemeron_array_add (MonoObject *obj)
 {
 	return TRUE;
+}
+
+guint64 mono_gc_get_total_allocated_bytes (MonoBoolean precise) 
+{
+	return 0;
+}
+
+void
+mono_gc_get_gcmemoryinfo (gint64* high_memory_load_threshold_bytes,
+						  gint64* memory_load_bytes,
+						  gint64* total_available_memory_bytes,
+						  gint64* heap_size_bytes,
+						  gint64* fragmented_bytes)
+{
+	*high_memory_load_threshold_bytes = 0;
+	*memory_load_bytes = 0;
+	*total_available_memory_bytes = 0;
+	*heap_size_bytes = 0;
+	*fragmented_bytes = 0;
 }
 
 #else

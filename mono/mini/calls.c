@@ -13,6 +13,7 @@
 #include "llvmonly-runtime.h"
 #include "mini-llvm.h"
 #include "jit-icalls.h"
+#include "aot-compiler.h"
 #include <mono/metadata/abi-details.h>
 #include <mono/metadata/class-abi-details.h>
 #include <mono/utils/mono-utils-debug.h>
@@ -20,6 +21,34 @@
 
 static const gboolean debug_tailcall_break_compile = FALSE; // break in method_to_ir
 static const gboolean debug_tailcall_break_run = FALSE;     // insert breakpoint in generated code
+
+MonoJumpInfoTarget
+mono_call_to_patch (MonoCallInst *call)
+{
+	MonoJumpInfoTarget patch;
+	MonoJitICallId jit_icall_id;
+
+	// This is similar to amd64 emit_call.
+
+	if (call->inst.flags & MONO_INST_HAS_METHOD) {
+		patch.type = MONO_PATCH_INFO_METHOD;
+		patch.target = call->method;
+	} else if ((jit_icall_id = call->jit_icall_id)) {
+		patch.type = MONO_PATCH_INFO_JIT_ICALL_ID;
+		patch.target = GUINT_TO_POINTER (jit_icall_id);
+	} else {
+		patch.type = MONO_PATCH_INFO_ABS;
+		patch.target = call->fptr;
+	}
+	return patch;
+}
+
+void
+mono_call_add_patch_info (MonoCompile *cfg, MonoCallInst *call, int ip)
+{
+	const MonoJumpInfoTarget patch = mono_call_to_patch (call);
+	mono_add_patch_info (cfg, ip, patch.type, patch.target);
+}
 
 void
 mini_test_tailcall (MonoCompile *cfg, gboolean tailcall)
@@ -29,7 +58,7 @@ mini_test_tailcall (MonoCompile *cfg, gboolean tailcall)
 	//
 	// Do not change "tailcalllog" here without changing other places, e.g. tests that search for it.
 	//
-	g_assertf (tailcall || !mini_get_debug_options ()->test_tailcall_require, "tailcalllog fail from %s", cfg->method->name);
+	g_assertf (tailcall || !mini_debug_options.test_tailcall_require, "tailcalllog fail from %s", cfg->method->name);
 	mono_tailcall_print ("tailcalllog %s from %s\n", tailcall ? "success" : "fail", cfg->method->name);
 }
 
@@ -397,9 +426,15 @@ can_enter_interp (MonoCompile *cfg, MonoMethod *method, gboolean virtual_)
 {
 	if (method->wrapper_type)
 		return FALSE;
-	/* Virtual calls from corlib can go outside corlib */
-	if ((m_class_get_image (method->klass) == m_class_get_image (cfg->method->klass)) && !virtual_)
-		return FALSE;
+
+	if (m_class_get_image (method->klass) == m_class_get_image (cfg->method->klass)) {
+		/* When using AOT profiling, the method might not be AOTed */
+		if (cfg->compile_aot && mono_aot_can_enter_interp (method))
+			return TRUE;
+		/* Virtual calls from corlib can go outside corlib */
+		if (!virtual_)
+			return FALSE;
+	}
 
 	/* See needs_extra_arg () in mini-llvm.c */
 	if (method->string_ctor)
@@ -426,9 +461,6 @@ mini_emit_method_call_full (MonoCompile *cfg, MonoMethod *method, MonoMethodSign
 
 	if (!sig)
 		sig = mono_method_signature_internal (method);
-
-	if (cfg->llvm_only && mono_class_is_interface (method->klass))
-		g_assert_not_reached ();
 
 	if (rgctx_arg) {
 		rgctx_reg = mono_alloc_preg (cfg);
@@ -565,6 +597,9 @@ mini_emit_method_call_full (MonoCompile *cfg, MonoMethod *method, MonoMethodSign
 		if (!virtual_ && cfg->llvm_only && cfg->interp && !tailcall && can_enter_interp (cfg, method, FALSE)) {
 			MonoInst *ftndesc = mini_emit_get_rgctx_method (cfg, -1, method, MONO_RGCTX_INFO_METHOD_FTNDESC);
 
+			/* Need wrappers for this signature to be able to enter interpreter */
+			cfg->interp_in_signatures = g_slist_prepend_mempool (cfg->mempool, cfg->interp_in_signatures, sig);
+
 			/* This call might need to enter the interpreter so make it indirect */
 			return mini_emit_llvmonly_calli (cfg, sig, args, ftndesc);
 		} else if (!virtual_) {
@@ -607,6 +642,7 @@ mono_emit_method_call (MonoCompile *cfg, MonoMethod *method, MonoInst **args, Mo
 	return mini_emit_method_call_full (cfg, method, mono_method_signature_internal (method), FALSE, args, this_ins, NULL, NULL);
 }
 
+static
 MonoInst*
 mono_emit_native_call (MonoCompile *cfg, gconstpointer func, MonoMethodSignature *sig,
 					   MonoInst **args)
@@ -624,13 +660,15 @@ mono_emit_native_call (MonoCompile *cfg, gconstpointer func, MonoMethodSignature
 }
 
 MonoInst*
-mono_emit_jit_icall (MonoCompile *cfg, gconstpointer func, MonoInst **args)
+mono_emit_jit_icall_id (MonoCompile *cfg, MonoJitICallId jit_icall_id, MonoInst **args)
 {
-	MonoJitICallInfo *info = mono_find_jit_icall_by_addr (func);
+	MonoJitICallInfo *info = mono_find_jit_icall_info (jit_icall_id);
 
-	g_assert (info);
+	MonoCallInst *call = (MonoCallInst *)mono_emit_native_call (cfg, mono_icall_get_wrapper (info), info->sig, args);
 
-	return mono_emit_native_call (cfg, mono_icall_get_wrapper (info), info->sig, args);
+	call->jit_icall_id = jit_icall_id;
+
+	return (MonoInst*)call;
 }
 
 /*
@@ -648,6 +686,8 @@ mini_emit_abs_call (MonoCompile *cfg, MonoJumpInfoType patch_type, gconstpointer
 	/* 
 	 * We pass ji as the call address, the PATCH_INFO_ABS resolving code will
 	 * handle it.
+	 * FIXME: Is the abs_patches hashtable avoidable?
+	 * Such as by putting the patch info in the call instruction?
 	 */
 	if (cfg->abs_patches == NULL)
 		cfg->abs_patches = g_hash_table_new (NULL, NULL);

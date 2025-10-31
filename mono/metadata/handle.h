@@ -134,7 +134,7 @@ gboolean mono_handle_stack_is_empty (HandleStack *stack);
 HandleStack* mono_handle_stack_alloc (void);
 void mono_handle_stack_free (HandleStack *handlestack);
 MonoRawHandle mono_stack_mark_pop_value (MonoThreadInfo *info, HandleStackMark *stackmark, MonoRawHandle value);
-void mono_stack_mark_record_size (MonoThreadInfo *info, HandleStackMark *stackmark, const char *func_name);
+MonoThreadInfo* mono_stack_mark_record_size (MonoThreadInfo *info, HandleStackMark *stackmark, const char *func_name);
 void mono_handle_stack_free_domain (HandleStack *stack, MonoDomain *domain);
 
 #ifdef MONO_HANDLE_TRACK_SP
@@ -187,17 +187,25 @@ Icall macros
 #define CLEAR_ICALL_COMMON	\
 	mono_error_set_pending_exception (error);
 
+// FIXME There should be fast and slow versions of this, i.e. with and without local variable.
 #define SETUP_ICALL_FRAME	\
 	HandleStackMark __mark;	\
-	mono_stack_mark_init (mono_thread_info_current_var, &__mark);
+	mono_stack_mark_init (mono_thread_info_current_var ? mono_thread_info_current_var : mono_thread_info_current (), &__mark);
 
+#ifdef ENABLE_CHECKED_BUILD
+/* __FUNCTION__ creates a C string for every icall */
+// FIXME This should be one function call since it is not fully inlined.
 #define CLEAR_ICALL_FRAME	\
-	mono_stack_mark_record_size (mono_thread_info_current_var, &__mark, __FUNCTION__);	\
-	mono_stack_mark_pop (mono_thread_info_current_var, &__mark);
-
+	mono_stack_mark_pop (mono_stack_mark_record_size (mono_thread_info_current_var, &__mark, __FUNCTION__), &__mark);
+// FIXME This should be one function call since it is not fully inlined.
 #define CLEAR_ICALL_FRAME_VALUE(RESULT, HANDLE)				\
-	mono_stack_mark_record_size (mono_thread_info_current_var, &__mark, __FUNCTION__);	\
-	(RESULT) = g_cast (mono_stack_mark_pop_value (mono_thread_info_current_var, &__mark, (HANDLE)));
+	(RESULT) = g_cast (mono_stack_mark_pop_value (mono_stack_mark_record_size (mono_thread_info_current_var, &__mark, __FUNCTION__), &__mark, (HANDLE)));
+#else
+#define CLEAR_ICALL_FRAME	\
+	mono_stack_mark_pop (mono_thread_info_current_var ? mono_thread_info_current_var : mono_thread_info_current (), &__mark);
+#define CLEAR_ICALL_FRAME_VALUE(RESULT, HANDLE)				\
+	(RESULT) = g_cast (mono_stack_mark_pop_value (mono_thread_info_current_var ? mono_thread_info_current_var : mono_thread_info_current (), &__mark, (HANDLE)));
+#endif
 
 #define HANDLE_FUNCTION_ENTER() do {				\
 	MONO_DISABLE_WARNING(4459) /* declaration of 'identifier' hides global declaration */ \
@@ -210,13 +218,34 @@ Icall macros
 	CLEAR_ICALL_FRAME;			\
 	} while (0)
 
-#define HANDLE_LOOP_PREPARE \
+// Do not do this often, but icall state can be manually managed.
+//
+// SETUP_ICALL_FUNCTION
+// loop { // Does not have to be a loop.
+//    SETUP_ICALL_FRAME
+//    ..
+//    CLEAR_ICALL_FRAME
+// }
+//
+// As with HANDLE_FUNCTION_RETURN, you must not
+// skip CLEAR_ICALL_FRAME -- no break, continue, return, or goto (goto label at CLEAR_ICALL_FRAME is idiom).
+//
+#define SETUP_ICALL_FUNCTION \
 	MONO_DISABLE_WARNING(4459) /* declaration of 'identifier' hides global declaration */ \
 	/* There are deliberately locals and a constant NULL global with this same name. */ \
 	MonoThreadInfo *mono_thread_info_current_var = mono_thread_info_current () \
 	MONO_RESTORE_WARNING
 
+// A common use of manual icall frame management is for loop.
+// It can also be used for conditionality, where only some paths
+// through a function allocate handles and frame teardown does
+// coincide with function return. For example: emit_invoke_call.
+//
+#define HANDLE_LOOP_PREPARE SETUP_ICALL_FUNCTION
+
 // Return a non-pointer or non-managed pointer, e.g. gboolean.
+// VAL should be a local variable or at least not use handles in the current frame.
+// i.e. it is "val", not "expr".
 #define HANDLE_FUNCTION_RETURN_VAL(VAL)		\
 	CLEAR_ICALL_FRAME;			\
 	return (VAL);				\
@@ -320,6 +349,10 @@ typedef struct _MonoTypeofCastHelper *MonoTypeofCastHelper; // a pointer type un
 #define MONO_TYPEOF_CAST(typeexpr, expr) ((__typeof__ (typeexpr))(expr))
 #endif
 
+/*
+ * Create handle for the object OBJECT.
+ * The handle will keep the object alive and pinned.
+ */
 #ifndef MONO_HANDLE_TRACK_OWNER
 
 #define MONO_HANDLE_NEW(type, object) \
@@ -333,6 +366,12 @@ typedef struct _MonoTypeofCastHelper *MonoTypeofCastHelper; // a pointer type un
 #endif
 
 #define MONO_HANDLE_CAST(type, value) (MONO_HANDLE_CAST_FOR (type) ((value).__raw))
+
+/*
+ * Return the raw object reference stored in the handle.
+ * The objref is valid while the handle is alive and
+ * points to it.
+ */
 #ifdef __cplusplus
 #define MONO_HANDLE_RAW(handle)     ((handle).GetRaw())
 #else
@@ -358,6 +397,7 @@ This is why we evaluate index and value before any call to MONO_HANDLE_RAW or ot
 		MONO_OBJECT_SETREF_INTERNAL (MONO_HANDLE_RAW (MONO_HANDLE_UNSUPPRESS (HANDLE)), FIELD, __val); \
 	} while (0)
 
+// handle->field = value for managed pointer
 #define MONO_HANDLE_SET(HANDLE, FIELD, VALUE) do {			\
 		MonoObjectHandle __val = MONO_HANDLE_CAST (MonoObject, VALUE);	\
 		do {							\
@@ -386,12 +426,14 @@ This is why we evaluate index and value before any call to MONO_HANDLE_RAW or ot
 // handle->field = (type)value, for non-managed pointers
 // This would be easier to write with the gcc extension typeof,
 // but it is not widely enough implemented (i.e. Microsoft C).
+// The value copy is needed in cases computing value causes a GC
 #define MONO_HANDLE_SETVAL(HANDLE, FIELD, TYPE, VALUE) do {	\
 		TYPE __val = (VALUE);	\
 		if (0) { TYPE * typecheck G_GNUC_UNUSED = &MONO_HANDLE_SUPPRESS (MONO_HANDLE_RAW (HANDLE)->FIELD); } \
 		MONO_HANDLE_SUPPRESS (MONO_HANDLE_RAW (MONO_HANDLE_UNSUPPRESS (HANDLE))->FIELD = __val); \
 	 } while (0)
 
+// handle [idx] = value (for managed pointers)
 #define MONO_HANDLE_ARRAY_SETREF(HANDLE, IDX, VALUE) do {	\
 		uintptr_t __idx = (IDX);	\
    		MonoObjectHandle __val = MONO_HANDLE_CAST (MonoObject, VALUE);		\
@@ -402,6 +444,7 @@ This is why we evaluate index and value before any call to MONO_HANDLE_RAW or ot
 		}							\
 	} while (0)
 
+// handle [idx] = (type)value (for non-managed types)
 #define MONO_HANDLE_ARRAY_SETVAL(HANDLE, TYPE, IDX, VALUE) do {		\
 		uintptr_t __idx = (IDX);				\
    		TYPE __val = (VALUE);					\
@@ -413,6 +456,7 @@ This is why we evaluate index and value before any call to MONO_HANDLE_RAW or ot
 	} while (0)
 
 #if 0 // This is never used.
+// handle [idx] = value
 #define MONO_HANDLE_ARRAY_SETRAW(HANDLE, IDX, VALUE) do {	\
 		MONO_HANDLE_SUPPRESS_SCOPE(1);			\
 		uintptr_t __idx = MONO_HANDLE_UNSUPPRESS(IDX);	\
@@ -429,14 +473,17 @@ This is why we evaluate index and value before any call to MONO_HANDLE_RAW or ot
 		(DEST) =  __result;					\
 	} while (0)
 
+// dest = handle [idx] (for managed pointers)
 #define MONO_HANDLE_ARRAY_GETREF(DEST, HANDLE, IDX) do {		\
 		mono_handle_array_getref (MONO_HANDLE_CAST(MonoObject, (DEST)), (HANDLE), (IDX)); \
 	} while (0)
 
-#define MONO_HANDLE_ASSIGN_RAW(DESTH, SRCP) (mono_handle_assign_raw (MONO_HANDLE_CAST (MonoObject, (DESTH)), SRCP))
+#define MONO_HANDLE_ASSIGN_RAW(DESTH, SRCP) (mono_handle_assign_raw (MONO_HANDLE_CAST (MonoObject, (DESTH)), (SRCP)))
 #define MONO_HANDLE_ASSIGN(DESTH, SRCH)     (MONO_HANDLE_ASSIGN_RAW ((DESTH), MONO_HANDLE_RAW (SRCH)))
 
 #define MONO_HANDLE_DOMAIN(HANDLE) MONO_HANDLE_SUPPRESS (mono_object_domain (MONO_HANDLE_RAW (MONO_HANDLE_CAST (MonoObject, MONO_HANDLE_UNSUPPRESS (HANDLE)))))
+
+#define mono_handle_domain(handle) MONO_HANDLE_DOMAIN ((handle))
 
 /* Given an object and a MonoClassField, return the value (must be non-object)
  * of the field.  It's the caller's responsibility to check that the object is
@@ -468,6 +515,12 @@ TYPED_HANDLE_DECL (MonoArray);
 TYPED_HANDLE_DECL (MonoObject);
 TYPED_HANDLE_DECL (MonoException);
 TYPED_HANDLE_DECL (MonoAppContext);
+
+/* Simpler version of MONO_HANDLE_NEW if the handle is not used */
+#define MONO_HANDLE_PIN(object) do { \
+		if ((object) != NULL) \
+			MONO_HANDLE_NEW (MonoObject, (MonoObject*)(object)); \
+	} while (0)
 
 // Structs cannot be cast to structs.
 // As well, a function is needed because an anonymous struct cannot be initialized in C.
@@ -505,12 +558,40 @@ Constant handles may be initialized to it, but non-constant
 handles must be NEW'ed. Uses of these are suspicious and should
 be reviewed and probably changed FIXME.
 */
-extern const MonoObjectHandle mono_null_value_handle;
-#define NULL_HANDLE mono_null_value_handle
+#define NULL_HANDLE (mono_null_value_handle ())
 #define NULL_HANDLE_INIT { 0 }
+static inline MonoObjectHandle
+mono_null_value_handle (void)
+{
+	MonoObjectHandle result = NULL_HANDLE_INIT;
+	return result;
+}
 #define NULL_HANDLE_STRING 		(MONO_HANDLE_CAST (MonoString, NULL_HANDLE))
 #define NULL_HANDLE_ARRAY  		(MONO_HANDLE_CAST (MonoArray,  NULL_HANDLE))
 #define NULL_HANDLE_STRING_BUILDER	(MONO_HANDLE_CAST (MonoStringBuilder, NULL_HANDLE))
+
+#if __cplusplus
+
+// Use this to convert a THandle to a raw T** such as for a ref or out parameter, without
+// copying back and forth through an intermediate. The handle must already be allocated,
+// such as icall marshaling does for out and ref parameters.
+#define MONO_HANDLE_REF(h) (h.Ref ())
+
+#else
+
+static inline void volatile*
+mono_handle_ref (void volatile* p)
+{
+	g_assert (p);
+	return p;
+}
+
+// Use this to convert a THandle to a raw T** such as for a ref or out parameter, without
+// copying back and forth through an intermediate. The handle must already be allocated,
+// such as icall marshaling does for out and ref parameters.
+#define MONO_HANDLE_REF(handle) (MONO_TYPEOF_CAST ((handle).__raw, mono_handle_ref ((handle).__raw)))
+
+#endif
 
 static inline MonoObjectHandle
 mono_handle_assign_raw (MonoObjectHandleOut dest, void *src)
@@ -533,31 +614,32 @@ MonoArrayHandle mono_array_new_handle (MonoDomain *domain, MonoClass *eclass, ui
 MonoArrayHandle
 mono_array_new_full_handle (MonoDomain *domain, MonoClass *array_class, uintptr_t *lengths, intptr_t *lower_bounds, MonoError *error);
 
-uintptr_t
-mono_array_handle_length (MonoArrayHandle arr);
+#define mono_array_handle_setref(array,index,value) MONO_HANDLE_ARRAY_SETREF ((array), (index), (value))
 
 void
 mono_handle_array_getref (MonoObjectHandleOut dest, MonoArrayHandle array, uintptr_t index);
 
 #define mono_handle_class(o) MONO_HANDLE_SUPPRESS (mono_object_class (MONO_HANDLE_RAW (MONO_HANDLE_UNSUPPRESS (o))))
 
+#define mono_handle_vtable(o) MONO_HANDLE_GETVAL (o, vtable)
+
 /* Local handles to global GC handles and back */
 
-uint32_t
+MonoGCHandle
 mono_gchandle_from_handle (MonoObjectHandle handle, mono_bool pinned);
 
 MonoObjectHandle
-mono_gchandle_get_target_handle (uint32_t gchandle);
+mono_gchandle_get_target_handle (MonoGCHandle gchandle);
 
 gboolean
-mono_gchandle_target_equal (uint32_t gchandle, MonoObjectHandle equal);
+mono_gchandle_target_equal (MonoGCHandle gchandle, MonoObjectHandle equal);
 
 void
-mono_gchandle_target_is_null_or_equal (uint32_t gchandle, MonoObjectHandle equal, gboolean *is_null,
+mono_gchandle_target_is_null_or_equal (MonoGCHandle gchandle, MonoObjectHandle equal, gboolean *is_null,
 	gboolean *is_equal);
 
 void
-mono_gchandle_set_target_handle (guint32 gchandle, MonoObjectHandle obj);
+mono_gchandle_set_target_handle (MonoGCHandle gchandle, MonoObjectHandle obj);
 
 void
 mono_array_handle_memcpy_refs (MonoArrayHandle dest, uintptr_t dest_idx, MonoArrayHandle src, uintptr_t src_idx, uintptr_t len);
@@ -567,7 +649,11 @@ mono_array_handle_memcpy_refs (MonoArrayHandle dest, uintptr_t dest_idx, MonoArr
  * size.  Call mono_gchandle_free to unpin.
  */
 gpointer
-mono_array_handle_pin_with_size (MonoArrayHandle handle, int size, uintptr_t index, uint32_t *gchandle);
+mono_array_handle_pin_with_size (MonoArrayHandle handle, int size, uintptr_t index, MonoGCHandle *gchandle);
+
+// Returns a pointer to the element with the given index, but does not pin
+gpointer
+mono_array_handle_addr (MonoArrayHandle handle, int size, uintptr_t index);
 
 #define MONO_ARRAY_HANDLE_PIN(handle,type,index,gchandle_out) ((type*)mono_array_handle_pin_with_size (MONO_HANDLE_CAST(MonoArray,(handle)), sizeof (type), (index), (gchandle_out)))
 
@@ -575,10 +661,10 @@ void
 mono_value_copy_array_handle (MonoArrayHandle dest, int dest_idx, gconstpointer src, int count);
 
 gunichar2 *
-mono_string_handle_pin_chars (MonoStringHandle s, uint32_t *gchandle_out);
+mono_string_handle_pin_chars (MonoStringHandle s, MonoGCHandle *gchandle_out);
 
 gpointer
-mono_object_handle_pin_unbox (MonoObjectHandle boxed_valuetype_obj, uint32_t *gchandle_out);
+mono_object_handle_pin_unbox (MonoObjectHandle boxed_valuetype_obj, MonoGCHandle *gchandle_out);
 
 static inline gpointer
 mono_handle_unbox_unsafe (MonoObjectHandle handle)
@@ -596,13 +682,13 @@ mono_context_get_handle (void);
 void
 mono_context_set_handle (MonoAppContextHandle new_context);
 
-guint32
+MonoGCHandle
 mono_gchandle_new_weakref_from_handle (MonoObjectHandle handle);
 
 int
 mono_handle_hash (MonoObjectHandle object);
 
-guint32
+MonoGCHandle
 mono_gchandle_new_weakref_from_handle_track_resurrection (MonoObjectHandle handle);
 
 #endif /* __MONO_HANDLE_H__ */

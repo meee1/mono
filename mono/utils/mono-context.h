@@ -14,10 +14,7 @@
 #include "mono-compiler.h"
 #include "mono-sigcontext.h"
 #include "mono-machine.h"
-
-#ifdef HAVE_SIGNAL_H
 #include <signal.h>
-#endif
 
 #define MONO_CONTEXT_OFFSET(field, index, field_type) \
     "i" (offsetof (MonoContext, field) + (index) * sizeof (field_type))
@@ -36,6 +33,7 @@ typedef struct __darwin_xmm_reg MonoContextSimdReg;
 typedef struct _libc_xmmreg MonoContextSimdReg;
 #elif defined(HOST_WIN32)
 #define MONO_HAVE_SIMD_REG
+//#define MONO_HAVE_SIMD_REG_AVX
 #include <emmintrin.h>
 typedef __m128d MonoContextSimdReg;
 #elif defined(HOST_ANDROID)
@@ -48,18 +46,7 @@ typedef __m128d MonoContextSimdReg;
 #endif
 #elif defined(TARGET_ARM64)
 #define MONO_HAVE_SIMD_REG
-#if defined(MONO_ARCH_ILP32) && defined(MONO_CPPSHARP_HACK)
-/* We lie to the MonoAotOffsetsDumper tool and claim we targeting armv7k. This
- * is because aarch64_ilp32 isn't available (yet). Unfortunately __uint128_t
- * isn't defined for this target by the compiler, so we define a struct with
- * the same size here in order to get the right offset */
-typedef struct
-{
-	guint8 v[16];
-} MonoContextSimdReg;
-#else
 typedef __uint128_t MonoContextSimdReg;
-#endif
 #endif
 
 /*
@@ -286,7 +273,10 @@ MONO_DISABLE_WARNING(4324) // 'struct_name' : structure was padded due to __decl
 
 typedef struct {
 	host_mgreg_t gregs [AMD64_NREG];
-#if defined(MONO_HAVE_SIMD_REG)
+#if defined(MONO_HAVE_SIMD_REG_AVX)
+	// Lower AMD64_XMM_NREG fregs holds lower 128 bit YMM. Upper AMD64_XMM_NREG fregs holds upper 128-bit YMM.
+	MonoContextSimdReg fregs [AMD64_XMM_NREG * 2];
+#elif defined(MONO_HAVE_SIMD_REG)
 	MonoContextSimdReg fregs [AMD64_XMM_NREG];
 #else
 	double fregs [AMD64_XMM_NREG];
@@ -303,11 +293,29 @@ MONO_RESTORE_WARNING
 #define MONO_CONTEXT_GET_BP(ctx) ((gpointer)(gsize)((ctx)->gregs [AMD64_RBP]))
 #define MONO_CONTEXT_GET_SP(ctx) ((gpointer)(gsize)((ctx)->gregs [AMD64_RSP]))
 
-#if defined (HOST_WIN32) && !defined(__GNUC__)
+#if defined(HOST_WIN32) && !defined(__GNUC__)
 /* msvc doesn't support inline assembly, so have to use a separate .asm file */
 // G_EXTERN_C due to being written in assembly.
+#if defined(MONO_HAVE_SIMD_REG_AVX) && defined(__AVX__)
+G_EXTERN_C void mono_context_get_current_avx (void *);
+#define MONO_CONTEXT_GET_CURRENT(ctx) \
+do { \
+	mono_context_get_current_avx((void*)&(ctx)); \
+} while (0)
+#elif defined(MONO_HAVE_SIMD_REG_AVX)
 G_EXTERN_C void mono_context_get_current (void *);
-#define MONO_CONTEXT_GET_CURRENT(ctx) do { mono_context_get_current((void*)&(ctx)); } while (0)
+#define MONO_CONTEXT_GET_CURRENT(ctx) \
+do { \
+	mono_context_get_current((void*)&(ctx)); \
+	memset (&(ctx.fregs [AMD64_XMM_NREG]), 0, sizeof (MonoContextSimdReg) * AMD64_XMM_NREG); \
+} while (0)
+#else
+G_EXTERN_C void mono_context_get_current (void *);
+#define MONO_CONTEXT_GET_CURRENT(ctx) \
+do { \
+	mono_context_get_current((void*)&(ctx)); \
+} while (0)
+#endif
 
 #else
 
@@ -890,7 +898,7 @@ typedef struct {
 
 #include <sys/ucontext.h>
 
-#if __GLIBC_PREREQ(2, 27)
+#if __GLIBC_PREREQ(2, 26)
 typedef ucontext_t MonoContext;
 #else
 typedef struct ucontext MonoContext;
@@ -916,7 +924,24 @@ typedef struct ucontext MonoContext;
 #define MONO_CONTEXT_GET_CURRENT(ctx)	\
 	__asm__ __volatile__(	\
 		"stmg	%%r0,%%r15,0(%0)\n"	\
-		: : "r" (&(ctx).uc_mcontext.gregs[0])	\
+		"std	%%f0,0(%1)\n"		\
+		"std	%%f1,8(%1)\n"		\
+		"std	%%f2,16(%1)\n"		\
+		"std	%%f3,24(%1)\n"		\
+		"std	%%f4,32(%1)\n"		\
+		"std	%%f5,40(%1)\n"		\
+		"std	%%f6,48(%1)\n"		\
+		"std	%%f7,56(%1)\n"		\
+		"std	%%f8,64(%1)\n"		\
+		"std	%%f9,72(%1)\n"		\
+		"std	%%f10,80(%1)\n"		\
+		"std	%%f11,88(%1)\n"		\
+		"std	%%f12,96(%1)\n"		\
+		"std	%%f13,104(%1)\n"		\
+		"std	%%f14,112(%1)\n"		\
+		"std	%%f15,120(%1)\n"		\
+		: : "a" (&(ctx).uc_mcontext.gregs[0]),		\
+		    "a" (&(ctx).uc_mcontext.fpregs.fprs[0])	\
 		: "memory"			\
 	)
 
@@ -1032,6 +1057,108 @@ typedef struct {
 	} while (0)
 
 #define MONO_ARCH_HAS_MONO_CONTEXT (1)
+
+#elif (defined(__loongarch64) && !defined(MONO_CROSS_COMPILE)) || (defined(TARGET_LOONGARCH64))
+
+#include <mono/arch/loongarch64/loongarch64-codegen.h>
+
+typedef struct {
+	host_mgreg_t regs [32];
+	/* FIXME not fully saved in trampolines */
+	double fregs [32];
+	host_mgreg_t pc;
+	/*
+	 * fregs might not be initialized if this context was created from a
+	 * ucontext.
+	 */
+	host_mgreg_t has_fregs;
+} MonoContext;
+
+#define MONO_CONTEXT_SET_IP(ctx,ip) do { (ctx)->pc = (host_mgreg_t)(gsize)ip; } while (0)
+#define MONO_CONTEXT_SET_BP(ctx,bp) do { (ctx)->regs [22] = (host_mgreg_t)(gsize)bp; } while (0);
+#define MONO_CONTEXT_SET_SP(ctx,bp) do { (ctx)->regs [3] = (host_mgreg_t)(gsize)bp; } while (0);
+
+#define MONO_CONTEXT_GET_IP(ctx) (gpointer)(gsize)((ctx)->pc)
+#define MONO_CONTEXT_GET_BP(ctx) (gpointer)(gsize)((ctx)->regs [22])
+#define MONO_CONTEXT_GET_SP(ctx) (gpointer)(gsize)((ctx)->regs [3])
+
+#define MONO_CONTEXT_GET_CURRENT(ctx)	do { 	\
+	g_assert (((void*)ctx.fregs - (void*)ctx.regs) == 256);	\
+	g_assert (((void*)&ctx.pc - (void*)ctx.regs) == 512);	    \
+	__asm__ __volatile__(		\
+		"st.d $r0, %0, 0  \n"	\
+		"st.d $r1, %0, 8  \n"	\
+		"st.d $r2, %0, 16 \n"	\
+		"st.d $r3, %0, 24 \n"	\
+		"st.d $r4, %0, 32 \n"	\
+		"st.d $r5, %0, 40 \n"	\
+		"st.d $r6, %0, 48 \n"	\
+		"st.d $r7, %0, 56 \n"	\
+		"st.d $r8, %0, 64 \n"	\
+		"st.d $r9, %0, 72 \n"	\
+		"st.d $r10, %0, 80 \n"	\
+		"st.d $r11, %0, 88 \n"	\
+		"st.d $r12, %0, 96 \n"	\
+		"st.d $r13, %0, 104 \n"	\
+		"st.d $r14, %0, 112 \n"	\
+		"st.d $r15, %0, 120 \n"	\
+		"st.d $r16, %0, 128 \n"	\
+		"st.d $r17, %0, 136 \n"	\
+		"st.d $r18, %0, 144 \n"	\
+		"st.d $r19, %0, 152 \n"	\
+		"st.d $r20, %0, 160 \n"	\
+		"st.d $r21, %0, 168 \n"	\
+		"st.d $r22, %0, 176 \n"	\
+		"st.d $r23, %0, 184 \n"	\
+		"st.d $r24, %0, 192 \n"	\
+		"st.d $r25, %0, 200 \n"	\
+		"st.d $r26, %0, 208 \n"	\
+		"st.d $r27, %0, 216 \n"	\
+		"st.d $r28, %0, 224 \n"	\
+		"st.d $r29, %0, 232 \n"	\
+		"st.d $r30, %0, 240 \n"	\
+		"st.d $r31, %0, 248 \n"	\
+		"fst.d $f0, %0, 256 \n"	\
+		"fst.d $f1, %0, 264 \n"	\
+		"fst.d $f2, %0, 272 \n"	\
+		"fst.d $f3, %0, 280 \n"	\
+		"fst.d $f4, %0, 288 \n"	\
+		"fst.d $f5, %0, 296 \n"	\
+		"fst.d $f6, %0, 304 \n"	\
+		"fst.d $f7, %0, 312 \n"	\
+		"fst.d $f8, %0, 320 \n"	\
+		"fst.d $f9, %0, 328 \n"	\
+		"fst.d $f10, %0, 336  \n"	\
+		"fst.d $f11, %0, 344  \n"	\
+		"fst.d $f12, %0, 352  \n"	\
+		"fst.d $f13, %0, 360  \n"	\
+		"fst.d $f14, %0, 368  \n"	\
+		"fst.d $f15, %0, 376  \n"	\
+		"fst.d $f16, %0, 384  \n"	\
+		"fst.d $f17, %0, 392  \n"	\
+		"fst.d $f18, %0, 400  \n"	\
+		"fst.d $f19, %0, 408  \n"	\
+		"fst.d $f20, %0, 416  \n"	\
+		"fst.d $f21, %0, 424  \n"	\
+		"fst.d $f22, %0, 432  \n"	\
+		"fst.d $f23, %0, 440  \n"	\
+		"fst.d $f24, %0, 448  \n"	\
+		"fst.d $f25, %0, 456  \n"	\
+		"fst.d $f26, %0, 464  \n"	\
+		"fst.d $f27, %0, 472  \n"	\
+		"fst.d $f28, %0, 480  \n"	\
+		"fst.d $f29, %0, 488  \n"	\
+		"fst.d $f30, %0, 496 \n"	\
+		"fst.d $f31, %0, 504 \n"	\
+		"pcaddi $r21, 0 \n"	        \
+		"st.d $r21, %0,  512 \n"	\
+		:							\
+		: "r" (&ctx.regs)			\
+		: "$r21", "memory"		    \
+	);								\
+} while (0)
+
+#define MONO_ARCH_HAS_MONO_CONTEXT 1
 
 #else
 

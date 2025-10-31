@@ -150,7 +150,10 @@ namespace Mono.Debugger.Soft
 		}
 
 		public void Detach () {
+			// Notify the application that we are detaching
 			conn.VM_Dispose ();
+			// Close the connection. No further messages can be sent
+			// over the connection after this point.
 			conn.Close ();
 			notify_vm_event (EventType.VMDisconnect, SuspendPolicy.None, 0, 0, null, 0);
 		}
@@ -168,8 +171,7 @@ namespace Mono.Debugger.Soft
 
 		HashSet<ThreadMirror> threadsToInvalidate = new HashSet<ThreadMirror> ();
 		ThreadMirror[] threadCache;
-		object threadCacheLocker = new object ();
-
+		
 		void InvalidateThreadAndFrameCaches () {
 			lock (threadsToInvalidate) {
 				foreach (var thread in threadsToInvalidate)
@@ -197,7 +199,7 @@ namespace Mono.Debugger.Soft
 				var fetchingEvent = new ManualResetEvent (false);
 				vm.conn.VM_GetThreads ((threadsIds) => {
 					ids = threadsIds;
-					threadCache = threads = new ThreadMirror [threadsIds.Length];
+					threads = new ThreadMirror [threadsIds.Length];
 					fetchingEvent.Set ();
 				});
 				if (WaitHandle.WaitAny (new []{ vm.conn.DisconnectedEvent, fetchingEvent }) == 0) {
@@ -212,6 +214,8 @@ namespace Mono.Debugger.Soft
 				//if (threadCache != threads) {//While fetching threads threadCache was invalidated(thread was created/destoyed)
 				//	return GetThreads ();
 				//}
+				Thread.MemoryBarrier ();
+				threadCache = threads;
 				return threads;
 			} else {
 				return threads;
@@ -275,6 +279,13 @@ namespace Mono.Debugger.Soft
 
 		public ExceptionEventRequest CreateExceptionRequest (TypeMirror exc_type, bool caught, bool uncaught) {
 			return new ExceptionEventRequest (this, exc_type, caught, uncaught);
+		}
+
+		public ExceptionEventRequest CreateExceptionRequest (TypeMirror exc_type, bool caught, bool uncaught, bool everything_else) {
+			if (Version.AtLeast (2, 54))
+				return new ExceptionEventRequest (this, exc_type, caught, uncaught, true, everything_else);
+			else
+				return new ExceptionEventRequest (this, exc_type, caught, uncaught);
 		}
 
 		public AssemblyLoadEventRequest CreateAssemblyLoadRequest () {
@@ -361,7 +372,7 @@ namespace Mono.Debugger.Soft
 			case ErrorCode.NO_SEQ_POINT_AT_IL_OFFSET:
 				throw new ArgumentException ("Cannot set breakpoint on the specified IL offset.");
 			default:
-				throw new CommandException (args.ErrorCode);
+				throw new CommandException (args.ErrorCode, args.ErrorMessage);
 			}
 		}
 
@@ -647,7 +658,9 @@ namespace Mono.Debugger.Soft
 
 		internal EventRequest GetRequest (int id) {
 			lock (requests_lock) {
-				return requests [id];
+				EventRequest obj;
+				requests.TryGetValue (id, out obj);
+				return obj;
 			}
 		}
 
@@ -657,7 +670,7 @@ namespace Mono.Debugger.Soft
 
 		internal Value DecodeValue (ValueImpl v, Dictionary<int, Value> parent_vtypes) {
 			if (v.Value != null) {
-				if (Version.AtLeast (2, 46) && v.Type == ElementType.Ptr)
+				if (Version.AtLeast (2, 46) && (v.Type == ElementType.Ptr || v.Type == ElementType.FnPtr))
 					return new PointerValue(this, GetType(v.Klass), (long)v.Value);
 				return new PrimitiveValue (this, v.Value);
 			}
@@ -724,7 +737,32 @@ namespace Mono.Debugger.Soft
 					return new ValueImpl { Type = (ElementType)ValueTypeId.VALUE_TYPE_ID_NULL, Objid = 0 };
 				duplicates.Add (v);
 
-				return new ValueImpl { Type = ElementType.ValueType, Klass = (v as StructMirror).Type.Id, Fields = EncodeValues ((v as StructMirror).Fields, duplicates) };
+				return new ValueImpl { Type = ElementType.ValueType, Klass = (v as StructMirror).Type.Id, Fields = EncodeFieldValues ((v as StructMirror).Fields, (v as StructMirror).Type.GetFields (), duplicates, 1) };
+			} else if (v is PointerValue) {
+				PointerValue val = (PointerValue)v;
+				return new ValueImpl { Type = ElementType.Ptr, Klass = val.Type.Id, Value = val.Address };
+			} else {
+				throw new NotSupportedException ("Value of type " + v.GetType());
+			}
+		}
+
+		internal ValueImpl EncodeValueFixedSize (Value v, List<Value> duplicates, int len_fixed_size) {
+			if (v is PrimitiveValue) {
+				object val = (v as PrimitiveValue).Value;
+				if (val == null)
+					return new ValueImpl { Type = (ElementType)ValueTypeId.VALUE_TYPE_ID_NULL, Objid = 0 };
+				else
+					return new ValueImpl { Value = val , FixedSize = len_fixed_size};
+			} else if (v is ObjectMirror) {
+				return new ValueImpl { Type = ElementType.Object, Objid = (v as ObjectMirror).Id };
+			} else if (v is StructMirror) {
+				if (duplicates == null)
+					duplicates = new List<Value> ();
+				if (duplicates.Contains (v))
+					return new ValueImpl { Type = (ElementType)ValueTypeId.VALUE_TYPE_ID_NULL, Objid = 0 };
+				duplicates.Add (v);
+
+				return new ValueImpl { Type = ElementType.ValueType, Klass = (v as StructMirror).Type.Id, Fields = EncodeFieldValues ((v as StructMirror).Fields, (v as StructMirror).Type.GetFields (), duplicates, len_fixed_size) };
 			} else if (v is PointerValue) {
 				PointerValue val = (PointerValue)v;
 				return new ValueImpl { Type = ElementType.Ptr, Klass = val.Type.Id, Value = val.Address };
@@ -737,6 +775,17 @@ namespace Mono.Debugger.Soft
 			ValueImpl[] res = new ValueImpl [values.Count];
 			for (int i = 0; i < values.Count; ++i)
 				res [i] = EncodeValue (values [i], duplicates);
+			return res;
+		}
+
+		internal ValueImpl[] EncodeFieldValues (IList<Value> values, FieldInfoMirror[] field_info, List<Value> duplicates, int fixedSize) {
+			ValueImpl[] res = new ValueImpl [values.Count];
+			for (int i = 0; i < values.Count; ++i) {
+				if (fixedSize > 1 || field_info [i].FixedSize > 1)
+					res [i] = EncodeValueFixedSize (values [i], duplicates, fixedSize > 1 ? fixedSize : field_info [i].FixedSize);
+				else
+					res [i] = EncodeValue (values [i], duplicates);
+			}
 			return res;
 		}
 
@@ -839,12 +888,17 @@ namespace Mono.Debugger.Soft
 
 	public class CommandException : Exception {
 
-		internal CommandException (ErrorCode error_code) : base ("Debuggee returned error code " + error_code + ".") {
+		internal CommandException (ErrorCode error_code, string error_message) : base ("Debuggee returned error code " + error_code + (error_message == null || error_message.Length == 0 ? "." : " - " + error_message + ".")) {
 			ErrorCode = error_code;
+			ErrorMessage = error_message;
 		}
 
 		public ErrorCode ErrorCode {
 			get; set;
+		}
+
+		public string ErrorMessage {
+			get; internal set;
 		}
 	}
 

@@ -86,7 +86,7 @@ typedef struct {
 	uint8_t	mie2:1;		// 058 - Miscellaneous execution facility 2
 	uint8_t	x005:1;		// 059 - Undefined
 	uint8_t	x006:1;		// 060 - Undefined
-	uint8_t	x007:1;		// 061 - Undefined
+	uint8_t	mie3:1;		// 061 - Miscellaneous execution facility 3
 	uint8_t	ibm06:1;	// 062 - Assigned to IBM
 	uint8_t	x008:1;		// 063 - Undefined
 	uint8_t	x009:1;		// 064 - Undefined
@@ -106,7 +106,8 @@ typedef struct {
 	uint8_t	edat2:1;	// 078 - Enhanced DAT 2
 	uint8_t	x010:1;		// 079 - Undefined
 	uint8_t dfppc:1;	// 080 - DFP packed conversion
-	uint8_t x011:7; 	// 081-87 - Undefined
+	uint8_t ppaf:1;		// 081 - PPA in order facility
+	uint8_t x011:6; 	// 082-87 - Undefined
 	uint8_t x012[5];	// 088-127 - Undefined
 	uint8_t ibm12:1;	// 128 - Assigned to IBM
 	uint8_t	vec:1;		// 129 - Vector facility
@@ -126,11 +127,33 @@ typedef struct {
 	uint8_t irbm:1; 	// 145 - Insert Reference Bits Multiple Facility
 	uint8_t mse8:1; 	// 146 - Message Security Assist Extension 8
 	uint8_t ibm14:1;	// 147 - Reserved for IBM use
-	uint8_t x016:4; 	// 148-151 - Undefined
-	uint8_t x017[2];	// 152-167 - Undefined
+	uint8_t vef2:1;		// 148 - Vector Execution Facility 2
+	uint8_t mpsk:1;		// 149 - Move Page and Set Key Facility
+	uint8_t esort:1;	// 150 - Enhanced-sort Facility
+	uint8_t dfcf:1;		// 151 - Deflate Conversion Facility
+	uint8_t vpde:1;		// 152 - Vector Packed Decimal Enhancement Facility
+	uint8_t x017:2; 	// 153-154 - Undefined
+	uint8_t msa9:1;		// 155 - Message Security Assist Facility 9
+	uint8_t x018:2;		// 156-157 - Undefined
+	uint8_t uvcf:1;		// 158 - Ultravisor Call Facility
+	uint8_t x019:1;		// 159 - Undefined
+	uint8_t x019a:1;	// 160 - Undefined
+	uint8_t seun:1;		// 161 - Secure Execution Unpack Facility
+	uint8_t x019b:3;	// 162-164 - Undefined
+	uint8_t nnpa:1;		// 165 - Neural Network Processing Assist Facility
+	uint8_t x019c:2;	// 166-167 - Undefined
 	uint8_t esac:1; 	// 168 - ESA/390 Compatibility Mode Facility
-	uint8_t x018:7;  	// 169-175 - Undefined
-	uint8_t x019[10];	// 176-256 Undefined
+	uint8_t skrm:1;  	// 169 - Storage Key Removal Facility
+	uint8_t x020:6;  	// 170-175 - Undefined
+	uint8_t x021[2];	// 176-191 Undefined
+	uint8_t vpde2:1; 	// 192 - Vector Packed Decimal Enhancment Facility 2
+	uint8_t bear:1; 	// 193 - Breaking Event Address Register Enhancement Facility
+	uint8_t rdat:1; 	// 194 - Reset DAT Protection Facility
+	uint8_t x022:1; 	// 195 - Undefined
+	uint8_t paci:1; 	// 196 - Processor Activity Instrumentation Facility
+	uint8_t pacie1:1; 	// 197 - Processor Activity Instrumentation Enhancement 1 Facility
+	uint8_t x023:2; 	// 198-199 - Undefined
+	uint8_t x024[7]; 	// 200-255 - Undefined
 } __attribute__ ((__packed__)) __attribute__ ((__aligned__(8))) facilityList_t;
 
 void
@@ -140,7 +163,7 @@ mono_hwcap_arch_init (void)
 	int lFacs = sizeof (facs) / 8;
 
 	__asm__ __volatile__ (
-		"lgfr\t0,%1\n\t"
+		"lgfr\t%%r0,%1\n\t"
 		".insn\ts,0xb2b00000,%0\n\t"
 		: "=m" (facs)
 		: "r" (lFacs)
@@ -153,5 +176,8 @@ mono_hwcap_arch_init (void)
 	mono_hwcap_s390x_has_ia   = facs.ia;
 	mono_hwcap_s390x_has_gie  = facs.gie;
 	mono_hwcap_s390x_has_mie2 = facs.mie2;
+	mono_hwcap_s390x_has_mie3 = facs.mie3;
 	mono_hwcap_s390x_has_gs   = facs.gs;
+	mono_hwcap_s390x_has_vef2 = facs.vef2;
+	mono_hwcap_s390x_has_eif  = facs.eif;
 }

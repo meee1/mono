@@ -42,6 +42,7 @@
 using System.Collections;
 using System.IO;
 using System.Text;
+using System.Threading;
 using System.Runtime.InteropServices;
 namespace System {
 	class TermInfoDriver : IConsoleDriver {
@@ -195,76 +196,81 @@ namespace System {
 			lock (initLock){
 				if (inited)
 					return;
-				inited = true;
 				
-				/* This should not happen any more, since it is checked for in Console */
-				if (!ConsoleDriver.IsConsole)
-					throw new IOException ("Not a tty.");
-				
-				ConsoleDriver.SetEcho (false);
-				
-				string endString = null;
-				keypadXmit = reader.Get (TermInfoStrings.KeypadXmit);
-				keypadLocal = reader.Get (TermInfoStrings.KeypadLocal);
-				if (keypadXmit != null) {
-					WriteConsole (keypadXmit); // Needed to get the arrows working
-					if (keypadLocal != null)
-						endString += keypadLocal;
-				}
-				
-				origPair = reader.Get (TermInfoStrings.OrigPair);
-				origColors = reader.Get (TermInfoStrings.OrigColors);
-				setfgcolor = reader.Get (TermInfoStrings.SetAForeground);
-				setbgcolor = reader.Get (TermInfoStrings.SetABackground);
-				maxColors = reader.Get (TermInfoNumbers.MaxColors);
-				maxColors = Math.Max (Math.Min (maxColors, 16), 1);
-				
-				string resetColors = (origColors == null) ? origPair : origColors;
-				if (resetColors != null)
-					endString += resetColors;
-				
-				unsafe {
-					if (!ConsoleDriver.TtySetup (keypadXmit, endString, out control_characters, out native_terminal_size)){
-						control_characters = new byte [17];
-						native_terminal_size = null;
-						//throw new IOException ("Error initializing terminal.");
+				try {
+					/* This should not happen any more, since it is checked for in Console */
+					if (!ConsoleDriver.IsConsole)
+						throw new IOException ("Not a tty.");
+					
+					ConsoleDriver.SetEcho (false);
+					
+					string endString = null;
+					keypadXmit = reader.Get (TermInfoStrings.KeypadXmit);
+					keypadLocal = reader.Get (TermInfoStrings.KeypadLocal);
+					if (keypadXmit != null) {
+						WriteConsole (keypadXmit); // Needed to get the arrows working
+						if (keypadLocal != null)
+							endString += keypadLocal;
 					}
+					
+					origPair = reader.Get (TermInfoStrings.OrigPair);
+					origColors = reader.Get (TermInfoStrings.OrigColors);
+					setfgcolor = reader.Get (TermInfoStrings.SetAForeground);
+					setbgcolor = reader.Get (TermInfoStrings.SetABackground);
+					maxColors = reader.Get (TermInfoNumbers.MaxColors);
+					maxColors = Math.Max (Math.Min (maxColors, 16), 1);
+					
+					string resetColors = (origColors == null) ? origPair : origColors;
+					if (resetColors != null)
+						endString += resetColors;
+					
+					unsafe {
+						if (!ConsoleDriver.TtySetup (keypadXmit, endString, out control_characters, out native_terminal_size)){
+							control_characters = new byte [17];
+							native_terminal_size = null;
+							//throw new IOException ("Error initializing terminal.");
+						}
+					}
+					
+					stdin = new StreamReader (Console.OpenStandardInput (0), Console.InputEncoding);
+					clear = reader.Get (TermInfoStrings.ClearScreen);
+					bell = reader.Get (TermInfoStrings.Bell);
+					if (clear == null) {
+						clear = reader.Get (TermInfoStrings.CursorHome);
+						clear += reader.Get (TermInfoStrings.ClrEos);
+					}
+					
+					csrVisible = reader.Get (TermInfoStrings.CursorNormal);
+					if (csrVisible == null)
+						csrVisible = reader.Get (TermInfoStrings.CursorVisible);
+					
+					csrInvisible = reader.Get (TermInfoStrings.CursorInvisible);
+					if (term == "cygwin" || term == "linux" || (term != null && term.StartsWith ("xterm")) ||
+						term == "rxvt" || term == "dtterm") {
+						titleFormat = "\x1b]0;{0}\x7"; // icon + window title
+					} else if (term == "iris-ansi") {
+						titleFormat = "\x1bP1.y{0}\x1b\\"; // not tested
+					} else if (term == "sun-cmd") {
+						titleFormat = "\x1b]l{0}\x1b\\"; // not tested
+					}
+					
+					cursorAddress = reader.Get (TermInfoStrings.CursorAddress);
+					
+					GetCursorPosition ();
+	#if DEBUG
+					logger.WriteLine ("noGetPosition: {0} left: {1} top: {2}", noGetPosition, cursorLeft, cursorTop);
+					logger.Flush ();
+	#endif
+					if (noGetPosition) {
+						WriteConsole (clear);
+						cursorLeft = 0;
+						cursorTop = 0;
+					}
+
+				} finally {
+					inited = true;
 				}
-				
-				stdin = new StreamReader (Console.OpenStandardInput (0), Console.InputEncoding);
-				clear = reader.Get (TermInfoStrings.ClearScreen);
-				bell = reader.Get (TermInfoStrings.Bell);
-				if (clear == null) {
-					clear = reader.Get (TermInfoStrings.CursorHome);
-					clear += reader.Get (TermInfoStrings.ClrEos);
-				}
-				
-				csrVisible = reader.Get (TermInfoStrings.CursorNormal);
-				if (csrVisible == null)
-					csrVisible = reader.Get (TermInfoStrings.CursorVisible);
-				
-				csrInvisible = reader.Get (TermInfoStrings.CursorInvisible);
-				if (term == "cygwin" || term == "linux" || (term != null && term.StartsWith ("xterm")) ||
-				    term == "rxvt" || term == "dtterm") {
-					titleFormat = "\x1b]0;{0}\x7"; // icon + window title
-				} else if (term == "iris-ansi") {
-					titleFormat = "\x1bP1.y{0}\x1b\\"; // not tested
-				} else if (term == "sun-cmd") {
-					titleFormat = "\x1b]l{0}\x1b\\"; // not tested
-				}
-				
-				cursorAddress = reader.Get (TermInfoStrings.CursorAddress);
-				
-				GetCursorPosition ();
-#if DEBUG
-				logger.WriteLine ("noGetPosition: {0} left: {1} top: {2}", noGetPosition, cursorLeft, cursorTop);
-				logger.Flush ();
-#endif
-				if (noGetPosition) {
-					WriteConsole (clear);
-					cursorLeft = 0;
-					cursorTop = 0;
-				}
+
 			}
 		}
 
@@ -519,7 +525,7 @@ namespace System {
 					Init ();
 				}
 
-				throw new NotSupportedException ();
+				SetBufferSize (BufferWidth, value);
 			}
 		}
 
@@ -537,7 +543,7 @@ namespace System {
 					Init ();
 				}
 
-				throw new NotSupportedException ();
+				SetBufferSize (value, BufferHeight);
 			}
 		}
 
@@ -711,6 +717,29 @@ namespace System {
 			bufferWidth = windowWidth;
 		}
 
+		// Should be called after init
+		//
+		// Only works on some Xterm-based terminals
+		void TrySetWindowDimensions (int width, int height)
+		{
+			if (width <= 0)
+				throw new ArgumentOutOfRangeException ("width", "Value must be higher than 0");
+			if (height <= 0)
+				throw new ArgumentOutOfRangeException ("height", "Value must be highet than 0");
+
+			if (height == WindowHeight && width == WindowWidth)
+				return;
+
+			if (term.StartsWith ("xterm")) {
+				WriteConsole ("\x1b[8;" + height.ToString () + ";" + width.ToString () + "t");
+
+				// Wait for window to get resized
+				Thread.Sleep (50);
+			} else {
+				throw new PlatformNotSupportedException ("Resizing can only work in xterm-based terminals");
+			}
+		}
+
 		
 		public int WindowHeight {
 			get {
@@ -726,7 +755,7 @@ namespace System {
 					Init ();
 				}
 
-				throw new NotSupportedException ();
+				SetWindowSize (WindowWidth, value);
 			}
 		}
 
@@ -744,7 +773,10 @@ namespace System {
 					Init ();
 				}
 
-				throw new NotSupportedException ();
+				if (value == 0)
+					return;
+
+				throw new ArgumentOutOfRangeException ("Unix terminals only support window position (0; 0)");
 			}
 		}
 
@@ -762,7 +794,10 @@ namespace System {
 					Init ();
 				}
 
-				throw new NotSupportedException ();
+				if (value == 0)
+					return;
+
+				throw new ArgumentOutOfRangeException ("Unix terminals only support window position (0; 0)");
 			}
 		}
 
@@ -780,7 +815,7 @@ namespace System {
 					Init ();
 				}
 
-				throw new NotSupportedException ();
+				SetWindowSize (value, WindowHeight);
 			}
 		}
 
@@ -812,7 +847,7 @@ namespace System {
 				Init ();
 			}
 
-			throw new NotImplementedException ();
+			throw new PlatformNotSupportedException ("Implemented only on Windows");
 		}
 
 		void AddToBuffer (int b)
@@ -1186,7 +1221,7 @@ namespace System {
 				Init ();
 			}
 
-			throw new NotImplementedException (String.Empty);
+			TrySetWindowDimensions (width, height);
 		}
 
 		public void SetCursorPosition (int left, int top)
@@ -1197,15 +1232,15 @@ namespace System {
 
 			CheckWindowDimensions ();
 			if (left < 0 || left >= bufferWidth)
-				throw new ArgumentOutOfRangeException ("left", "Value must be positive and below the buffer width.");
+				throw new ArgumentOutOfRangeException ("left", left.ToString (), "Value must be positive and below the buffer width.");
 
 			if (top < 0 || top >= bufferHeight)
-				throw new ArgumentOutOfRangeException ("top", "Value must be positive and below the buffer height.");
+				throw new ArgumentOutOfRangeException ("top", top.ToString (), "Value must be positive and below the buffer height.");
 
 			// Either CursorAddress or nothing.
 			// We might want to play with up/down/left/right/home when ca is not available.
 			if (cursorAddress == null)
-				throw new NotSupportedException ("This terminal does not suport setting the cursor position.");
+				throw new IOException ("This terminal does not suport setting the cursor position.");
 
 			WriteConsole (ParameterizedStrings.Evaluate (cursorAddress, top, left));
 			cursorLeft = left;
@@ -1218,8 +1253,8 @@ namespace System {
 				Init ();
 			}
 
-			// No need to throw exceptions here.
-			//throw new NotSupportedException ();
+			if (left != 0 || top != 0)
+				throw new ArgumentOutOfRangeException ("Unix terminals only support window position (0; 0)");
 		}
 
 		public void SetWindowSize (int width, int height)
@@ -1228,8 +1263,7 @@ namespace System {
 				Init ();
 			}
 
-			// No need to throw exceptions here.
-			//throw new NotSupportedException ();
+			TrySetWindowDimensions (width, height);
 		}
 
 

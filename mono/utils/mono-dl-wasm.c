@@ -1,4 +1,5 @@
 #include <config.h>
+#include <mono/utils/mono-compiler.h>
 
 #if defined (HOST_WASM)
 
@@ -11,6 +12,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <glib.h>
+#include <dlfcn.h>
 
 const char *
 mono_dl_get_so_prefix (void)
@@ -54,23 +56,36 @@ mono_dl_current_error_string (void)
 	return g_strdup ("");
 }
 
-
+// Copied from mono-dl-posix.c
 int
-mono_dl_convert_flags (int flags)
+mono_dl_convert_flags (int mono_flags, int native_flags)
 {
-	return flags;
+	int lflags = native_flags;
+
+	lflags = mono_flags & MONO_DL_LOCAL ? RTLD_LOCAL : RTLD_GLOBAL;
+
+	if (mono_flags & MONO_DL_LAZY)
+		lflags |= RTLD_LAZY;
+	else
+		lflags |= RTLD_NOW;
+
+	return lflags;
 }
 
 void *
 mono_dl_open_file (const char *file, int flags)
 {
+	// Actual dlopen is done in driver.c:wasm_dl_load()
 	return NULL;
 }
 
 void
 mono_dl_close_handle (MonoDl *module)
 {
-	//nothing to do
 }
+
+#else
+
+MONO_EMPTY_SOURCE_FILE (mono_dl_wasm);
 
 #endif

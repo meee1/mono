@@ -3,5 +3,7 @@
   <ItemGroup Label="win32_sources">
     <ClCompile Include="$(MonoSourceLocation)\mono\utils\os-event-win32.c" />
     <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-os-wait-win32.c" />
+    <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-os-semaphore-win32.c" />
+    <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-windows-thread-name.c" />
   </ItemGroup>
 </Project>

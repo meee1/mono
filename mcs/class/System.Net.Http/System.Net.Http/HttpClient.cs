@@ -44,7 +44,12 @@ namespace System.Net.Http
 		long buffer_size;
 		TimeSpan timeout;
 
-#if !XAMARIN_MODERN && !WASM
+#if XAMARIN_MODERN
+		public HttpClient ()
+			: this (CreateDefaultHandler (), true)
+		{
+		}
+#elif !WASM
 		public HttpClient ()
 			: this (new HttpClientHandler (), true)
 		{
@@ -269,6 +274,9 @@ namespace System.Net.Http
 		async Task<HttpResponseMessage> SendAsyncWorker (HttpRequestMessage request, HttpCompletionOption completionOption, CancellationToken cancellationToken)
 		{
 			using (var lcts = CancellationTokenSource.CreateLinkedTokenSource (cts.Token, cancellationToken)) {
+				// Hack to pass the timeout to the HttpWebRequest that's created by MonoWebRequestHandler; all other handlers ignore this.
+				if (handler is HttpClientHandler clientHandler)
+					clientHandler.SetWebRequestTimeout (timeout);
 				lcts.CancelAfter (timeout);
 
 				var task = base.SendAsync (request, lcts.Token);

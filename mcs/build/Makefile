@@ -4,7 +4,7 @@ include ../build/rules.make
 
 BUILT_FILES = common/Consts.cs $(topdir)/class/lib/$(PROFILE_DIRECTORY)/Consts.cs common/sourcelink.json
 
-all-local install-local test-local run-test-local csproj-local run-test-ondotnet-local uninstall-local doc-update-local: $(BUILT_FILES)
+all-local install-local test-local run-test-local run-test-ondotnet-local uninstall-local doc-update-local: $(BUILT_FILES)
 	@:
 
 clean-local:
@@ -49,6 +49,7 @@ DISTFILES = \
 	library.make			\
 	rules.make			\
 	tests.make			\
+	start-compiler-server.sh	\
 	$(COMMON_SRCS:%=common/%)	\
 	$(PLATFORMS:%=platforms/%.make) $(PROFILES:%=profiles/%.make)
 

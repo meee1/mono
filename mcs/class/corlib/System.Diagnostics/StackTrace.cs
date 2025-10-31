@@ -43,9 +43,7 @@ namespace System.Diagnostics {
 
 	[Serializable]
 	[ComVisible (true)]
-#if !NETCORE
 	[MonoTODO ("Serialized objects are not compatible with .NET")]
-#endif
 	public class StackTrace {
 
         // TraceFormat is Used to specify options for how the 
@@ -148,9 +146,7 @@ namespace System.Diagnostics {
 			this.frames [0] = frame;
 		}
 
-#if !NETCORE
 		[MonoLimitation ("Not possible to create StackTraces from other threads")]
-#endif
 		[Obsolete]
 		public StackTrace (Thread targetThread, bool needFileInfo)
 		{
@@ -202,9 +198,9 @@ namespace System.Diagnostics {
 		static string GetAotId ()
 		{
 			if (!isAotidSet) {
-				aotid = RuntimeAssembly.GetAotId ();
-				if (aotid != null)
-					aotid = new Guid (aotid).ToString ("N");
+				var arr = RuntimeAssembly.GetAotId ();
+				if (arr != null)
+					aotid = new Guid (arr).ToString ("N");
 				isAotidSet = true;
 			}
 
@@ -243,6 +239,7 @@ namespace System.Diagnostics {
 					}
 
 					var filename = frame.GetSecureFileName ();
+#if !WASM
 					if (filename[0] == '<') {
 						var mvid = frame.GetMethod ().Module.ModuleVersionId.ToString ("N");
 						var aotid = GetAotId ();
@@ -252,6 +249,7 @@ namespace System.Diagnostics {
 							filename = string.Format ("<{0}#{1}>", mvid, aotid);
 						}
 					}
+#endif
 
 					sb.AppendFormat (" in {0}:{1} ", filename, frame.GetFileLineNumber ());
 				}

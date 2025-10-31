@@ -113,6 +113,7 @@ typedef struct _MonoFSAsyncResult {
 */
 /* System.IO.MonoIO */
 
+
 ICALL_EXPORT
 MonoBoolean
 ves_icall_System_IO_MonoIO_CreateDirectory (const gunichar2 *path, gint32 *error);
@@ -162,6 +163,11 @@ gpointer
 ves_icall_System_IO_MonoIO_Open (const gunichar2 *filename, gint32 mode,
 				 gint32 access_mode, gint32 share, gint32 options,
 				 gint32 *error);
+
+ICALL_EXPORT
+MonoBoolean
+ves_icall_System_IO_MonoIO_Cancel (gpointer handle, gint32 *error);
+
 ICALL_EXPORT
 MonoBoolean
 ves_icall_System_IO_MonoIO_Close (gpointer handle, gint32 *error);
@@ -237,6 +243,11 @@ ves_icall_System_IO_MonoIO_ReplaceFile (const gunichar2 *source_file_name, const
 					const gunichar2 *destination_backup_file_name, MonoBoolean ignore_metadata_errors,
 					gint32 *error);
 
+ICALL_EXPORT
+void
+ves_icall_System_IO_MonoIO_DumpHandles (void);
+
+
 #if defined (TARGET_IOS) || defined (TARGET_ANDROID)
 
 MONO_API MONO_RT_EXTERNAL_ONLY gint64
@@ -247,10 +258,6 @@ mono_filesize_from_fd (int fd);
 
 #endif
 
-ICALL_EXPORT
-void
-ves_icall_System_IO_MonoIO_DumpHandles (void);
-
 #if !defined(HOST_WIN32)
 
 #define GENERIC_READ    0x80000000
@@ -258,6 +265,7 @@ ves_icall_System_IO_MonoIO_DumpHandles (void);
 #define GENERIC_EXECUTE 0x20000000
 #define GENERIC_ALL     0x10000000
 
+#define FILE_SHARE_NONE   0x00000000
 #define FILE_SHARE_READ   0x00000001
 #define FILE_SHARE_WRITE  0x00000002
 #define FILE_SHARE_DELETE 0x00000004
@@ -365,6 +373,9 @@ gpointer
 mono_w32file_create(const gunichar2 *name, guint32 fileaccess, guint32 sharemode, guint32 createmode, guint32 attrs);
 
 gboolean
+mono_w32file_cancel (gpointer handle);
+
+gboolean
 mono_w32file_close (gpointer handle);
 
 gboolean
@@ -454,8 +465,11 @@ mono_w32file_set_cwd (const gunichar2 *path);
 gboolean
 mono_w32file_create_pipe (gpointer *readpipe, gpointer *writepipe, guint32 size);
 
+guint32
+mono_w32file_get_drive_type (const gunichar2 *root_path_name, gint32 root_path_name_length, MonoError *error);
+
 gint32
-mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf);
+mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf, MonoError *error);
 
 #ifndef PLATFORM_NO_DRIVEINFO
 gboolean

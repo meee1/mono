@@ -22,6 +22,9 @@ test_file_get_contents (void)
 	gsize length;
 #ifdef G_OS_WIN32
 	const gchar *filename = "c:\\Windows\\system.ini";
+#elif defined(__PASE__)
+	/* Most etc files don't exist in PASE. Try one that should exist. */
+	const gchar *filename = "/etc/magic";
 #else
 	const gchar *filename = "/etc/hosts";
 #endif
@@ -174,7 +177,7 @@ test_file (void)
 		return FAILED ("3 %s should not be a symlink", path);
 
 #ifndef G_OS_WIN32 /* FIXME */
-	sympath = g_strconcat (path, "-link", NULL);
+	sympath = g_strconcat (path, "-link", (const char*)NULL);
 	ignored = symlink (path, sympath);
 	res = g_file_test (sympath, G_FILE_TEST_EXISTS);
 	if (!res)

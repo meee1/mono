@@ -23,4 +23,16 @@ mono_threads_platform_get_stack_bounds (guint8 **staddr, size_t *stsize)
 	*stsize = ss.ss_size;
 }
 
+guint64
+mono_native_thread_os_id_get (void)
+{
+	return (guint64)getthrid ();
+}
+
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (mono_threads_openbsd);
+
 #endif

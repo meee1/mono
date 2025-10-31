@@ -1,6 +1,6 @@
 thisdir = class
 
-NO_FACADES_PROFILE := $(filter monodroid_tools monotouch_tools wasm_tools binary_reference_assemblies xbuild_12 xbuild_14 netcore, $(PROFILE))
+NO_FACADES_PROFILE := $(filter monodroid_tools monotouch_tools wasm_tools binary_reference_assemblies xbuild_12 xbuild_14, $(PROFILE))
 
 ifndef NO_FACADES_PROFILE
 FACADES_FOLDER := Facades
@@ -77,6 +77,7 @@ mobile_common_dirs_parallel := \
 	System.Numerics	\
 	System.Numerics.Vectors		\
 	System.Data	\
+	System.Data.DataSetExtensions \
 	Mono.Data.Sqlite	\
 	System.Data.Services.Client \
 	System.IO.Compression \
@@ -117,10 +118,12 @@ monodroid_dirs_parallel := \
 
 monodroid_tools_dirs_parallel := \
 	Mono.Cecil	\
+	Mono.Cecil.Mdb	\
 	Mono.CompilerServices.SymbolWriter \
 	ICSharpCode.SharpZipLib	\
 	monodoc \
-	Mono.Debugger.Soft
+	Mono.Debugger.Soft \
+	Mono.Profiler.Log
 
 monotouch_tools_dirs_parallel := \
 	Mono.Cecil \
@@ -159,11 +162,35 @@ winaot_dirs_parallel := \
 	$(mobile_common_dirs_parallel)	\
 	Mono.Simd
 
+testing_winaot_interp_dirs_parallel := \
+	$(mobile_common_dirs_parallel)	\
+	Mono.Simd
+
 unreal_dirs_parallel := \
 	$(mobile_common_dirs_parallel)
 
 wasm_dirs_parallel := \
-	$(mobile_common_dirs_parallel)
+	Mono.Security \
+	System	\
+	System.Core	\
+	System.XML	\
+	System.Security	\
+	I18N		\
+	System.Transactions	\
+	System.ServiceModel.Internals	\
+	System.Runtime.Serialization	\
+	System.Data	\
+	System.Data.DataSetExtensions	\
+	System.Xml.Linq	\
+	System.Numerics	\
+	System.Numerics.Vectors		\
+	System.IO.Compression \
+	System.IO.Compression.FileSystem \
+	System.ComponentModel.DataAnnotations \
+	System.ComponentModel.Composition.4.5 \
+	System.Net.Http	\
+	Microsoft.CSharp \
+	System.Runtime.CompilerServices.Unsafe
 
 wasm_tools_dirs_parallel := \
 	Mono.Cecil
@@ -188,6 +215,7 @@ xammac_4_5_dirs_parallel := \
 	System.Transactions	\
 	System.EnterpriseServices	\
 	System.Data	\
+	System.Data.DataSetExtensions	\
 	System.Runtime.Serialization	\
 	System.Xml.Linq	\
 	Mono.Data.Sqlite	\
@@ -410,6 +438,9 @@ xbuild_14_SUBDIRS := $(xbuild_4_0_dirs) Microsoft.NuGet.Build.Tasks
 winaot_SUBDIRS := $(mobile_common_dirs)
 winaot_PARALLEL_SUBDIRS := $(winaot_dirs_parallel)
 
+testing_winaot_interp_SUBDIRS := $(mobile_common_dirs)
+testing_winaot_interp_PARALLEL_SUBDIRS := $(testing_winaot_interp_dirs_parallel)
+
 orbis_SUBDIRS := $(mobile_common_dirs)
 orbis_PARALLEL_SUBDIRS := $(orbis_dirs_parallel)
 
@@ -421,15 +452,12 @@ wasm_PARALLEL_SUBDIRS := $(wasm_dirs_parallel)
 wasm_tools_SUBDIRS :=
 wasm_tools_PARALLEL_SUBDIRS := $(wasm_tools_dirs_parallel)
 
-netcore_SUBDIRS := System.Private.CoreLib
-netcore_PARALLEL_SUBDIRS :=
-
 include ../build/rules.make
 
 DIST_SUBDIRS = $(testing_aot_full_dirs_parallel) $(testing_aot_hybrid_dirs_parallel) $(monotouch_dirs_parallel) $(monotouch_tools_dirs_parallel) \
 $(monodroid_dirs_parallel) $(monodroid_tools_dirs_parallel) $(xammac_dirs_parallel) $(net_4_x_dirs) $(net_4_x_parallel_dirs) \
 $(xammac_4_5_dirs_parallel) $(unreal_dirs_parallel) $(wasm_dirs_parallel) $(wasm_tools_dirs_parallel) $(xbuild_14_SUBDIRS) \
-$(testing_aot_full_interp_dirs_parallel) $(netcore_SUBDIRS) dlr aot-compiler reference-assemblies Facades
+$(testing_aot_full_interp_dirs_parallel) dlr aot-compiler reference-assemblies Facades
 
 # No new makefiles for: System.Messaging, System.Web.Mobile,
 # System.ServiceProcess
@@ -533,8 +561,6 @@ get-monolite-latest:
 dist-default: dist-monolite-all-platforms
 
 dist-local: dist-default
-
-csproj-local:
 
 do-clean:
 	$(RM) -rf $(topdir)/class/lib/$(PROFILE)

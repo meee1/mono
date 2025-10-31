@@ -141,7 +141,7 @@ g_file_open_tmp (const gchar *tmpl, gchar **name_used, GError **gerror)
 		return -1;
 	}
 
-	t = g_build_filename (g_get_tmp_dir (), tmpl, NULL);
+	t = g_build_filename (g_get_tmp_dir (), tmpl, (const char*)NULL);
 
 	fd = mkstemp (t);
 
@@ -179,7 +179,7 @@ g_get_current_dir (void)
 	} while (fail);
 
 	/* On amd64 sometimes the bottom 32-bits of r == the bottom 32-bits of buffer
-	 * but the top 32-bits of r have overflown to 0xffffffff (seriously wtf getcwd
+	 * but the top 32-bits of r have overflown to 0xffffffff (seriously, getcwd
 	 * so we return the buffer here since it has a pointer to the valid string
 	 */
 	return buffer;

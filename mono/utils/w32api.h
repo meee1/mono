@@ -7,6 +7,9 @@
 
 #include <glib.h>
 
+#define WAIT_TOO_MANY_POSTS      ((gint) 0x0000012A)
+#define WAIT_NOT_OWNED_BY_CALLER ((gint) 0x0000012B)
+
 #ifndef HOST_WIN32
 
 #define WAIT_FAILED        ((gint) 0xFFFFFFFF)
@@ -47,10 +50,6 @@ typedef struct pollfd {
 	short  events;
 	short  revents;
 } WSAPOLLFD, *PWSAPOLLFD, *LPWSAPOLLFD;
-#endif
-
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
-#include <mswsock.h>
 #endif
 
 #endif /* HOST_WIN32 */

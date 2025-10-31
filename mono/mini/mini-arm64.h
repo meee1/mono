@@ -19,6 +19,8 @@
 
 #define MONO_MAX_IREGS 32
 #define MONO_MAX_FREGS 32
+#define MONO_MAX_XREGS 32
+
 
 #define MONO_CONTEXT_SET_LLVM_EXC_REG(ctx, exc) do { (ctx)->regs [0] = (gsize)exc; } while (0)
 
@@ -40,6 +42,10 @@
 #define MONO_ARCH_CALLEE_FREGS 0xfffc00ff
 /* v8..v15 */
 #define MONO_ARCH_CALLEE_SAVED_FREGS 0xff00
+
+#define MONO_ARCH_CALLEE_SAVED_XREGS 0
+
+#define MONO_ARCH_CALLEE_XREGS MONO_ARCH_CALLEE_FREGS
 
 #define MONO_ARCH_USE_FPSTACK FALSE
 
@@ -79,8 +85,6 @@ struct MonoLMF {
 
 /* Structure used by the sequence points in AOTed code */
 struct SeqPointInfo {
-	gpointer ss_trigger_page;
-	gpointer bp_trigger_page;
 	gpointer ss_tramp_addr;
 	guint8* bp_addrs [MONO_ZERO_LEN_ARRAY];
 };
@@ -112,6 +116,8 @@ typedef struct {
 	int thunks_size;
 } MonoCompileArch;
 
+#define MONO_ARCH_EMULATE_FCONV_TO_U4 1
+#define MONO_ARCH_EMULATE_FCONV_TO_U8 1
 #ifdef MONO_ARCH_ILP32
 /* For the watch (starting with series 4), a new ABI is introduced: arm64_32.
  * We can still use the older AOT compiler to produce bitcode, because it's
@@ -167,6 +173,10 @@ typedef struct {
 #define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
 #define MONO_ARCH_FLOAT32_SUPPORTED 1
 #define MONO_ARCH_HAVE_INTERP_PINVOKE_TRAMP 1
+#define MONO_ARCH_LLVM_TARGET_LAYOUT "e-i64:64-i128:128-n32:64-S128"
+#ifdef TARGET_OSX
+#define MONO_ARCH_FORCE_FLOAT32 1
+#endif
 
 // Does the ABI have a volatile non-parameter register, so tailcall
 // can pass context to generics or interfaces?
@@ -182,7 +192,7 @@ typedef struct {
 
 #endif
 
-#if defined(TARGET_IOS)
+#if defined(TARGET_IOS) || defined(TARGET_WATCHOS)
 #define MONO_ARCH_HAVE_UNWIND_BACKTRACE 1
 #endif
 
@@ -240,7 +250,7 @@ typedef struct {
 struct CallInfo {
 	int nargs;
 	int gr, fr, stack_usage;
-	gboolean pinvoke;
+	gboolean pinvoke, vararg;
 	ArgInfo ret;
 	ArgInfo sig_cookie;
 	ArgInfo args [1];
@@ -270,6 +280,10 @@ guint8* mono_arm_emit_load_regarray (guint8 *code, guint64 regs, int basereg, in
 
 /* MonoJumpInfo **ji */
 guint8* mono_arm_emit_aotconst (gpointer ji, guint8 *code, guint8 *code_start, int dreg, guint32 patch_type, gconstpointer data);
+
+guint8* mono_arm_emit_brx (guint8 *code, int reg);
+
+guint8* mono_arm_emit_blrx (guint8 *code, int reg);
 
 void mono_arm_patch (guint8 *code, guint8 *target, int relocation);
 

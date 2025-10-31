@@ -38,9 +38,6 @@ namespace System
 {
 	[StructLayout (LayoutKind.Auto)]
 	public
-#if NETCORE
-	ref
-#endif
 	struct ArgIterator
 	{
 #pragma warning disable 169, 414
@@ -58,6 +55,8 @@ namespace System
 			sig = IntPtr.Zero;
 			args = IntPtr.Zero;
 			next_arg = num_args = 0;
+			if (arglist.args == IntPtr.Zero)
+				throw new PlatformNotSupportedException ();
 			Setup (arglist.args, IntPtr.Zero);
 		}
 
@@ -67,6 +66,8 @@ namespace System
 			sig = IntPtr.Zero;
 			args = IntPtr.Zero;
 			next_arg = num_args = 0;
+			if (arglist.args == IntPtr.Zero)
+				throw new PlatformNotSupportedException ();
 			Setup (arglist.args, (IntPtr) ptr);
 		}
 

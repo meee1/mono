@@ -62,12 +62,6 @@ Combine: MonoDefaults, GENERATE_GET_CLASS_WITH_CACHE, TYPED_HANDLE_DECL and frie
  * chunk should be updated before an object is written into the
  * handle, and chunks to be scanned (between bottom and top) should
  * always be valid.
- *
- * Note that the handle stack is scanned PRECISELY (see
- * sgen_client_scan_thread_data ()).  That means there should not be
- * stale objects scanned.  So when we manipulate the size of a chunk,
- * we must ensure that the newly scannable slot is either null or
- * points to a valid value.
  */
 
 static HandleStack*
@@ -93,8 +87,6 @@ free_handle_chunk (HandleChunk *chunk)
 {
 	g_free (chunk);
 }
-
-const MonoObjectHandle mono_null_value_handle = { 0 };
 
 #define THIS_IS_AN_OK_NUMBER_OF_HANDLES 100
 
@@ -171,11 +163,15 @@ mono_handle_new (MonoObject *obj, MonoThreadInfo *info, const char *owner)
 #endif
 {
 	info = info ? info : mono_thread_info_current ();
+
 	HandleStack *handles = info->handle_stack;
 	HandleChunk *top = handles->top;
 #ifdef MONO_HANDLE_TRACK_SP
 	mono_handle_chunk_leak_check (handles);
 #endif
+
+	// FIXME: Since we scan the handle stack inprecisely, some of the
+	// membars could be removed
 
 retry:
 	if (G_LIKELY (top->size < OBJECTS_PER_HANDLES_CHUNK)) {
@@ -319,14 +315,11 @@ mono_handle_stack_scan (HandleStack *stack, GcScanFunc func, gpointer gc_data, g
 		check_handle_stack_monotonic (stack);
 
 	/*
-	  We're called twice - on the imprecise pass we do nothing.
-	  Interior pointers are retained in managed frames.
-	  On the precise pass, we scan all the objects where the handles point to the start of
-	  the object.
-
-	  Note that if we're running, we know the world is stopped.
-	*/
-	if (!precise)
+	 * We're called twice, on the precise pass we do nothing.
+	 * On the inprecise pass, we pin the objects pointed to by the handles.
+	 * Note that if we're running, we know the world is stopped.
+	 */
+	if (precise)
 		return;
 
 	HandleChunk *cur = stack->bottom;
@@ -345,9 +338,11 @@ mono_handle_stack_scan (HandleStack *stack, GcScanFunc func, gpointer gc_data, g
 	}
 }
 
-void
+MonoThreadInfo*
 mono_stack_mark_record_size (MonoThreadInfo *info, HandleStackMark *stackmark, const char *func_name)
 {
+	info = info ? info : mono_thread_info_current ();
+
 	HandleStack *handles = info->handle_stack;
 	HandleChunk *cur = stackmark->chunk;
 	int size = -stackmark->size; //discard the starting point of the stack
@@ -360,6 +355,8 @@ mono_stack_mark_record_size (MonoThreadInfo *info, HandleStackMark *stackmark, c
 
 	if (size > THIS_IS_AN_OK_NUMBER_OF_HANDLES)
 		g_warning ("%s USED %d handles\n", func_name, size);
+
+	return info;
 }
 
 /*
@@ -399,15 +396,7 @@ mono_array_new_full_handle (MonoDomain *domain, MonoClass *array_class, uintptr_
 	return MONO_HANDLE_NEW (MonoArray, mono_array_new_full_checked (domain, array_class, lengths, lower_bounds, error));
 }
 
-uintptr_t
-mono_array_handle_length (MonoArrayHandle arr)
-{
-	MONO_REQ_GC_UNSAFE_MODE;
-
-	return MONO_HANDLE_RAW (arr)->max_length;
-}
-
-uint32_t
+MonoGCHandle
 mono_gchandle_from_handle (MonoObjectHandle handle, mono_bool pinned)
 {
 	// FIXME This used to check for out of scope handles.
@@ -420,22 +409,28 @@ mono_gchandle_from_handle (MonoObjectHandle handle, mono_bool pinned)
 }
 
 MonoObjectHandle
-mono_gchandle_get_target_handle (uint32_t gchandle)
+mono_gchandle_get_target_handle (MonoGCHandle gchandle)
 {
 	return MONO_HANDLE_NEW (MonoObject, mono_gchandle_get_target_internal (gchandle));
 }
 
 gpointer
-mono_array_handle_pin_with_size (MonoArrayHandle handle, int size, uintptr_t idx, uint32_t *gchandle)
+mono_array_handle_addr (MonoArrayHandle handle, int size, uintptr_t index)
+{
+	MonoArray *raw = MONO_HANDLE_RAW (handle);
+	return mono_array_addr_with_size_internal (raw, size, index);
+}
+
+gpointer
+mono_array_handle_pin_with_size (MonoArrayHandle handle, int size, uintptr_t idx, MonoGCHandle *gchandle)
 {
 	g_assert (gchandle != NULL);
 	*gchandle = mono_gchandle_from_handle (MONO_HANDLE_CAST(MonoObject,handle), TRUE);
-	MonoArray *raw = MONO_HANDLE_RAW (handle);
-	return mono_array_addr_with_size_internal (raw, size, idx);
+	return mono_array_handle_addr (handle, size, idx);
 }
 
 gunichar2*
-mono_string_handle_pin_chars (MonoStringHandle handle, uint32_t *gchandle)
+mono_string_handle_pin_chars (MonoStringHandle handle, MonoGCHandle *gchandle)
 {
 	g_assert (gchandle != NULL);
 	*gchandle = mono_gchandle_from_handle (MONO_HANDLE_CAST (MonoObject, handle), TRUE);
@@ -444,7 +439,7 @@ mono_string_handle_pin_chars (MonoStringHandle handle, uint32_t *gchandle)
 }
 
 gpointer
-mono_object_handle_pin_unbox (MonoObjectHandle obj, uint32_t *gchandle)
+mono_object_handle_pin_unbox (MonoObjectHandle obj, MonoGCHandle *gchandle)
 {
 	g_assert (!MONO_HANDLE_IS_NULL (obj));
 	MonoClass *klass = mono_handle_class (obj);
@@ -468,7 +463,7 @@ mono_handle_stack_is_empty (HandleStack *stack)
 
 //FIXME inline
 gboolean
-mono_gchandle_target_equal (uint32_t gchandle, MonoObjectHandle equal)
+mono_gchandle_target_equal (MonoGCHandle gchandle, MonoObjectHandle equal)
 {
 	// This function serves to reduce coop handle creation.
 	MONO_HANDLE_SUPPRESS_SCOPE (1);
@@ -477,7 +472,7 @@ mono_gchandle_target_equal (uint32_t gchandle, MonoObjectHandle equal)
 
 //FIXME inline
 void
-mono_gchandle_target_is_null_or_equal (uint32_t gchandle, MonoObjectHandle equal, gboolean *is_null,
+mono_gchandle_target_is_null_or_equal (MonoGCHandle gchandle, MonoObjectHandle equal, gboolean *is_null,
 	gboolean *is_equal)
 {
 	// This function serves to reduce coop handle creation.
@@ -489,13 +484,13 @@ mono_gchandle_target_is_null_or_equal (uint32_t gchandle, MonoObjectHandle equal
 
 //FIXME inline
 void
-mono_gchandle_set_target_handle (guint32 gchandle, MonoObjectHandle obj)
+mono_gchandle_set_target_handle (MonoGCHandle gchandle, MonoObjectHandle obj)
 {
 	mono_gchandle_set_target (gchandle, MONO_HANDLE_RAW (obj));
 }
 
 //FIXME inline
-guint32
+MonoGCHandle
 mono_gchandle_new_weakref_from_handle (MonoObjectHandle handle)
 {
 	return mono_gchandle_new_weakref_internal (MONO_HANDLE_SUPPRESS (MONO_HANDLE_RAW (handle)), FALSE);
@@ -509,7 +504,7 @@ mono_handle_hash (MonoObjectHandle object)
 }
 
 //FIXME inline
-guint32
+MonoGCHandle
 mono_gchandle_new_weakref_from_handle_track_resurrection (MonoObjectHandle handle)
 {
 	return mono_gchandle_new_weakref_internal (MONO_HANDLE_SUPPRESS (MONO_HANDLE_RAW (handle)), TRUE);

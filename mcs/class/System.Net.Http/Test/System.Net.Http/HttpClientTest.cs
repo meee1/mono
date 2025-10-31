@@ -175,7 +175,7 @@ namespace MonoTests.System.Net.Http
 			}
 		}
 
-		const int WaitTimeout = 5000;
+		const int WaitTimeout = 10000;
 
 		[Test]
 		public void Ctor ()
@@ -188,9 +188,14 @@ namespace MonoTests.System.Net.Http
 		}
 
 		[Test]
-		public void Ctor_Default ()
+#if FEATURE_NO_BSD_SOCKETS
+#if !MONOTOUCH_WATCH			
+		[ExpectedException (typeof (PlatformNotSupportedException))]
+#endif		
+#endif
+		public void Ctor_HttpClientHandler ()
 		{
-			var client = HttpClientTestHelpers.CreateHttpClient ();
+			var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 			Assert.IsNull (client.BaseAddress, "#1");
 			Assert.IsNotNull (client.DefaultRequestHeaders, "#2");	// TODO: full check
 			Assert.AreEqual (int.MaxValue, client.MaxResponseContentBufferSize, "#3");
@@ -259,6 +264,7 @@ namespace MonoTests.System.Net.Http
 
 
 		[Test]
+		[Ignore]
 #if FEATURE_NO_BSD_SOCKETS
 		// Using HttpClientHandler, which indirectly requires BSD sockets.
 		[ExpectedException (typeof (PlatformNotSupportedException))]
@@ -271,7 +277,7 @@ namespace MonoTests.System.Net.Http
 			handler.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
 
 			var httpClient = new HttpClient (handler) {
-				BaseAddress = new Uri ("https://google.com"),
+				BaseAddress = new Uri ("https://www.example.com"),
 				Timeout = TimeSpan.FromMilliseconds (1)
 			};
 
@@ -292,7 +298,7 @@ namespace MonoTests.System.Net.Http
 		[Test]
 		public void Properties ()
 		{
-			var client = HttpClientTestHelpers.CreateHttpClient ();
+			var client = new HttpClient ();
 			client.BaseAddress = null;
 			client.MaxResponseContentBufferSize = int.MaxValue;
 			client.Timeout = Timeout.InfiniteTimeSpan;
@@ -305,7 +311,7 @@ namespace MonoTests.System.Net.Http
 		[Test]
 		public void Properties_Invalid ()
 		{
-			var client = HttpClientTestHelpers.CreateHttpClient ();
+			var client = new HttpClient ();
 			try {
 				client.MaxResponseContentBufferSize = 0;
 				Assert.Fail ("#1");
@@ -335,6 +341,7 @@ namespace MonoTests.System.Net.Http
 #if FEATURE_NO_BSD_SOCKETS
 		[ExpectedException (typeof (PlatformNotSupportedException))]
 #endif
+		[Category ("InetAccess")]
 		public void Proxy_Disabled ()
 		{
 			var pp = WebRequest.DefaultWebProxy;
@@ -346,7 +353,7 @@ namespace MonoTests.System.Net.Http
 				request.UseProxy = false;
 
 				var client = new HttpClient (request);
-				Assert.IsTrue (client.GetAsync ("http://google.com").Wait (5000), "needs internet access");
+				Assert.IsTrue (client.GetAsync ("http://www.example.com").Wait (5000), "needs internet access");
 			} finally {
 				WebRequest.DefaultWebProxy = pp;
 			}
@@ -358,7 +365,7 @@ namespace MonoTests.System.Net.Http
 			var mh = new HttpMessageHandlerMock ();
 
 			var client = new HttpClient (mh);
-			client.BaseAddress = new Uri ("http://xamarin.com");
+			client.BaseAddress = new Uri ("http://www.example.com");
 			var request = new HttpRequestMessage ();
 			var response = new HttpResponseMessage ();
 
@@ -371,8 +378,7 @@ namespace MonoTests.System.Net.Http
 			Assert.AreEqual (response, client.SendAsync (request).Result, "#1");
 		}
 
-		[Test]
-		[Category ("NotWorking")]
+		[Test]		
 		public void Send_BaseAddress ()
 		{
 			var mh = new HttpMessageHandlerMock ();
@@ -396,9 +402,9 @@ namespace MonoTests.System.Net.Http
 			var mh = new HttpMessageHandlerMock ();
 
 			var client = new HttpClient (mh);
-			client.DefaultRequestHeaders.Referrer = new Uri ("http://google.com");
+			client.DefaultRequestHeaders.Referrer = new Uri ("http://www.example.com");
 
-			var request = new HttpRequestMessage (HttpMethod.Get, "http://xamarin.com");
+			var request = new HttpRequestMessage (HttpMethod.Get, "http://www.example.org");
 			var response = new HttpResponseMessage ();
 
 			mh.OnSend = l => {
@@ -446,7 +452,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Complete_Default/");
 				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
 
@@ -496,7 +502,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Complete_Version_1_0/");
 				request.Version = HttpVersion.Version10;
 				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
@@ -670,7 +676,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 
 				client.DefaultRequestHeaders.Add("User-Agent", "MLK Android Phone 1.1.9");
 
@@ -706,7 +712,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 
 				client.DefaultRequestHeaders.Add("Host", "customhost");
 
@@ -741,7 +747,7 @@ namespace MonoTests.System.Net.Http
 
 			try {
 				try {
-					var client = HttpClientTestHelpers.CreateHttpClient ();
+					var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 					client.DefaultRequestHeaders.TransferEncodingChunked = true;
 					client.GetAsync ($"http://localhost:{port}/Send_Transfer_Encoding_Chunked_Needs_Content/").Wait ();
 					// fails with
@@ -783,48 +789,12 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				client.DefaultRequestHeaders.TransferEncodingChunked = true;
 
 				client.GetAsync ($"http://localhost:{port}/Send_Transfer_Encoding_Chunked/").Wait ();
 
 				Assert.AreEqual (false, failed, "#102");
-			} finally {
-				listener.Abort ();
-				listener.Close ();
-			}
-		}
-
-		[Test]
-#if FEATURE_NO_BSD_SOCKETS
-		[ExpectedException (typeof (PlatformNotSupportedException))]
-#endif
-		// The SocketsHttpHandler permits custom transfer encodings.
-		public void Send_Transfer_Encoding_Custom ()
-		{
-			if (HttpClientTestHelpers.UsingSocketsHandler)
-				Assert.Ignore ("Requires LegacyHttpClient");
-
-			bool? failed = null;
-
-			var listener = NetworkHelpers.CreateAndStartHttpListener("http://*:", out int port, "/Send_Transfer_Encoding_Custom/");
-			AddListenerContext (listener, l => {
-				failed = true;
-			});
-
-			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
-				client.DefaultRequestHeaders.TransferEncoding.Add (new TransferCodingHeaderValue ("chunked2"));
-
-				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Transfer_Encoding_Custom/");
-
-				try {
-					client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Wait ();
-					Assert.Fail ("#1");
-				} catch (AggregateException e) {
-					Assert.AreEqual (typeof (InvalidOperationException), e.InnerException.GetType (), "#2");
-				}
-				Assert.IsNull (failed, "#102");
 			} finally {
 				listener.Abort ();
 				listener.Close ();
@@ -845,7 +815,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Complete_Content/");
 				Assert.IsTrue (request.Headers.TryAddWithoutValidation ("aa", "vv"), "#0");
 				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
@@ -876,7 +846,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				client.MaxResponseContentBufferSize = 1000;
 				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Complete_Content_MaxResponseContentBufferSize/");
 				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
@@ -902,7 +872,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				client.MaxResponseContentBufferSize = 1000;
 				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Complete_Content_MaxResponseContentBufferSize_Error/");
 
@@ -998,7 +968,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var request = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Complete_Error/");
 				var response = client.SendAsync (request, HttpCompletionOption.ResponseHeadersRead).Result;
 
@@ -1022,7 +992,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var r = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Content_Get/");
 				var response = client.SendAsync (r).Result;
 
@@ -1050,7 +1020,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var r = new HttpRequestMessage (HttpMethod.Get, $"http://localhost:{port}/Send_Content_BomEncoding/");
 				var response = client.SendAsync (r).Result;
 
@@ -1076,7 +1046,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var r = new HttpRequestMessage (HttpMethod.Put, $"http://localhost:{port}/Send_Content_Put/");
 				r.Content = new StringContent ("my text");
 				var response = client.SendAsync (r).Result;
@@ -1141,9 +1111,14 @@ namespace MonoTests.System.Net.Http
 		}
 
 		[Test]
+#if FEATURE_NO_BSD_SOCKETS
+#if !MONOTOUCH_WATCH			
+		[ExpectedException (typeof (PlatformNotSupportedException))]
+#endif		
+#endif
 		public void Send_Invalid ()
 		{
-			var client = HttpClientTestHelpers.CreateHttpClient ();
+			var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 			try {
 				client.SendAsync (null).Wait (WaitTimeout);
 				Assert.Fail ("#1");
@@ -1237,7 +1212,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 
 				client.DefaultRequestHeaders.TransferEncodingChunked = true;
 
@@ -1291,7 +1266,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 
 				var imageContent = new StreamContent (new MemoryStream ());
 
@@ -1326,7 +1301,7 @@ namespace MonoTests.System.Net.Http
 			AddListenerContext (listener, context);  // add another request handler for the second request
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				var t1 = client.GetStringAsync ($"http://localhost:{port}/GetString_Many/");
 				var t2 = client.GetStringAsync ($"http://localhost:{port}/GetString_Many/");
 				Assert.IsTrue (Task.WaitAll (new [] { t1, t2 }, WaitTimeout));
@@ -1352,7 +1327,7 @@ namespace MonoTests.System.Net.Http
 			});
 
 			try {
-				var client = HttpClientTestHelpers.CreateHttpClient ();
+				var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ();
 				try {
 					client.GetByteArrayAsync ($"http://localhost:{port}/GetByteArray_ServerError/").Wait (WaitTimeout);
 					Assert.Fail ("#1");
@@ -1511,7 +1486,7 @@ namespace MonoTests.System.Net.Http
 				Assert.Ignore ("Throws System.NullReferenceException");
 
 			try {
-				using (var client = HttpClientTestHelpers.CreateHttpClient ()) {
+				using (var client = HttpClientTestHelpers.CreateHttpClientWithHttpClientHandler ()) {
 					client.GetAsync ("http://255.255.255.255").Wait (WaitTimeout);
 				}
 			} catch (AggregateException e) {

@@ -74,8 +74,6 @@ typedef struct
 
 TYPED_HANDLE_DECL (MonoW32ProcessStartInfo);
 
-typedef uint32_t gchandle_t; // FIXME use this more, make it typesafe.
-
 typedef struct _MonoCreateProcessCoop {
 	gunichar2 *filename;
 	gunichar2 *arguments;
@@ -92,12 +90,12 @@ typedef struct _MonoCreateProcessCoop {
 		MonoStringHandle domain;
 	} coophandle;
 	struct {
-		gchandle_t filename;
-		gchandle_t arguments;
-		gchandle_t working_directory;
-		gchandle_t verb;
-		gchandle_t username;
-		gchandle_t domain;
+		MonoGCHandle filename;
+		MonoGCHandle arguments;
+		MonoGCHandle working_directory;
+		MonoGCHandle verb;
+		MonoGCHandle username;
+		MonoGCHandle domain;
 	} gchandle;
 	struct {
 		gsize filename;
@@ -133,29 +131,4 @@ gchar*
 mono_w32process_get_path (pid_t pid);
 
 #endif
-
-ICALL_EXPORT
-gpointer
-ves_icall_System_Diagnostics_Process_GetProcess_internal (guint32 pid);
-
-ICALL_EXPORT
-MonoArray*
-ves_icall_System_Diagnostics_Process_GetProcesses_internal (void);
-
-ICALL_EXPORT
-MonoArray*
-ves_icall_System_Diagnostics_Process_GetModules_internal (MonoObject *this_obj, gpointer process);
-
-ICALL_EXPORT
-void
-ves_icall_System_Diagnostics_FileVersionInfo_GetVersionInfo_internal (MonoObject *this_obj, MonoString *filename);
-
-ICALL_EXPORT
-MonoString*
-ves_icall_System_Diagnostics_Process_ProcessName_internal (gpointer process);
-
-ICALL_EXPORT
-gint64
-ves_icall_System_Diagnostics_Process_GetProcessData (int pid, gint32 data_type, gint32 *error);
-
 #endif /* _MONO_METADATA_W32PROCESS_H_ */

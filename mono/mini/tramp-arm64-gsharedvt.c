@@ -13,6 +13,7 @@
 #include "mini.h"
 #include "mini-arm64.h"
 #include "mini-arm64-gsharedvt.h"
+#include "mini-runtime.h"
 
 /*
  * GSHAREDVT
@@ -36,13 +37,16 @@ mono_arch_get_gsharedvt_arg_trampoline (MonoDomain *domain, gpointer arg, gpoint
 	 */
 	buf = code = mono_global_codeman_reserve (buf_len);
 
+	MINI_BEGIN_CODEGEN ();
+
 	code = mono_arm_emit_imm64 (code, ARMREG_IP1, (guint64)arg);
 	code = mono_arm_emit_imm64 (code, ARMREG_IP0, (guint64)addr);
 
-	arm_brx (code, ARMREG_IP0);
+	code = mono_arm_emit_brx (code, ARMREG_IP0);
 
 	g_assert ((code - buf) < buf_len);
-	mono_arch_flush_icache (buf, code - buf);
+
+	MINI_END_CODEGEN (buf, code - buf, -1, NULL);
 
 	return buf;
 }
@@ -214,7 +218,7 @@ mono_arch_get_gsharedvt_trampoline (MonoTrampInfo **info, gboolean aot)
 	MonoJumpInfo *ji = NULL;
 	guint8 *br_out, *br [64], *br_ret [64], *bcc_ret [64];
 	int i, n_arg_regs, n_arg_fregs, offset, arg_reg, info_offset, rgctx_arg_reg_offset;
-	int caller_reg_area_offset, callee_reg_area_offset, callee_stack_area_offset;
+	int caller_reg_area_offset, callee_reg_area_offset;
 	int br_ret_index, bcc_ret_index;
 
 	buf_len = 2048;
@@ -248,6 +252,8 @@ mono_arch_get_gsharedvt_trampoline (MonoTrampInfo **info, gboolean aot)
 
 	cfa_offset = offset;
 
+	MINI_BEGIN_CODEGEN ();
+
 	/* Setup frame */
 	arm_stpx_pre (code, ARMREG_FP, ARMREG_LR, ARMREG_SP, -cfa_offset);
 	mono_add_unwind_op_def_cfa (unwind_ops, code, buf, ARMREG_SP, cfa_offset);
@@ -277,7 +283,6 @@ mono_arch_get_gsharedvt_trampoline (MonoTrampInfo **info, gboolean aot)
 	/* Allocate callee register area just below the callee area so it can be accessed from start_gsharedvt_call using negative offsets */
 	/* The + 8 is for alignment */
 	callee_reg_area_offset = 8;
-	callee_stack_area_offset = callee_reg_area_offset + (n_arg_regs * sizeof (target_mgreg_t));
 	arm_subx_imm (code, ARMREG_SP, ARMREG_SP, ((n_arg_regs + n_arg_fregs) * sizeof (target_mgreg_t)) + 8);
 
 	/*
@@ -300,10 +305,10 @@ mono_arch_get_gsharedvt_trampoline (MonoTrampInfo **info, gboolean aot)
 	arm_ldrx (code, ARMREG_R3, ARMREG_FP, rgctx_arg_reg_offset);
 
 	if (aot)
-		code = mono_arm_emit_aotconst (&ji, code, buf, ARMREG_IP0, MONO_PATCH_INFO_JIT_ICALL_ADDR, "mono_arm_start_gsharedvt_call");
+		code = mono_arm_emit_aotconst (&ji, code, buf, ARMREG_IP0, MONO_PATCH_INFO_JIT_ICALL_ADDR, GUINT_TO_POINTER (MONO_JIT_ICALL_mono_arm_start_gsharedvt_call));
 	else
 		code = mono_arm_emit_imm64 (code, ARMREG_IP0, (guint64)mono_arm_start_gsharedvt_call);
-	arm_blrx (code, ARMREG_IP0);
+	code = mono_arm_emit_blrx (code, ARMREG_IP0);
 
 	/* Make the real method call */
 	/* R0 contains the addr to call */
@@ -320,7 +325,7 @@ mono_arch_get_gsharedvt_trampoline (MonoTrampInfo **info, gboolean aot)
 	/* Clear callee reg area */
 	arm_addx_imm (code, ARMREG_SP, ARMREG_SP, ((n_arg_regs + n_arg_fregs) * sizeof (target_mgreg_t)) + 8);
 	/* Make the call */
-	arm_blrx (code, ARMREG_IP1);
+	code = mono_arm_emit_blrx (code, ARMREG_IP1);
 
 	br_ret_index = 0;
 	bcc_ret_index = 0;
@@ -548,7 +553,8 @@ mono_arch_get_gsharedvt_trampoline (MonoTrampInfo **info, gboolean aot)
 	if (info)
 		*info = mono_tramp_info_create ("gsharedvt_trampoline", buf, code - buf, ji, unwind_ops);
 
-	mono_arch_flush_icache (buf, code - buf);
+	MINI_END_CODEGEN (buf, code - buf, -1, NULL);
+
 	return buf;
 }
 

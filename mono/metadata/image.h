@@ -28,9 +28,11 @@ MONO_API void          mono_images_cleanup (void);
 
 MONO_API MonoImage    *mono_image_open     (const char *fname,
 				   MonoImageOpenStatus *status);
-MONO_API MonoImage    *mono_image_open_full (const char *fname,
+MONO_API MONO_RT_EXTERNAL_ONLY
+MonoImage             *mono_image_open_full (const char *fname,
 				   MonoImageOpenStatus *status, mono_bool refonly);
-MONO_API MonoImage    *mono_pe_file_open     (const char *fname,
+MONO_API MONO_RT_EXTERNAL_ONLY
+MonoImage             *mono_pe_file_open     (const char *fname,
 				     MonoImageOpenStatus *status);
 MONO_API MONO_RT_EXTERNAL_ONLY
 MonoImage    *mono_image_open_from_data (char *data, uint32_t data_len, mono_bool need_copy,
@@ -46,8 +48,10 @@ MONO_API MONO_RT_EXTERNAL_ONLY
 MonoImage             *mono_image_loaded   (const char *name);
 MONO_API MONO_RT_EXTERNAL_ONLY
 MonoImage             *mono_image_loaded_full   (const char *name, mono_bool refonly);
-MONO_API MonoImage    *mono_image_loaded_by_guid (const char *guid);
-MONO_API MonoImage    *mono_image_loaded_by_guid_full (const char *guid, mono_bool refonly);
+MONO_API MONO_RT_EXTERNAL_ONLY
+MonoImage             *mono_image_loaded_by_guid (const char *guid);
+MONO_API MONO_RT_EXTERNAL_ONLY
+MonoImage             *mono_image_loaded_by_guid_full (const char *guid, mono_bool refonly);
 MONO_API void          mono_image_init     (MonoImage *image);
 MONO_API void          mono_image_close    (MonoImage *image);
 MONO_API void          mono_image_addref   (MonoImage *image);
@@ -87,6 +91,8 @@ MONO_API uint32_t       mono_image_strong_name_position (MonoImage *image, uint3
 MONO_API void          mono_image_add_to_name_cache (MonoImage *image, 
 			const char *nspace, const char *name, uint32_t idx);
 MONO_API mono_bool     mono_image_has_authenticode_entry (MonoImage *image);
+
+mono_bool mono_has_pdb_checksum (char *raw_data, uint32_t raw_data_len);
 
 MONO_END_DECLS
 

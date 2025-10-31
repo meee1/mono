@@ -4,6 +4,7 @@
  * Authors:
  *   Paolo Molaro (lupus@ximian.com)
  *   Alex Rønne Petersen (alexrp@xamarin.com)
+ *   Johan Lorensson (lateralusx.github@gmail.com)
  *
  * Copyright 2010 Novell, Inc (http://www.novell.com)
  * Copyright 2011 Xamarin Inc (http://www.xamarin.com)
@@ -11,6 +12,7 @@
  */
 
 #include <config.h>
+#include <gmodule.h>
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/assembly-internals.h>
 #include <mono/metadata/class-internals.h>
@@ -43,13 +45,14 @@
 #include <mono/utils/mono-os-semaphore.h>
 #include <mono/utils/mono-threads.h>
 #include <mono/utils/mono-threads-api.h>
+#include <mono/utils/mono-threads-coop.h>
 #include <mono/utils/mono-error-internals.h>
+#include <mono/utils/mono-publib.h>
 #include <mono/utils/os-event.h>
+#include <mono/utils/w32subset.h>
 #include "log.h"
+#include "helper.h"
 
-#ifdef HAVE_DLFCN_H
-#include <dlfcn.h>
-#endif
 #include <fcntl.h>
 #ifdef HAVE_LINK_H
 #include <link.h>
@@ -60,13 +63,26 @@
 #if defined(__APPLE__)
 #include <mach/mach_time.h>
 #endif
+#ifndef HOST_WIN32
 #include <netinet/in.h>
+#endif
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
 #endif
+#ifndef HOST_WIN32
 #include <sys/socket.h>
+#endif
 #if defined (HAVE_SYS_ZLIB)
 #include <zlib.h>
+#endif
+
+#ifdef HOST_WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#endif
+
+#ifndef HOST_WIN32
+#define HAVE_COMMAND_PIPES 1
 #endif
 
 // Statistics for internal profiler data structures.
@@ -295,10 +311,17 @@ struct _MonoProfiler {
 	LARGE_INTEGER pcounter_freq;
 #endif
 
+#if HAVE_API_SUPPORT_WIN32_PIPE_OPEN_CLOSE && !defined (HOST_WIN32)
 	int pipe_output;
+#endif
 	int command_port;
 	int server_socket;
+
+#ifdef HAVE_COMMAND_PIPES
 	int pipes [2];
+#else
+	int pipe_command;
+#endif
 
 	MonoLinkedListSet profiler_thread_list;
 	volatile gint32 buffer_lock_state;
@@ -603,6 +626,8 @@ ensure_logbuf_unsafe (MonoProfilerThread *thread, int bytes)
  *
  * The lock does not support recursion.
  */
+static void
+buffer_lock_helper (void);
 
 static void
 buffer_lock (void)
@@ -618,31 +643,58 @@ buffer_lock (void)
 	 * is about to stop.
 	 */
 	if (mono_atomic_load_i32 (&log_profiler.buffer_lock_state) != get_thread ()->small_id << 16) {
-		MONO_ENTER_GC_SAFE;
+		/* We can get some sgen events (for example gc_handle_deleted)
+		 * from threads that are unattached to the runtime (but that
+		 * are attached to the profiler).  In that case, avoid mono
+		 * thread state transition to GC Safe around the loop, since
+		 * the thread won't be participating in Mono's suspension
+		 * mechianism anyway.
+		 */
+		MonoThreadInfo *info = mono_thread_info_current_unchecked ();
+		if (info) {
+			/* Why do we enter Unsafe and then Safe?  Because we
+			 * might be called from a native-to-managed wrapper
+			 * from a P/Invoke.  In that case the thread is already
+			 * in GC Safe, and the state machine doesn't allow
+			 * recursive GC Safe transitions.  (On the other hand
+			 * it's ok to enter GC Unsafe multiple times - the
+			 * state machine will tell us it's a noop.).
+			 */
+			MONO_ENTER_GC_UNSAFE_WITH_INFO (info);
+			MONO_ENTER_GC_SAFE_WITH_INFO (info);
 
-		gint32 old, new_;
+			buffer_lock_helper ();
 
-		do {
-		restart:
-			// Hold off if a thread wants to take the exclusive lock.
-			while (mono_atomic_load_i32 (&log_profiler.buffer_lock_exclusive_intent))
-				mono_thread_info_yield ();
-
-			old = mono_atomic_load_i32 (&log_profiler.buffer_lock_state);
-
-			// Is a thread holding the exclusive lock?
-			if (old >> 16) {
-				mono_thread_info_yield ();
-				goto restart;
-			}
-
-			new_ = old + 1;
-		} while (mono_atomic_cas_i32 (&log_profiler.buffer_lock_state, new_, old) != old);
-
-		MONO_EXIT_GC_SAFE;
+			MONO_EXIT_GC_SAFE_WITH_INFO;
+			MONO_EXIT_GC_UNSAFE_WITH_INFO;
+		} else
+			buffer_lock_helper ();
 	}
 
 	mono_memory_barrier ();
+}
+
+static void
+buffer_lock_helper (void)
+{
+	gint32 old, new_;
+
+	do {
+	restart:
+		// Hold off if a thread wants to take the exclusive lock.
+		while (mono_atomic_load_i32 (&log_profiler.buffer_lock_exclusive_intent))
+			mono_thread_info_yield ();
+
+		old = mono_atomic_load_i32 (&log_profiler.buffer_lock_state);
+
+		// Is a thread holding the exclusive lock?
+		if (old >> 16) {
+			mono_thread_info_yield ();
+			goto restart;
+		}
+
+		new_ = old + 1;
+	} while (mono_atomic_cas_i32 (&log_profiler.buffer_lock_state, new_, old) != old);
 }
 
 static void
@@ -2381,7 +2433,7 @@ add_code_pointer (uintptr_t ip)
 }
 
 static void
-dump_usym (const char *name, uintptr_t value, uintptr_t size)
+dump_usym (char *name, uintptr_t value, uintptr_t size)
 {
 	int len = strlen (name) + 1;
 
@@ -2401,42 +2453,34 @@ dump_usym (const char *name, uintptr_t value, uintptr_t size)
 	EXIT_LOG;
 }
 
-static const char*
-symbol_for (uintptr_t code)
+static gboolean
+symbol_for (uintptr_t code, char *sname, size_t slen)
 {
-#ifdef HAVE_DLADDR
-	Dl_info di;
-
-	if (dladdr ((void *) code, &di))
-		if (di.dli_sname)
-			return di.dli_sname;
-#endif
-
-	return NULL;
+	return g_module_address ((void *) code, NULL, 0, NULL, sname, slen, NULL);
 }
 
 static void
 dump_unmanaged_coderefs (void)
 {
 	int i;
-	const char* last_symbol;
+	char last_symbol [256];
 	uintptr_t addr, page_end;
 
 	for (i = 0; i < size_code_pages; ++i) {
-		const char* sym;
+		char sym [256];
 		if (!code_pages [i] || code_pages [i] & 1)
 			continue;
-		last_symbol = NULL;
+		last_symbol [0] = '\0';
 		addr = CPAGE_ADDR (code_pages [i]);
 		page_end = addr + CPAGE_SIZE;
 		code_pages [i] |= 1;
 		/* we dump the symbols for the whole page */
 		for (; addr < page_end; addr += 16) {
-			sym = symbol_for (addr);
-			if (sym && sym == last_symbol)
+			gboolean symret = symbol_for (addr, sym, 256);
+			if (symret && strncmp (sym, last_symbol, 256) == 0)
 				continue;
-			last_symbol = sym;
-			if (!sym)
+			g_strlcpy (last_symbol, sym, 256);
+			if (sym [0] == '\0')
 				continue;
 			dump_usym (sym, addr, 0); /* let's not guess the size */
 		}
@@ -2865,10 +2909,50 @@ cleanup_reusable_samples (void)
 static void
 signal_helper_thread (char c)
 {
+#ifdef HAVE_COMMAND_PIPES
 	if (write (log_profiler.pipes [1], &c, 1) != 1) {
 		mono_profiler_printf_err ("Could not write to log profiler pipe: %s", g_strerror (errno));
 		exit (1);
 	}
+#else
+	/*
+	* On Windows we can't use pipes together with sockets in select. Instead of
+	* re-writing the whole logic, the Windows implementation will replace use of command pipe
+	* with simple command buffer and a dummy connect to localhost, making sure
+	* helper thread will pick up command and process is. Since the dummy connection will
+	* be closed right away by client, it will be discarded by helper thread.
+	*/
+	mono_atomic_store_i32(&log_profiler.pipe_command, c);
+
+	SOCKET client_socket;
+	client_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (client_socket != INVALID_SOCKET) {
+		struct sockaddr_in client_addr;
+		client_addr.sin_family = AF_INET;
+		client_addr.sin_port = htons(log_profiler.command_port);
+		inet_pton (client_addr.sin_family, "127.0.0.1", &client_addr.sin_addr);
+
+		gulong non_blocking = 1;
+		ioctlsocket (client_socket, FIONBIO, &non_blocking);
+		if (connect (client_socket, (SOCKADDR *)&client_addr, sizeof (client_addr)) == SOCKET_ERROR) {
+			if (WSAGetLastError () == WSAEWOULDBLOCK) {
+				fd_set wfds;
+				int max_fd = -1;
+
+				FD_ZERO (&wfds);
+				FD_SET (client_socket, &wfds);
+
+				/*
+				* Include timeout to prevent hanging on connect call.
+				*/
+				struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
+				select (client_socket + 1, NULL, &wfds, NULL, &tv);
+			}
+		}
+
+		mono_profhelper_close_socket_fd (client_socket);
+	}
+#endif
 }
 
 static void
@@ -2983,9 +3067,11 @@ log_shutdown (MonoProfiler *prof)
 	if (prof->gzfile)
 		gzclose (prof->gzfile);
 #endif
+#if HAVE_API_SUPPORT_WIN32_PIPE_OPEN_CLOSE && !defined (HOST_WIN32)
 	if (prof->pipe_output)
 		pclose (prof->file);
 	else
+#endif
 		fclose (prof->file);
 
 	mono_conc_hashtable_destroy (prof->method_table);
@@ -2994,6 +3080,14 @@ log_shutdown (MonoProfiler *prof)
 	mono_coop_mutex_destroy (&log_profiler.api_mutex);
 
 	g_free (prof->args);
+
+#ifdef HOST_WIN32
+	/*
+	* We depend on socket support in this profiler provider we need to
+	* make sure we keep a reference on WSA for the lifetime of this provider.
+	*/
+	WSACleanup ();
+#endif
 }
 
 static char*
@@ -3056,12 +3150,12 @@ new_filename (const char* filename)
 }
 
 static MonoProfilerThread *
-profiler_thread_begin (const char *name, gboolean send)
+profiler_thread_begin_function (const char *name8, const gunichar2* name16, size_t name_length, gboolean send)
 {
 	mono_thread_info_attach ();
 	MonoProfilerThread *thread = init_thread (FALSE);
 
-	mono_thread_attach (mono_get_root_domain ());
+	mono_thread_internal_attach (mono_get_root_domain ());
 
 	MonoInternalThread *internal = mono_thread_internal_current ();
 
@@ -3072,12 +3166,7 @@ profiler_thread_begin (const char *name, gboolean send)
 	 */
 	internal->flags |= MONO_THREAD_FLAG_DONT_MANAGE;
 
-	ERROR_DECL (error);
-
-	MonoString *name_str = mono_string_new_checked (mono_get_root_domain (), name, error);
-	mono_error_assert_ok (error);
-	mono_thread_set_name_internal (internal, name_str, FALSE, FALSE, error);
-	mono_error_assert_ok (error);
+	mono_thread_set_name (internal, name8, name_length, name16, MonoSetThreadNameFlag_Constant, NULL);
 
 	mono_thread_info_set_flags (MONO_THREAD_INFO_FLAGS_NO_GC | MONO_THREAD_INFO_FLAGS_NO_SAMPLE);
 
@@ -3091,6 +3180,9 @@ profiler_thread_begin (const char *name, gboolean send)
 
 	return thread;
 }
+
+#define profiler_thread_begin(name, send)							\
+	profiler_thread_begin_function (name, MONO_THREAD_NAME_WINDOWS_CONSTANT (name), G_N_ELEMENTS (name) - 1, (send))
 
 static void
 profiler_thread_end (MonoProfilerThread *thread, MonoOSEvent *event, gboolean send)
@@ -3112,30 +3204,10 @@ profiler_thread_check_detach (MonoProfilerThread *thread)
 		thread->did_detach = TRUE;
 
 		mono_thread_info_set_flags (MONO_THREAD_INFO_FLAGS_NONE);
-		mono_thread_detach (mono_thread_current ());
+		mono_thread_internal_detach (mono_thread_current ());
 
 		mono_os_sem_post (&log_profiler.detach_threads_sem);
 	}
-}
-
-static void
-add_to_fd_set (fd_set *set, int fd, int *max_fd)
-{
-	/*
-	 * This should only trigger for the basic FDs (server socket, pipes) at
-	 * startup if for some mysterious reason they're too large. In this case,
-	 * the profiler really can't function, and we're better off printing an
-	 * error and exiting.
-	 */
-	if (fd >= FD_SETSIZE) {
-		mono_profiler_printf_err ("File descriptor is out of bounds for fd_set: %d", fd);
-		exit (1);
-	}
-
-	FD_SET (fd, set);
-
-	if (*max_fd < fd)
-		*max_fd = fd;
 }
 
 static void *
@@ -3151,11 +3223,14 @@ helper_thread (void *arg)
 
 		FD_ZERO (&rfds);
 
-		add_to_fd_set (&rfds, log_profiler.server_socket, &max_fd);
-		add_to_fd_set (&rfds, log_profiler.pipes [0], &max_fd);
+		mono_profhelper_add_to_fd_set (&rfds, log_profiler.server_socket, &max_fd);
+
+#ifdef HAVE_COMMAND_PIPES
+		mono_profhelper_add_to_fd_set (&rfds, log_profiler.pipes [0], &max_fd);
+#endif
 
 		for (gint i = 0; i < command_sockets->len; i++)
-			add_to_fd_set (&rfds, g_array_index (command_sockets, int, i), &max_fd);
+			mono_profhelper_add_to_fd_set (&rfds, g_array_index (command_sockets, int, i), &max_fd);
 
 		struct timeval tv = { .tv_sec = 1, .tv_usec = 0 };
 
@@ -3178,14 +3253,24 @@ helper_thread (void *arg)
 		buffer_unlock_excl ();
 
 		// Did we get a shutdown or detach signal?
+#ifdef HAVE_COMMAND_PIPES
 		if (FD_ISSET (log_profiler.pipes [0], &rfds)) {
 			char c;
-
 			read (log_profiler.pipes [0], &c, 1);
-
 			if (c == 1)
 				break;
 		}
+#else
+		int value = mono_atomic_load_i32(&log_profiler.pipe_command);
+		if (value != 0) {
+			while (mono_atomic_cas_i32 (&log_profiler.pipe_command, 0, value) != value)
+				value = mono_atomic_load_i32(&log_profiler.pipe_command);
+
+			char c = (char)value;
+			if (c == 1)
+				break;
+		}
+#endif
 
 		for (gint i = 0; i < command_sockets->len; i++) {
 			int fd = g_array_index (command_sockets, int, i);
@@ -3194,15 +3279,18 @@ helper_thread (void *arg)
 				continue;
 
 			char buf [64];
+#ifdef HOST_WIN32
+			int len = recv (fd, buf, sizeof (buf) - 1, 0);
+#else
 			int len = read (fd, buf, sizeof (buf) - 1);
-
+#endif
 			if (len == -1)
 				continue;
 
 			if (!len) {
 				// The other end disconnected.
 				g_array_remove_index (command_sockets, i);
-				close (fd);
+				mono_profhelper_close_socket_fd (fd);
 
 				continue;
 			}
@@ -3217,9 +3305,11 @@ helper_thread (void *arg)
 			int fd = accept (log_profiler.server_socket, NULL, NULL);
 
 			if (fd != -1) {
+#ifndef HOST_WIN32
 				if (fd >= FD_SETSIZE)
-					close (fd);
+					mono_profhelper_close_socket_fd (fd);
 				else
+#endif
 					g_array_append_val (command_sockets, fd);
 			}
 		}
@@ -3228,7 +3318,7 @@ helper_thread (void *arg)
 	}
 
 	for (gint i = 0; i < command_sockets->len; i++)
-		close (g_array_index (command_sockets, int, i));
+		mono_profhelper_close_socket_fd (g_array_index (command_sockets, int, i));
 
 	g_array_free (command_sockets, TRUE);
 
@@ -3240,50 +3330,18 @@ helper_thread (void *arg)
 static void
 start_helper_thread (void)
 {
+#ifdef HAVE_COMMAND_PIPES
 	if (pipe (log_profiler.pipes) == -1) {
 		mono_profiler_printf_err ("Could not create log profiler pipe: %s", g_strerror (errno));
 		exit (1);
 	}
+#endif
 
-	log_profiler.server_socket = socket (PF_INET, SOCK_STREAM, 0);
-
-	if (log_profiler.server_socket == -1) {
-		mono_profiler_printf_err ("Could not create log profiler server socket: %s", g_strerror (errno));
-		exit (1);
-	}
-
-	struct sockaddr_in server_address;
-
-	memset (&server_address, 0, sizeof (server_address));
-	server_address.sin_family = AF_INET;
-	server_address.sin_addr.s_addr = INADDR_ANY;
-	server_address.sin_port = htons (log_profiler.command_port);
-
-	if (bind (log_profiler.server_socket, (struct sockaddr *) &server_address, sizeof (server_address)) == -1) {
-		mono_profiler_printf_err ("Could not bind log profiler server socket on port %d: %s", log_profiler.command_port, g_strerror (errno));
-		close (log_profiler.server_socket);
-		exit (1);
-	}
-
-	if (listen (log_profiler.server_socket, 1) == -1) {
-		mono_profiler_printf_err ("Could not listen on log profiler server socket: %s", g_strerror (errno));
-		close (log_profiler.server_socket);
-		exit (1);
-	}
-
-	socklen_t slen = sizeof (server_address);
-
-	if (getsockname (log_profiler.server_socket, (struct sockaddr *) &server_address, &slen)) {
-		mono_profiler_printf_err ("Could not retrieve assigned port for log profiler server socket: %s", g_strerror (errno));
-		close (log_profiler.server_socket);
-		exit (1);
-	}
-
-	log_profiler.command_port = ntohs (server_address.sin_port);
+	mono_profhelper_setup_command_server (&log_profiler.server_socket, &log_profiler.command_port, "log");
 
 	if (!mono_native_thread_create (&log_profiler.helper_thread, helper_thread, NULL)) {
 		mono_profiler_printf_err ("Could not start log profiler helper thread");
-		close (log_profiler.server_socket);
+		mono_profhelper_close_socket_fd (log_profiler.server_socket);
 		exit (1);
 	}
 }
@@ -3889,6 +3947,20 @@ proflog_icall_SetJitEvents (MonoBoolean value)
 static void
 runtime_initialized (MonoProfiler *profiler)
 {
+#ifdef HOST_WIN32
+	/*
+	* We depend on socket support in this profiler provider we need to
+	* make sure we keep a reference on WSA for the lifetime of this provider.
+	*/
+	WSADATA wsadata;
+	int err;
+
+	err = WSAStartup (2 /* 2.0 */, &wsadata);
+	if (err) {
+		mono_profiler_printf_err ("Couldn't initialise networking.");
+		exit (1);
+	}
+#endif
 	mono_atomic_store_i32 (&log_profiler.runtime_inited, 1);
 
 	register_counter ("Sample events allocated", &sample_allocations_ctr);
@@ -4018,7 +4090,7 @@ create_profiler (const char *args, const char *filename, GPtrArray *filters)
 
 	//If filename begin with +, append the pid at the end
 	if (filename && *filename == '+')
-		filename = g_strdup_printf ("%s.%d", filename + 1, getpid ());
+		filename = g_strdup_printf ("%s.%d", filename + 1, (int)process_id ());
 
 	if (!filename) {
 		if (log_config.do_report)
@@ -4037,8 +4109,12 @@ create_profiler (const char *args, const char *filename, GPtrArray *filters)
 		}
 	}
 	if (*nf == '|') {
+#if HAVE_API_SUPPORT_WIN32_PIPE_OPEN_CLOSE && !defined (HOST_WIN32)
 		log_profiler.file = popen (nf + 1, "w");
 		log_profiler.pipe_output = 1;
+#else
+		mono_profiler_printf_err ("Platform doesn't support popen");
+#endif
 	} else if (*nf == '#') {
 		int fd = strtol (nf + 1, NULL, 10);
 		log_profiler.file = fdopen (fd, "a");

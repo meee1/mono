@@ -27,6 +27,25 @@
 #include <config.h>
 #include <glib.h>
 #include <string.h>
+#include <errno.h>
+
+#if defined (__APPLE__)
+#include <mach/message.h>
+#include <mach/mach_host.h>
+#include <mach/host_info.h>
+#include <sys/sysctl.h>
+#endif
+
+#if defined (__NetBSD__)
+#include <sys/param.h>
+#include <sys/sysctl.h>
+#include <sys/vmmeter.h>
+#endif
+
+
+#if defined(TARGET_WIN32)
+#include <windows.h>
+#endif 
 
 #include "memfuncs.h"
 
@@ -51,6 +70,7 @@
 			__d [__i] = NULL;		\
 	} while (0)
 
+#define MINMEMSZ 20971520	/* Minimum restricted memory size - 20MB */
 
 /**
  * mono_gc_bzero_aligned:
@@ -220,4 +240,169 @@ mono_gc_memmove_atomic (void *dest, const void *src, size_t size)
 		memmove (dest, src, size);
 	else
 		mono_gc_memmove_aligned (dest, src, size);
+}
+
+guint64
+mono_determine_physical_ram_size (void)
+{
+#if defined (TARGET_WIN32)
+	MEMORYSTATUSEX memstat;
+
+	memstat.dwLength = sizeof (memstat);
+	GlobalMemoryStatusEx (&memstat);
+	return (guint64)memstat.ullTotalPhys;
+#elif defined (__NetBSD__) || defined (__APPLE__)
+#ifdef __NetBSD__
+	unsigned long value;
+#else
+	guint64 value;
+#endif
+	int mib[2] = {
+		CTL_HW,
+#ifdef __NetBSD__
+		HW_PHYSMEM64
+#else
+		HW_MEMSIZE
+#endif
+	};
+	size_t size_sys = sizeof (value);
+
+	sysctl (mib, 2, &value, &size_sys, NULL, 0);
+	if (value == 0)
+		return 134217728;
+
+	return (guint64)value;
+#elif defined (HAVE_SYSCONF)
+	guint64 page_size = 0, num_pages = 0, memsize;
+
+	/* sysconf works on most *NIX operating systems, if your system doesn't have it or if it
+	 * reports invalid values, please add your OS specific code below. */
+#ifdef _SC_PAGESIZE
+	page_size = (guint64)sysconf (_SC_PAGESIZE);
+#endif
+
+#ifdef _SC_PHYS_PAGES
+	num_pages = (guint64)sysconf (_SC_PHYS_PAGES);
+#endif
+
+	if (!page_size || !num_pages) {
+		g_warning ("Your operating system's sysconf (3) function doesn't correctly report physical memory size!");
+		return 134217728;
+	}
+
+#if defined(_SC_AVPHYS_PAGES)
+	memsize = sysconf(_SC_AVPHYS_PAGES) * page_size;
+#else
+	memsize = page_size * num_pages;	/* Calculate physical memory size */
+#endif
+
+#if HAVE_CGROUP_SUPPORT
+	gint64 restricted_limit = mono_get_restricted_memory_limit();	/* Check for any cgroup limit */
+	if (restricted_limit != 0) {
+		gchar *heapHardLimit = getenv("DOTNET_GCHeapHardLimit");	/* See if user has set a limit */
+		if (heapHardLimit == NULL)
+			heapHardLimit = getenv("COMPlus_GCHeapHardLimit");	/* Check old envvar name */
+		errno = 0;
+		if (heapHardLimit != NULL) {
+			guint64 gcLimit = strtoull(heapHardLimit, NULL, 16);
+			if ((errno == 0) && (gcLimit != 0))
+				restricted_limit = (restricted_limit < gcLimit ? restricted_limit : (gint64) gcLimit);
+		} else {
+			gchar *heapHardLimitPct = getenv("DOTNET_GCHeapHardLimitPercent"); /* User % limit? */
+			if (heapHardLimitPct == NULL)
+				heapHardLimitPct = getenv("COMPlus_GCHeapHardLimitPercent");	/* Check old envvar name */
+			if (heapHardLimitPct != NULL) {
+				int gcLimit = strtoll(heapHardLimitPct, NULL, 16);
+				if ((gcLimit > 0) && (gcLimit <= 100)) 
+					restricted_limit = (gcLimit * restricted_limit) / 100;
+				else
+					restricted_limit = (3 * restricted_limit) / 4;	/* Use 75% limit of container */
+			} else {
+				restricted_limit = (3 * restricted_limit) / 4;	/* Use 75% limit of container */
+			}
+		}
+		return (restricted_limit < MINMEMSZ ? MINMEMSZ : 	/* Use at least 20MB */
+			(restricted_limit < memsize ? restricted_limit : memsize));
+	}
+
+#endif
+
+	return memsize;
+#else
+	return 134217728;
+#endif
+}
+
+guint64
+mono_determine_physical_ram_available_size (void)
+{
+#if defined (TARGET_WIN32)
+	MEMORYSTATUSEX memstat;
+
+	memstat.dwLength = sizeof (memstat);
+	GlobalMemoryStatusEx (&memstat);
+	return (guint64)memstat.ullAvailPhys;
+
+#elif defined (__NetBSD__)
+	struct vmtotal vm_total;
+	guint64 page_size;
+	int mib[2];
+	size_t len;
+
+	mib[0] = CTL_VM;
+	mib[1] = VM_METER;
+
+	len = sizeof (vm_total);
+	sysctl (mib, 2, &vm_total, &len, NULL, 0);
+
+	mib[0] = CTL_HW;
+	mib[1] = HW_PAGESIZE;
+
+	len = sizeof (page_size);
+	sysctl (mib, 2, &page_size, &len, NULL, 0);
+
+	return ((guint64) vm_total.t_free * page_size) / 1024;
+#elif defined (__APPLE__)
+	mach_msg_type_number_t count = HOST_VM_INFO_COUNT;
+	mach_port_t host = mach_host_self ();
+	vm_size_t page_size;
+	vm_statistics_data_t vmstat;
+	kern_return_t ret;
+	do {
+		ret = host_statistics (host, HOST_VM_INFO, (host_info_t)&vmstat, &count);
+	} while (ret == KERN_ABORTED);
+
+	if (ret != KERN_SUCCESS) {
+		g_warning ("Mono was unable to retrieve memory usage!");
+		return 0;
+	}
+
+	host_page_size (host, &page_size);
+	return (guint64) vmstat.free_count * page_size;
+
+#elif HAVE_CGROUP_SUPPORT
+	return (mono_get_memory_avail());
+
+#elif defined (HAVE_SYSCONF)
+	guint64 page_size = 0, num_pages = 0;
+
+	/* sysconf works on most *NIX operating systems, if your system doesn't have it or if it
+	 * reports invalid values, please add your OS specific code below. */
+#ifdef _SC_PAGESIZE
+	page_size = (guint64)sysconf (_SC_PAGESIZE);
+#endif
+
+#ifdef _SC_AVPHYS_PAGES
+	num_pages = (guint64)sysconf (_SC_AVPHYS_PAGES);
+#endif
+
+	if (!page_size || !num_pages) {
+		g_warning ("Your operating system's sysconf (3) function doesn't correctly report physical memory size!");
+		return 0;
+	}
+
+	return page_size * num_pages;
+#else
+	return 0;
+#endif
 }

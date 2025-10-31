@@ -27,7 +27,7 @@ XTEST_RESOURCE_FILES = \
 	Test/TestData/testservereku.contoso.com.pfx
 
 USE_XTEST_REMOTE_EXECUTOR = YES
-XTEST_LIB_REFS = System System.Core System.Net Facades/System.Threading.Tasks Facades/System.Runtime.InteropServices.RuntimeInformation System.Net.Http
+XTEST_LIB_REFS = System System.Core Facades/System.Threading.Tasks Facades/System.Runtime.InteropServices.RuntimeInformation System.Net.Http
 LIB_MCS_FLAGS = -d:COREFX -d:CONFIGURATION_2_0 -d:SYSTEM_NET_PRIMITIVES_DLL -d:XML_DEP -d:SECURITY_DEP $(REFERENCE_SOURCES_FLAGS) -unsafe $(RESOURCE_FILES:%=-resource:%) -nowarn:436
 XTEST_MCS_FLAGS += $(XTEST_RESOURCE_FILES:%=-resource:%)
 
@@ -114,6 +114,10 @@ API_BIN_REFS := System.Net.Http System.Xml System.Core System.Numerics
 ifndef MOBILE_PROFILE
 API_BIN_REFS += System.Configuration
 LIB_MCS_FLAGS += -d:CONFIGURATION_DEP
+endif
+
+ifeq (wasm,$(PROFILE))
+API_BIN_REFS += WebAssembly.Net.WebSockets
 endif
 
 EXTRA_DISTFILES = \

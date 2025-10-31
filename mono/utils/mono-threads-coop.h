@@ -17,12 +17,14 @@
 #include "checked-build.h"
 #include "mono-threads.h"
 #include "mono-threads-api.h"
+#include "mono/metadata/icalls.h"
 
 /* JIT specific interface */
 extern volatile size_t mono_polling_required;
 
 /* Internal API */
 
+ICALL_EXTERN_C
 void
 mono_threads_state_poll (void);
 
@@ -69,8 +71,15 @@ mono_threads_suspend_policy_is_multiphase_stw_enabled (MonoThreadsSuspendPolicy 
 gboolean
 mono_threads_suspend_policy_is_blocking_transition_enabled (MonoThreadsSuspendPolicy p);
 
-MonoThreadsSuspendPolicy
-mono_threads_suspend_policy (void);
+extern char mono_threads_suspend_policy_hidden_dont_modify;
+
+static inline MonoThreadsSuspendPolicy
+mono_threads_suspend_policy (void) {
+	return (MonoThreadsSuspendPolicy)mono_threads_suspend_policy_hidden_dont_modify;
+}
+
+void
+mono_threads_suspend_policy_init (void);
 
 const char*
 mono_threads_suspend_policy_name (MonoThreadsSuspendPolicy p);
@@ -116,11 +125,7 @@ void mono_threads_suspend_override_policy (MonoThreadsSuspendPolicy new_policy);
  * runtime assertion error when trying to switch the state of the current thread.
  */
 
-G_EXTERN_C // due to THREAD_INFO_TYPE varying
-gpointer
-mono_threads_enter_gc_safe_region_with_info (THREAD_INFO_TYPE *info, MonoStackData *stackdata);
-
-G_EXTERN_C // due to THREAD_INFO_TYPE varying
+MONO_PROFILER_API
 gpointer
 mono_threads_enter_gc_safe_region_with_info (THREAD_INFO_TYPE *info, MonoStackData *stackdata);
 
@@ -131,11 +136,7 @@ mono_threads_enter_gc_safe_region_with_info (THREAD_INFO_TYPE *info, MonoStackDa
 
 #define MONO_EXIT_GC_SAFE_WITH_INFO	MONO_EXIT_GC_SAFE
 
-G_EXTERN_C // due to THREAD_INFO_TYPE varying
-gpointer
-mono_threads_enter_gc_unsafe_region_with_info (THREAD_INFO_TYPE *, MonoStackData *stackdata);
-
-G_EXTERN_C // due to THREAD_INFO_TYPE varying
+MONO_PROFILER_API
 gpointer
 mono_threads_enter_gc_unsafe_region_with_info (THREAD_INFO_TYPE *, MonoStackData *stackdata);
 
@@ -149,5 +150,16 @@ mono_threads_enter_gc_unsafe_region_with_info (THREAD_INFO_TYPE *, MonoStackData
 G_EXTERN_C // due to THREAD_INFO_TYPE varying
 gpointer
 mono_threads_enter_gc_unsafe_region_unbalanced_with_info (THREAD_INFO_TYPE *info, MonoStackData *stackdata);
+
+extern char mono_threads_is_runtime_startup_finished_hidden_do_not_modify;
+
+static inline gboolean
+mono_threads_is_runtime_startup_finished (void)
+{
+	return mono_threads_is_runtime_startup_finished_hidden_do_not_modify != 0;
+}
+
+void
+mono_threads_set_runtime_startup_finished (void);
 
 #endif

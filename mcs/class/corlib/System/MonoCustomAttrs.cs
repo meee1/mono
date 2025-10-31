@@ -54,7 +54,7 @@ namespace System
 		{
 			Type type = obj as Type;
 #if !FULL_AOT_RUNTIME
-			if ((type is RuntimeType) || (type is TypeBuilder))
+			if ((type is RuntimeType) || (RuntimeFeature.IsDynamicCodeSupported && type is TypeBuilder))
 #else
 			if (type is RuntimeType)
 #endif
@@ -67,7 +67,7 @@ namespace System
 		}
 	
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		internal static extern object[] GetCustomAttributesInternal (ICustomAttributeProvider obj, Type attributeType, bool pseudoAttrs);
+		internal static extern Attribute[] GetCustomAttributesInternal (ICustomAttributeProvider obj, Type attributeType, bool pseudoAttrs);
 
 		internal static object[] GetPseudoCustomAttributes (ICustomAttributeProvider obj, Type attributeType) {
 			object[] pseudoAttrs = null;
@@ -88,7 +88,7 @@ namespace System
 							return pseudoAttrs;
 						else
 							return new object [] { pseudoAttrs [i] };
-				return EmptyArray<object>.Value;
+				return Array.Empty<object> ();
 			}
 
 			return pseudoAttrs;
@@ -134,7 +134,7 @@ namespace System
 			if (!inheritedOnly) {
 				object[] pseudoAttrs = GetPseudoCustomAttributes (obj, attributeType);
 				if (pseudoAttrs != null) {
-					object[] res = new object [attrs.Length + pseudoAttrs.Length];
+					object[] res = new Attribute [attrs.Length + pseudoAttrs.Length];
 					System.Array.Copy (attrs, res, attrs.Length);
 					System.Array.Copy (pseudoAttrs, 0, res, attrs.Length, pseudoAttrs.Length);
 					return res;
@@ -147,18 +147,13 @@ namespace System
 		internal static object[] GetCustomAttributes (ICustomAttributeProvider obj, Type attributeType, bool inherit)
 		{
 			if (obj == null)
-				throw new ArgumentNullException ("obj");
+				throw new ArgumentNullException (nameof (obj));
 			if (attributeType == null)
-				throw new ArgumentNullException ("attributeType");	
-
-#if NETCORE
-			if (!typeof (Attribute).IsAssignableFrom (attributeType) && attributeType != typeof (MonoCustomAttrs))
-				throw new ArgumentException (SR.Argument_MustHaveAttributeBaseClass);
-#endif
+				throw new ArgumentNullException (nameof (attributeType));	
 
 			if (attributeType == typeof (MonoCustomAttrs))
 				attributeType = null;
-			
+
 			object[] r;
 			object[] res = GetCustomAttributesBase (obj, attributeType, false);
 			// shortcut
@@ -522,10 +517,6 @@ namespace System
 		{
 			if (attributeType == null)
 				throw new ArgumentNullException ("attributeType");
-#if NETCORE
-			if (!typeof (Attribute).IsAssignableFrom (attributeType) && attributeType != typeof (MonoCustomAttrs))
-				throw new ArgumentException (SR.Argument_MustHaveAttributeBaseClass);
-#endif
 
 			AttributeUsageAttribute usage = null;
 			do {
@@ -633,7 +624,7 @@ namespace System
 					return bmethod.GetParameters ()[parinfo.Position];
 				}
 			}
-			/**
+			/*
 			 * ParameterInfo -> null
 			 * Assembly -> null
 			 * RuntimeEventInfo -> null

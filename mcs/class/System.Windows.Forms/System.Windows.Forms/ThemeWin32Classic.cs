@@ -3176,7 +3176,7 @@ namespace System.Windows.Forms
 			}
 
 			sformat.LineAlignment = StringAlignment.Near;
-			dc.DrawString (group.Header, font, SystemBrushes.ControlText, text_bounds, sformat);
+			dc.DrawString (group.Header, font, SystemBrushes.Highlight, text_bounds, sformat);
 			dc.DrawLine (pen, header_bounds.Left, header_bounds.Top + text_height, header_bounds.Left + ListViewGroupLineWidth, 
 					header_bounds.Top + text_height);
 
@@ -6255,7 +6255,11 @@ namespace System.Windows.Forms
 			}
 
 			// Respect MinimizeBox/MaximizeBox
-			if (form.MinimizeBox == false && form.MaximizeBox == false) {
+			if (form.ControlBox == false) {
+				buttons.MinimizeButton.Visible = false;
+				buttons.MaximizeButton.Visible = false;
+				buttons.CloseButton.Visible = false;
+			} else if (form.MinimizeBox == false && form.MaximizeBox == false) {
 				buttons.MinimizeButton.Visible = false;
 				buttons.MaximizeButton.Visible = false;
 			} else if (form.MinimizeBox == false)

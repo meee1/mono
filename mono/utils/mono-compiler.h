@@ -50,12 +50,11 @@ typedef ptrdiff_t ssize_t;
 
 #endif /* _MSC_VER */
 
-#ifdef _MSC_VER
-// Quiet Visual Studio linker warning, LNK4221, in cases when this source file intentional ends up empty.
-#define MONO_EMPTY_SOURCE_FILE(x) void __mono_win32_ ## x ## _quiet_lnk4221 (void) {}
-#else
-#define MONO_EMPTY_SOURCE_FILE(x)
-#endif
+// Quiet Visual Studio linker warning, LNK4221: This object file does not define any previously
+// undefined public symbols, so it will not be used by any link operation that consumes this library.
+// And other linkers, e.g. older Apple.
+#define MONO_EMPTY_SOURCE_FILE(x) extern const char mono_quash_linker_empty_file_warning_ ## x; \
+				  const char mono_quash_linker_empty_file_warning_ ## x = 0;
 
 #ifdef _MSC_VER
 #define MONO_PRAGMA_WARNING_PUSH() __pragma(warning (push))
@@ -74,16 +73,6 @@ typedef ptrdiff_t ssize_t;
 #define MONO_PRAGMA_WARNING_POP()
 #define MONO_DISABLE_WARNING(x)
 #define MONO_RESTORE_WARNING
-#endif
-
-#if !defined(_MSC_VER) && !defined(HOST_SOLARIS) && !defined(_WIN32) && !defined(__CYGWIN__) && !defined(MONOTOUCH) && HAVE_VISIBILITY_HIDDEN
-#if MONO_LLVM_LOADED
-#define MONO_LLVM_INTERNAL MONO_API_NO_EXTERN_C
-#else
-#define MONO_LLVM_INTERNAL
-#endif
-#else
-#define MONO_LLVM_INTERNAL 
 #endif
 
 /* Used to mark internal functions used by the profiler modules */

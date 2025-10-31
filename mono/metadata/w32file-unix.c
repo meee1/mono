@@ -48,11 +48,13 @@
 #include "w32file-unix-glob.h"
 #include "w32error.h"
 #include "fdhandle.h"
+#include "utils/mono-error-internals.h"
 #include "utils/mono-io-portability.h"
 #include "utils/mono-logger-internals.h"
 #include "utils/mono-os-mutex.h"
 #include "utils/mono-threads.h"
 #include "utils/mono-threads-api.h"
+#include "utils/strenc-internals.h"
 #include "utils/strenc.h"
 #include "utils/refcount.h"
 #include "icall-decl.h"
@@ -280,17 +282,23 @@ _wapi_open (const gchar *pathname, gint flags, mode_t mode)
 		located_filename = mono_portability_find_file (pathname, FALSE);
 		if (located_filename == NULL) {
 			MONO_ENTER_GC_SAFE;
-			fd = open (pathname, flags, mode);
+			do {
+				fd = open (pathname, flags, mode);
+			} while (fd == -1 && errno == EINTR);
 			MONO_EXIT_GC_SAFE;
 		} else {
 			MONO_ENTER_GC_SAFE;
-			fd = open (located_filename, flags, mode);
+			do {
+				fd = open (located_filename, flags, mode);
+			} while (fd == -1 && errno == EINTR);
 			MONO_EXIT_GC_SAFE;
 			g_free (located_filename);
 		}
 	} else {
 		MONO_ENTER_GC_SAFE;
-		fd = open (pathname, flags, mode);
+		do {
+			fd = open (pathname, flags, mode);
+		} while (fd == -1 && errno == EINTR);
 		MONO_EXIT_GC_SAFE;
 		if (fd == -1 && (errno == ENOENT || errno == ENOTDIR) && IS_PORTABILITY_SET) {
 			gint saved_errno = errno;
@@ -302,7 +310,9 @@ _wapi_open (const gchar *pathname, gint flags, mode_t mode)
 			}
 
 			MONO_ENTER_GC_SAFE;
-			fd = open (located_filename, flags, mode);
+			do {
+				fd = open (located_filename, flags, mode);
+			} while (fd == -1 && errno == EINTR);
 			MONO_EXIT_GC_SAFE;
 			g_free (located_filename);
 		}
@@ -1849,7 +1859,7 @@ static gboolean share_allows_open (struct stat *statbuf, guint32 sharemode,
 		 * when we looked it up, so be careful to put it back
 		 * if we conclude we can't use this file.
 		 */
-		if (file_existing_share == 0) {
+		if ((file_existing_share == FILE_SHARE_NONE) || (sharemode == FILE_SHARE_NONE)) {
 			/* Quick and easy, no possibility to share */
 			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: Share mode prevents open: requested access: 0x%" PRIx32 ", file has sharing = NONE", __func__, fileaccess);
 
@@ -1865,19 +1875,6 @@ static gboolean share_allows_open (struct stat *statbuf, guint32 sharemode,
 		     (fileaccess != GENERIC_WRITE))) {
 			/* New access mode doesn't match up */
 			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: Share mode prevents open: requested access: 0x%" PRIx32 ", file has sharing: 0x%" PRIx32, __func__, fileaccess, file_existing_share);
-
-			file_share_release (*share_info);
-			*share_info = NULL;
-		
-			return(FALSE);
-		}
-
-		if (((file_existing_access & GENERIC_READ) &&
-		     !(sharemode & FILE_SHARE_READ)) ||
-		    ((file_existing_access & GENERIC_WRITE) &&
-		     !(sharemode & FILE_SHARE_WRITE))) {
-			/* New share mode doesn't match up */
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: Access mode prevents open: requested share: 0x%" PRIx32 ", file has access: 0x%" PRIx32, __func__, sharemode, file_existing_access);
 
 			file_share_release (*share_info);
 			*share_info = NULL;
@@ -1947,6 +1944,7 @@ mono_w32file_create(const gunichar2 *name, guint32 fileaccess, guint32 sharemode
 	gchar *filename;
 	gint fd, ret;
 	struct stat statbuf;
+	ERROR_DECL (error);
 
 	if (attrs & FILE_ATTRIBUTE_TEMPORARY)
 		perms = 0600;
@@ -1963,10 +1961,11 @@ mono_w32file_create(const gunichar2 *name, guint32 fileaccess, guint32 sharemode
 		return(INVALID_HANDLE_VALUE);
 	}
 
-	filename = mono_unicode_to_external (name);
+	filename = mono_unicode_to_external_checked (name, error);
 	if (filename == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return(INVALID_HANDLE_VALUE);
 	}
@@ -2082,6 +2081,13 @@ mono_w32file_create(const gunichar2 *name, guint32 fileaccess, guint32 sharemode
 }
 
 gboolean
+mono_w32file_cancel (gpointer handle)
+{
+	mono_w32error_set_last (ERROR_NOT_SUPPORTED);
+	return FALSE;
+}
+
+gboolean
 mono_w32file_close (gpointer handle)
 {
 	if (!mono_fdhandle_close (GPOINTER_TO_INT (handle))) {
@@ -2097,6 +2103,7 @@ gboolean mono_w32file_delete(const gunichar2 *name)
 	gchar *filename;
 	gint retval;
 	gboolean ret = FALSE;
+	ERROR_DECL (error);
 #if 0
 	struct stat statbuf;
 	FileShare *shareinfo;
@@ -2109,10 +2116,11 @@ gboolean mono_w32file_delete(const gunichar2 *name)
 		return(FALSE);
 	}
 
-	filename=mono_unicode_to_external(name);
+	filename = mono_unicode_to_external_checked (name, error);
 	if(filename==NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return(FALSE);
 	}
@@ -2175,6 +2183,7 @@ MoveFile (const gunichar2 *name, const gunichar2 *dest_name)
 	struct stat stat_src, stat_dest;
 	gboolean ret = FALSE;
 	FileShare *shareinfo;
+	ERROR_DECL (error);
 	
 	if(name==NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: name is NULL", __func__);
@@ -2183,10 +2192,11 @@ MoveFile (const gunichar2 *name, const gunichar2 *dest_name)
 		return(FALSE);
 	}
 
-	utf8_name = mono_unicode_to_external (name);
+	utf8_name = mono_unicode_to_external_checked (name, error);
 	if (utf8_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 		
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return FALSE;
 	}
@@ -2199,10 +2209,11 @@ MoveFile (const gunichar2 *name, const gunichar2 *dest_name)
 		return(FALSE);
 	}
 
-	utf8_dest_name = mono_unicode_to_external (dest_name);
+	utf8_dest_name = mono_unicode_to_external_checked (dest_name, error);
 	if (utf8_dest_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		g_free (utf8_name);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return FALSE;
@@ -2383,6 +2394,7 @@ CopyFile (const gunichar2 *name, const gunichar2 *dest_name, gboolean fail_if_ex
 	gchar *utf8_src, *utf8_dest;
 	struct stat st, dest_st;
 	gboolean ret = TRUE;
+	ERROR_DECL (error);
 	
 	if(name==NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: name is NULL", __func__);
@@ -2391,11 +2403,12 @@ CopyFile (const gunichar2 *name, const gunichar2 *dest_name, gboolean fail_if_ex
 		return(FALSE);
 	}
 	
-	utf8_src = mono_unicode_to_external (name);
+	utf8_src = mono_unicode_to_external_checked (name, error);
 	if (utf8_src == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion of source returned NULL",
-			   __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion of source returned NULL; %s",
+			   __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
 		return(FALSE);
 	}
@@ -2408,13 +2421,14 @@ CopyFile (const gunichar2 *name, const gunichar2 *dest_name, gboolean fail_if_ex
 		return(FALSE);
 	}
 	
-	utf8_dest = mono_unicode_to_external (dest_name);
+	utf8_dest = mono_unicode_to_external_checked (dest_name, error);
 	if (utf8_dest == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion of dest returned NULL",
-			   __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion of dest returned NULL; %s",
+			   __func__, mono_error_get_message (error));
 
 		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
 
+		mono_error_cleanup (error);
 		g_free (utf8_src);
 		
 		return(FALSE);
@@ -2522,7 +2536,7 @@ CopyFile (const gunichar2 *name, const gunichar2 *dest_name, gboolean fail_if_ex
 	if (fail_if_exists) {
 		dest_fd = _wapi_open (utf8_dest, O_WRONLY | O_CREAT | O_EXCL, st.st_mode);
 	} else {
-		/* FIXME: it kinda sucks that this code path potentially scans
+		/* FIXME: it's bad that this code path potentially scans
 		 * the directory twice due to the weird mono_w32error_set_last()
 		 * behavior. */
 		dest_fd = _wapi_open (utf8_dest, O_WRONLY | O_TRUNC, st.st_mode);
@@ -2582,6 +2596,7 @@ static gchar*
 convert_arg_to_utf8 (const gunichar2 *arg, const gchar *arg_name)
 {
 	gchar *utf8_ret;
+	ERROR_DECL (error);
 
 	if (arg == NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: %s is NULL", __func__, arg_name);
@@ -2589,10 +2604,12 @@ convert_arg_to_utf8 (const gunichar2 *arg, const gchar *arg_name)
 		return NULL;
 	}
 
-	utf8_ret = mono_unicode_to_external (arg);
+	utf8_ret = mono_unicode_to_external_checked (arg, error);
 	if (utf8_ret == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion of %s returned NULL",
-			   __func__, arg_name);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion of %s returned NULL; %s",
+			   __func__, arg_name, mono_error_get_message (error));
+
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
 		return NULL;
 	}
@@ -3195,6 +3212,7 @@ mono_w32file_find_first (const gunichar2 *pattern, WIN32_FIND_DATA *find_data)
 	FindHandle *findhandle;
 	gchar *utf8_pattern = NULL, *dir_part, *entry_part, **namelist;
 	gint result;
+	ERROR_DECL (error);
 	
 	if (pattern == NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: pattern is NULL", __func__);
@@ -3203,10 +3221,11 @@ mono_w32file_find_first (const gunichar2 *pattern, WIN32_FIND_DATA *find_data)
 		return(INVALID_HANDLE_VALUE);
 	}
 
-	utf8_pattern = mono_unicode_to_external (pattern);
+	utf8_pattern = mono_unicode_to_external_checked (pattern, error);
 	if (utf8_pattern == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 		
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return(INVALID_HANDLE_VALUE);
 	}
@@ -3327,7 +3346,7 @@ retry:
 
 	/* stat next match */
 
-	filename = g_build_filename (findhandle->dir_part, findhandle->namelist[findhandle->count ++], NULL);
+	filename = g_build_filename (findhandle->dir_part, findhandle->namelist[findhandle->count ++], (const char*)NULL);
 
 	result = _wapi_stat (filename, &buf);
 	if (result == -1 && errno == ENOENT) {
@@ -3440,7 +3459,8 @@ mono_w32file_create_directory (const gunichar2 *name)
 {
 	gchar *utf8_name;
 	gint result;
-	
+	ERROR_DECL (error);
+
 	if (name == NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: name is NULL", __func__);
 
@@ -3448,10 +3468,11 @@ mono_w32file_create_directory (const gunichar2 *name)
 		return(FALSE);
 	}
 	
-	utf8_name = mono_unicode_to_external (name);
+	utf8_name = mono_unicode_to_external_checked (name, error);
 	if (utf8_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 	
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return FALSE;
 	}
@@ -3473,6 +3494,7 @@ mono_w32file_remove_directory (const gunichar2 *name)
 {
 	gchar *utf8_name;
 	gint result;
+	ERROR_DECL (error);
 	
 	if (name == NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: name is NULL", __func__);
@@ -3481,10 +3503,11 @@ mono_w32file_remove_directory (const gunichar2 *name)
 		return(FALSE);
 	}
 
-	utf8_name = mono_unicode_to_external (name);
+	utf8_name = mono_unicode_to_external_checked (name, error);
 	if (utf8_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 		
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return FALSE;
 	}
@@ -3508,6 +3531,7 @@ mono_w32file_get_attributes (const gunichar2 *name)
 	struct stat buf, linkbuf;
 	gint result;
 	guint32 ret;
+	ERROR_DECL (error);
 	
 	if (name == NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: name is NULL", __func__);
@@ -3516,10 +3540,11 @@ mono_w32file_get_attributes (const gunichar2 *name)
 		return(FALSE);
 	}
 	
-	utf8_name = mono_unicode_to_external (name);
+	utf8_name = mono_unicode_to_external_checked (name, error);
 	if (utf8_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
 		return (INVALID_FILE_ATTRIBUTES);
 	}
@@ -3557,6 +3582,7 @@ mono_w32file_get_attributes_ex (const gunichar2 *name, MonoIOStat *stat)
 
 	struct stat buf, linkbuf;
 	gint result;
+	ERROR_DECL (error);
 	
 	if (name == NULL) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: name is NULL", __func__);
@@ -3565,10 +3591,11 @@ mono_w32file_get_attributes_ex (const gunichar2 *name, MonoIOStat *stat)
 		return(FALSE);
 	}
 
-	utf8_name = mono_unicode_to_external (name);
+	utf8_name = mono_unicode_to_external_checked (name, error);
 	if (utf8_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
 		return FALSE;
 	}
@@ -3630,6 +3657,7 @@ mono_w32file_set_attributes (const gunichar2 *name, guint32 attrs)
 	gchar *utf8_name;
 	struct stat buf;
 	gint result;
+	ERROR_DECL (error);
 
 	/*
 	 * Currently we only handle one *internal* case, with a value that is
@@ -3643,10 +3671,11 @@ mono_w32file_set_attributes (const gunichar2 *name, guint32 attrs)
 		return(FALSE);
 	}
 
-	utf8_name = mono_unicode_to_external (name);
+	utf8_name = mono_unicode_to_external_checked (name, error);
 	if (utf8_name == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+		mono_error_cleanup (error);
 		mono_w32error_set_last (ERROR_INVALID_NAME);
 		return FALSE;
 	}
@@ -3743,13 +3772,22 @@ mono_w32file_set_cwd (const gunichar2 *path)
 {
 	gchar *utf8_path;
 	gboolean result;
+	ERROR_DECL (error);
 
 	if (path == NULL) {
 		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
 		return(FALSE);
 	}
 	
-	utf8_path = mono_unicode_to_external (path);
+	utf8_path = mono_unicode_to_external_checked (path, error);
+	if (utf8_path == NULL) {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
+
+		mono_error_cleanup (error);
+		mono_w32error_set_last (ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+
 	if (_wapi_chdir (utf8_path) != 0) {
 		_wapi_set_last_error_from_errno ();
 		result = FALSE;
@@ -3804,7 +3842,7 @@ mono_w32file_create_pipe (gpointer *readpipe, gpointer *writepipe, guint32 size)
 #ifdef HAVE_GETFSSTAT
 /* Darwin has getfsstat */
 gint32
-mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
+mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf, MonoError *error)
 {
 	struct statfs *stats;
 	gint size, n, i;
@@ -3845,7 +3883,7 @@ mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
 }
 #elif _AIX
 gint32
-mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
+mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf, MonoError *error)
 {
 	struct vmount *mounts;
 	// ret will first be the errno cond, then no of structs
@@ -3855,7 +3893,7 @@ mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
 	total = 0;
 
 	MONO_ENTER_GC_SAFE;
-	ret = mntctl (MCTL_QUERY, sizeof(needsize), &needsize);
+	ret = mntctl (MCTL_QUERY, sizeof(needsize), (char*)&needsize);
 	MONO_EXIT_GC_SAFE;
 	if (ret == -1)
 		return 0;
@@ -3863,7 +3901,7 @@ mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
 	if (mounts == NULL)
 		return 0;
 	MONO_ENTER_GC_SAFE;
-	ret = mntctl (MCTL_QUERY, needsize, mounts);
+	ret = mntctl (MCTL_QUERY, needsize, (char*)mounts);
 	MONO_EXIT_GC_SAFE;
 	if (ret == -1) {
 		g_free (mounts);
@@ -3878,7 +3916,7 @@ mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
 		} 
 		g_free (dir);
 		total += length + 1;
-		mounts = (void*)mounts + mounts->vmt_length; // next!
+		mounts = (struct vmount *)((char*)mounts + mounts->vmt_length); // next!
 	}
 	if (total < len)
 		buf [total] = 0;
@@ -3946,7 +3984,7 @@ static void append_to_mountpoint (LinuxMountInfoParseState *state);
 static gboolean add_drive_string (guint32 len, gunichar2 *buf, LinuxMountInfoParseState *state);
 
 gint32
-mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
+mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf, MonoError *error)
 {
 	gint fd;
 	gint32 ret = 0;
@@ -4218,7 +4256,7 @@ add_drive_string (guint32 len, gunichar2 *buf, LinuxMountInfoParseState *state)
 }
 #else
 gint32
-mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf)
+mono_w32file_get_logical_drive (guint32 len, gunichar2 *buf, MonoError *error)
 {
 	return GetLogicalDriveStrings_Mtab (len, buf);
 }
@@ -4352,10 +4390,10 @@ mono_w32file_get_disk_free_space (const gunichar2 *path_name, guint64 *free_byte
 #elif defined(HAVE_STATFS)
 	struct statfs fsstat;
 #endif
-	gboolean isreadonly;
 	gchar *utf8_path_name;
 	gint ret;
 	unsigned long block_size;
+	ERROR_DECL (error);
 
 	if (path_name == NULL) {
 		utf8_path_name = g_strdup (g_get_current_dir());
@@ -4365,10 +4403,11 @@ mono_w32file_get_disk_free_space (const gunichar2 *path_name, guint64 *free_byte
 		}
 	}
 	else {
-		utf8_path_name = mono_unicode_to_external (path_name);
+		utf8_path_name = mono_unicode_to_external_checked (path_name, error);
 		if (utf8_path_name == NULL) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+			mono_error_cleanup (error);
 			mono_w32error_set_last (ERROR_INVALID_NAME);
 			return(FALSE);
 		}
@@ -4379,17 +4418,11 @@ mono_w32file_get_disk_free_space (const gunichar2 *path_name, guint64 *free_byte
 		MONO_ENTER_GC_SAFE;
 		ret = statvfs (utf8_path_name, &fsstat);
 		MONO_EXIT_GC_SAFE;
-		isreadonly = ((fsstat.f_flag & ST_RDONLY) == ST_RDONLY);
 		block_size = fsstat.f_frsize;
 #elif defined(HAVE_STATFS)
 		MONO_ENTER_GC_SAFE;
 		ret = statfs (utf8_path_name, &fsstat);
 		MONO_EXIT_GC_SAFE;
-#if defined (MNT_RDONLY)
-		isreadonly = ((fsstat.f_flags & MNT_RDONLY) == MNT_RDONLY);
-#elif defined (MS_RDONLY)
-		isreadonly = ((fsstat.f_flags & MS_RDONLY) == MS_RDONLY);
-#endif
 		block_size = fsstat.f_bsize;
 #endif
 	} while(ret == -1 && errno == EINTR);
@@ -4403,19 +4436,13 @@ mono_w32file_get_disk_free_space (const gunichar2 *path_name, guint64 *free_byte
 	}
 
 	/* total number of free bytes for non-root */
-	if (isreadonly)
-		*free_bytes_avail = 0;
-	else
-		*free_bytes_avail = block_size * (guint64)fsstat.f_bavail;
+	*free_bytes_avail = block_size * (guint64)fsstat.f_bavail;
 
 	/* total number of bytes available for non-root */
 	*total_number_of_bytes = block_size * (guint64)fsstat.f_blocks;
 
 	/* total number of bytes available for root */
-	if (isreadonly)
-		*total_number_of_free_bytes = 0;
-	else
-		*total_number_of_free_bytes = block_size * (guint64)fsstat.f_bfree;
+	*total_number_of_free_bytes = block_size * (guint64)fsstat.f_bfree;
 #endif
 	return(TRUE);
 }
@@ -4708,7 +4735,7 @@ GetDriveTypeFromPath (const gchar *utf8_root_path_name)
 #endif
 
 guint32
-ves_icall_System_IO_DriveInfo_GetDriveType (const gunichar2 *root_path_name, gint32 root_path_name_length, MonoError *error)
+mono_w32file_get_drive_type (const gunichar2 *root_path_name, gint32 root_path_name_length, MonoError *error)
 {
 	// FIXME Check for embedded nuls here or in managed.
 
@@ -4722,9 +4749,9 @@ ves_icall_System_IO_DriveInfo_GetDriveType (const gunichar2 *root_path_name, gin
 		}
 	}
 	else {
-		utf8_root_path_name = mono_unicode_to_external (root_path_name);
+		utf8_root_path_name = mono_unicode_to_external_checked (root_path_name, error);
 		if (utf8_root_path_name == NULL) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL", __func__);
+			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_FILE, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 			return(DRIVE_NO_ROOT_DIR);
 		}
 		
@@ -4984,7 +5011,7 @@ gint64
 mono_w32file_get_file_size (gpointer handle, gint32 *error)
 {
 	gint64 length;
-	guint32 length_hi;
+	guint32 length_hi = 0;
 
 	length = GetFileSize (handle, &length_hi);
 	if(length==INVALID_FILE_SIZE) {

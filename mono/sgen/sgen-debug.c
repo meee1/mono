@@ -26,6 +26,9 @@
 #include "mono/sgen/sgen-pinning.h"
 #include "mono/sgen/sgen-client.h"
 
+#if _MSC_VER
+#pragma warning(disable:4312) // FIXME pointer cast to different size
+#endif
 
 #ifndef DISABLE_SGEN_DEBUG_HELPERS
 
@@ -516,7 +519,7 @@ find_pinning_ref_from_thread (char *obj, size_t size)
 			mword w = *ctxcurrent;
 
 			if (w >= (mword)obj && w < (mword)obj + size)
-				SGEN_LOG (0, "Object %p referenced in saved reg %d of thread %p (id %p)", obj, (int) (ctxcurrent - ctxstart), info, (gpointer)mono_thread_info_get_tid (info));
+				SGEN_LOG (0, "Object %p referenced in saved reg %d of thread %p (id %p)", obj, (int) (ctxcurrent - ctxstart), info, (gpointer)(gsize)mono_thread_info_get_tid (info));
 		}
 	} FOREACH_THREAD_END
 #endif
@@ -597,23 +600,18 @@ sgen_check_heap_marked (gboolean nursery_must_be_pinned)
 }
 
 static void
-check_nursery_objects_pinned_callback (char *obj, size_t size, void *data /* ScanCopyContext *ctx */)
+check_nursery_objects_untag_callback (char *obj, size_t size, void *data)
 {
-	gboolean pinned = (gboolean) (size_t) data;
-
 	g_assert (!SGEN_OBJECT_IS_FORWARDED (obj));
-	if (pinned)
-		g_assert (SGEN_OBJECT_IS_PINNED (obj));
-	else
-		g_assert (!SGEN_OBJECT_IS_PINNED (obj));
+	g_assert (!SGEN_OBJECT_IS_PINNED (obj));
 }
 
 void
-sgen_check_nursery_objects_pinned (gboolean pinned)
+sgen_check_nursery_objects_untag (void)
 {
 	sgen_clear_nursery_fragments ();
 	sgen_scan_area_with_callback (sgen_nursery_section->data, sgen_nursery_section->end_data,
-			(IterateObjectCallbackFunc)check_nursery_objects_pinned_callback, (void*) (size_t) pinned /* (void*)&ctx */, FALSE, TRUE);
+			(IterateObjectCallbackFunc)check_nursery_objects_untag_callback, NULL, FALSE, TRUE);
 }
 
 static void
@@ -950,37 +948,18 @@ static gboolean
 is_xdomain_ref_allowed (GCObject **ptr, GCObject *obj, MonoDomain *domain)
 {
 	MonoObject *o = (MonoObject*)(obj);
-	MonoObject *ref = *ptr;
 	size_t offset = (char*)(ptr) - (char*)o;
 
-#ifndef ENABLE_NETCORE
 	if (o->vtable->klass == mono_defaults.thread_class && offset == G_STRUCT_OFFSET (MonoThread, internal_thread))
 		return TRUE;
 	if (o->vtable->klass == mono_defaults.internal_thread_class && offset == G_STRUCT_OFFSET (MonoInternalThread, current_appcontext))
 		return TRUE;
-#endif
 
 #ifndef DISABLE_REMOTING
 	if (m_class_get_supertypes (mono_defaults.real_proxy_class) && mono_class_has_parent_fast (o->vtable->klass, mono_defaults.real_proxy_class) &&
 			offset == G_STRUCT_OFFSET (MonoRealProxy, unwrapped_server))
 		return TRUE;
 #endif
-	/*
-	 *  at System.IO.MemoryStream.InternalConstructor (byte[],int,int,bool,bool) [0x0004d] in /home/schani/Work/novell/trunk/mcs/class/corlib/System.IO/MemoryStream.cs:121
-	 * at System.IO.MemoryStream..ctor (byte[]) [0x00017] in /home/schani/Work/novell/trunk/mcs/class/corlib/System.IO/MemoryStream.cs:81
-	 * at (wrapper remoting-invoke-with-check) System.IO.MemoryStream..ctor (byte[]) <IL 0x00020, 0xffffffff>
-	 * at System.Runtime.Remoting.Messaging.CADMethodCallMessage.GetArguments () [0x0000d] in /home/schani/Work/novell/trunk/mcs/class/corlib/System.Runtime.Remoting.Messaging/CADMessages.cs:327
-	 * at System.Runtime.Remoting.Messaging.MethodCall..ctor (System.Runtime.Remoting.Messaging.CADMethodCallMessage) [0x00017] in /home/schani/Work/novell/trunk/mcs/class/corlib/System.Runtime.Remoting.Messaging/MethodCall.cs:87
-	 * at System.AppDomain.ProcessMessageInDomain (byte[],System.Runtime.Remoting.Messaging.CADMethodCallMessage,byte[]&,System.Runtime.Remoting.Messaging.CADMethodReturnMessage&) [0x00018] in /home/schani/Work/novell/trunk/mcs/class/corlib/System/AppDomain.cs:1213
-	 * at (wrapper remoting-invoke-with-check) System.AppDomain.ProcessMessageInDomain (byte[],System.Runtime.Remoting.Messaging.CADMethodCallMessage,byte[]&,System.Runtime.Remoting.Messaging.CADMethodReturnMessage&) <IL 0x0003d, 0xffffffff>
-	 * at System.Runtime.Remoting.Channels.CrossAppDomainSink.ProcessMessageInDomain (byte[],System.Runtime.Remoting.Messaging.CADMethodCallMessage) [0x00008] in /home/schani/Work/novell/trunk/mcs/class/corlib/System.Runtime.Remoting.Channels/CrossAppDomainChannel.cs:198
-	 * at (wrapper runtime-invoke) object.runtime_invoke_CrossAppDomainSink/ProcessMessageRes_object_object (object,intptr,intptr,intptr) <IL 0x0004c, 0xffffffff>
-	 */
-	if (!strcmp (m_class_get_name_space (ref->vtable->klass), "System") &&
-		!strcmp (m_class_get_name (ref->vtable->klass), "Byte[]") &&
-		!strcmp (m_class_get_name_space (o->vtable->klass), "System.IO") &&
-		!strcmp (m_class_get_name (o->vtable->klass), "MemoryStream"))
-		return TRUE;
 	return FALSE;
 }
 
@@ -1046,15 +1025,12 @@ scan_object_for_xdomain_refs (GCObject *obj, mword size, void *data)
 void
 sgen_check_for_xdomain_refs (void)
 {
-	LOSObject *bigobj;
-
 	sgen_scan_area_with_callback (sgen_nursery_section->data, sgen_nursery_section->end_data,
 			(IterateObjectCallbackFunc)scan_object_for_xdomain_refs, NULL, FALSE, TRUE);
 
 	sgen_major_collector.iterate_objects (ITERATE_OBJECTS_SWEEP_ALL, (IterateObjectCallbackFunc)scan_object_for_xdomain_refs, NULL);
 
-	for (bigobj = sgen_los_object_list; bigobj; bigobj = bigobj->next)
-		scan_object_for_xdomain_refs ((GCObject*)bigobj->data, sgen_los_object_size (bigobj), NULL);
+	sgen_los_iterate_objects ((IterateObjectCallbackFunc)scan_object_for_xdomain_refs, NULL);
 }
 
 #endif
@@ -1153,6 +1129,12 @@ dump_object (GCObject *obj, gboolean dump_location)
 #endif
 }
 
+static void
+dump_object_callback (GCObject *obj, size_t size, gboolean dump_location)
+{
+	dump_object (obj, dump_location);
+}
+
 void
 sgen_debug_enable_heap_dump (const char *filename)
 {
@@ -1167,7 +1149,6 @@ void
 sgen_debug_dump_heap (const char *type, int num, const char *reason)
 {
 	SgenPointerQueue *pinned_objects;
-	LOSObject *bigobj;
 	int i;
 
 	if (!heap_dump_file)
@@ -1196,8 +1177,7 @@ sgen_debug_dump_heap (const char *type, int num, const char *reason)
 	sgen_major_collector.dump_heap (heap_dump_file);
 
 	fprintf (heap_dump_file, "<los>\n");
-	for (bigobj = sgen_los_object_list; bigobj; bigobj = bigobj->next)
-		dump_object ((GCObject*)bigobj->data, FALSE);
+	sgen_los_iterate_objects ((IterateObjectCallbackFunc)dump_object_callback, (void*)FALSE);
 	fprintf (heap_dump_file, "</los>\n");
 
 	fprintf (heap_dump_file, "</collection>\n");
@@ -1265,7 +1245,7 @@ sgen_check_mod_union_consistency (void)
 }
 
 void
-sgen_check_nursery_objects_pinned (gboolean pinned)
+sgen_check_nursery_objects_untag (void)
 {
 }
 

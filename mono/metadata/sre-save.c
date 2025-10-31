@@ -20,6 +20,7 @@
 #include "mono/metadata/dynamic-image-internals.h"
 #include "mono/metadata/dynamic-stream-internals.h"
 #include "mono/metadata/mono-ptr-array.h"
+#include "mono/metadata/mono-hash-internals.h"
 #include "mono/metadata/object-internals.h"
 #include "mono/metadata/sre-internals.h"
 #include "mono/metadata/security-manager.h"
@@ -105,6 +106,7 @@ find_index_in_table (MonoDynamicImage *assembly, int table_idx, int col, guint32
 	return 0;
 }
 
+#if G_BYTE_ORDER != G_LITTLE_ENDIAN
 /*
  * Copy len * nelem bytes from val to dest, swapping bytes to LE if necessary.
  * dest may be misaligned.
@@ -150,6 +152,7 @@ swap_with_size (char *dest, const char* val, int len, int nelem) {
 	memcpy (dest, val, len * nelem);
 #endif
 }
+#endif
 
 static guint32
 add_mono_string_to_blob_cached (MonoDynamicImage *assembly, MonoString *str)
@@ -183,7 +186,7 @@ image_create_token_raw  (MonoDynamicImage *assembly, MonoObject* obj_raw, gboole
 	HANDLE_FUNCTION_ENTER (); /* FIXME callers of image_create_token_raw should use handles */
 	error_init (error);
 	MONO_HANDLE_DCL (MonoObject, obj);
-	guint32 result = mono_image_create_token (assembly, obj, create_methodspec, register_token, error);
+	guint32 const result = mono_image_create_token (assembly, obj, create_methodspec, register_token, error);
 	HANDLE_FUNCTION_RETURN_VAL (result);
 }
 
@@ -229,7 +232,7 @@ mono_image_add_cattrs (MonoDynamicImage *assembly, guint32 idx, guint32 type, Mo
 				token = mono_image_get_methodref_token (assembly, method, FALSE);
 		} else {
 			token = image_create_token_raw (assembly, (MonoObject*)cattr->ctor, FALSE, FALSE, error); /* FIXME use handles */
-			if (!mono_error_ok (error)) goto fail;
+			if (!is_ok (error)) goto fail;
 		}
 		type = mono_metadata_token_index (token);
 		type <<= MONO_CUSTOM_ATTR_TYPE_BITS;
@@ -240,7 +243,7 @@ mono_image_add_cattrs (MonoDynamicImage *assembly, guint32 idx, guint32 type, Mo
 			 * fixup_cattrs () needs to fix this up. We can't use image->tokens, since it contains the old token for the
 			 * method, not the one returned by mono_image_create_token ().
 			 */
-			mono_g_hash_table_insert (assembly->remapped_tokens, GUINT_TO_POINTER (token), cattr->ctor);
+			mono_g_hash_table_insert_internal (assembly->remapped_tokens, GUINT_TO_POINTER (token), cattr->ctor);
 			break;
 		case MONO_TABLE_MEMBERREF:
 			type |= MONO_CUSTOM_ATTR_TYPE_MEMBERREF;
@@ -388,7 +391,7 @@ method_encode_code (MonoDynamicImage *assembly, ReflectionMethodBuilder *mb, Mon
 		idx = mono_image_add_stream_data (&assembly->code, &flags, 1);
 		/* add to the fixup todo list */
 		if (mb->ilgen && mb->ilgen->num_token_fixups)
-			mono_g_hash_table_insert (assembly->token_fixups, mb->ilgen, GUINT_TO_POINTER (idx + 1));
+			mono_g_hash_table_insert_internal (assembly->token_fixups, mb->ilgen, GUINT_TO_POINTER (idx + 1));
 		mono_image_add_stream_data (&assembly->code, mono_array_addr_internal (code, char, 0), code_size);
 		return assembly->text_rva + idx;
 	} 
@@ -417,7 +420,7 @@ fat_header:
 	idx = mono_image_add_stream_data (&assembly->code, fat_header, 12);
 	/* add to the fixup todo list */
 	if (mb->ilgen && mb->ilgen->num_token_fixups)
-		mono_g_hash_table_insert (assembly->token_fixups, mb->ilgen, GUINT_TO_POINTER (idx + 12));
+		mono_g_hash_table_insert_internal (assembly->token_fixups, mb->ilgen, GUINT_TO_POINTER (idx + 12));
 	
 	mono_image_add_stream_data (&assembly->code, mono_array_addr_internal (code, char, 0), code_size);
 	if (num_exception) {
@@ -627,17 +630,22 @@ static gboolean
 mono_image_get_method_info (MonoReflectionMethodBuilder *mb, MonoDynamicImage *assembly, MonoError *error)
 {
 	MONO_REQ_GC_UNSAFE_MODE;
+	/* We need to clear handles for rmb fields created in mono_reflection_methodbuilder_from_method_builder */
+	HANDLE_FUNCTION_ENTER ();
 
 	MonoDynamicTable *table;
 	guint32 *values;
 	ReflectionMethodBuilder rmb;
 	int i;
+	gboolean ret = TRUE;
 
 	error_init (error);
 
 	if (!mono_reflection_methodbuilder_from_method_builder (&rmb, mb, error) ||
-	    !mono_image_basic_method (&rmb, assembly, error))
-		return FALSE;
+	    !mono_image_basic_method (&rmb, assembly, error)) {
+		ret = FALSE;
+		goto exit;
+	}
 
 	mb->table_idx = *rmb.table_idx;
 
@@ -682,26 +690,33 @@ mono_image_get_method_info (MonoReflectionMethodBuilder *mb, MonoDynamicImage *a
 				(MonoReflectionGenericParam *)mono_array_get_internal (mb->generic_params, gpointer, i), owner, assembly);
 		}
 	}
-
-	return TRUE;
+exit:
+	HANDLE_FUNCTION_RETURN_VAL (ret);
 }
 
 static gboolean
 mono_image_get_ctor_info (MonoDomain *domain, MonoReflectionCtorBuilder *mb, MonoDynamicImage *assembly, MonoError *error)
 {
+	/* We need to clear handles for rmb fields created in mono_reflection_methodbuilder_from_ctor_builder */
+	HANDLE_FUNCTION_ENTER ();
 	MONO_REQ_GC_UNSAFE_MODE;
 
+	gboolean ret = TRUE;
 	ReflectionMethodBuilder rmb;
 
-	if (!mono_reflection_methodbuilder_from_ctor_builder (&rmb, mb, error))
-		return FALSE;
+	if (!mono_reflection_methodbuilder_from_ctor_builder (&rmb, mb, error)) {
+		ret = FALSE;
+		goto exit;
+	}
 
-	if (!mono_image_basic_method (&rmb, assembly, error))
-		return FALSE;
+	if (!mono_image_basic_method (&rmb, assembly, error)) {
+		ret = FALSE;
+		goto exit;
+	}
 
 	mb->table_idx = *rmb.table_idx;
-
-	return TRUE;
+exit:
+	HANDLE_FUNCTION_RETURN_VAL (ret);
 }
 #endif
 
@@ -1302,7 +1317,7 @@ mono_image_fill_export_table_from_module (MonoDomain *domain, MonoReflectionModu
 	for (i = 0; i < t->rows; ++i) {
 		ERROR_DECL (error);
 		MonoClass *klass = mono_class_get_checked (image, mono_metadata_make_token (MONO_TABLE_TYPEDEF, i + 1), error);
-		g_assert (mono_error_ok (error)); /* FIXME don't swallow the error */
+		g_assert (is_ok (error)); /* FIXME don't swallow the error */
 
 		if (mono_class_is_public (klass))
 			mono_image_fill_export_table_from_class (domain, klass, module_index, 0, assembly);
@@ -1499,7 +1514,7 @@ build_compressed_metadata (MonoDynamicImage *assembly, MonoError *error)
 
 	error_init (error);
 
-	qsort (assembly->gen_params->pdata, assembly->gen_params->len, sizeof (gpointer), compare_genericparam);
+	mono_qsort (assembly->gen_params->pdata, assembly->gen_params->len, sizeof (gpointer), compare_genericparam);
 	for (i = 0; i < assembly->gen_params->len; i++) {
 		GenericParamTableEntry *entry = (GenericParamTableEntry *)g_ptr_array_index (assembly->gen_params, i);
 		if (!write_generic_param_entry (assembly, entry, error))
@@ -1639,26 +1654,26 @@ build_compressed_metadata (MonoDynamicImage *assembly, MonoError *error)
 	/* sort the tables that still need sorting */
 	table = &assembly->tables [MONO_TABLE_CONSTANT];
 	if (table->rows)
-		qsort (table->values + MONO_CONSTANT_SIZE, table->rows, sizeof (guint32) * MONO_CONSTANT_SIZE, compare_constants);
+		mono_qsort (table->values + MONO_CONSTANT_SIZE, table->rows, sizeof (guint32) * MONO_CONSTANT_SIZE, compare_constants);
 	table = &assembly->tables [MONO_TABLE_METHODSEMANTICS];
 	if (table->rows)
-		qsort (table->values + MONO_METHOD_SEMA_SIZE, table->rows, sizeof (guint32) * MONO_METHOD_SEMA_SIZE, compare_semantics);
+		mono_qsort (table->values + MONO_METHOD_SEMA_SIZE, table->rows, sizeof (guint32) * MONO_METHOD_SEMA_SIZE, compare_semantics);
 	table = &assembly->tables [MONO_TABLE_CUSTOMATTRIBUTE];
 	if (table->rows)
-		qsort (table->values + MONO_CUSTOM_ATTR_SIZE, table->rows, sizeof (guint32) * MONO_CUSTOM_ATTR_SIZE, compare_custom_attrs);
+		mono_qsort (table->values + MONO_CUSTOM_ATTR_SIZE, table->rows, sizeof (guint32) * MONO_CUSTOM_ATTR_SIZE, compare_custom_attrs);
 	table = &assembly->tables [MONO_TABLE_FIELDMARSHAL];
 	if (table->rows)
-		qsort (table->values + MONO_FIELD_MARSHAL_SIZE, table->rows, sizeof (guint32) * MONO_FIELD_MARSHAL_SIZE, compare_field_marshal);
+		mono_qsort (table->values + MONO_FIELD_MARSHAL_SIZE, table->rows, sizeof (guint32) * MONO_FIELD_MARSHAL_SIZE, compare_field_marshal);
 	table = &assembly->tables [MONO_TABLE_NESTEDCLASS];
 	if (table->rows)
-		qsort (table->values + MONO_NESTED_CLASS_SIZE, table->rows, sizeof (guint32) * MONO_NESTED_CLASS_SIZE, compare_nested);
+		mono_qsort (table->values + MONO_NESTED_CLASS_SIZE, table->rows, sizeof (guint32) * MONO_NESTED_CLASS_SIZE, compare_nested);
 	/* Section 21.11 DeclSecurity in Partition II doesn't specify this to be sorted by MS implementation requires it */
 	table = &assembly->tables [MONO_TABLE_DECLSECURITY];
 	if (table->rows)
-		qsort (table->values + MONO_DECL_SECURITY_SIZE, table->rows, sizeof (guint32) * MONO_DECL_SECURITY_SIZE, compare_declsecurity_attrs);
+		mono_qsort (table->values + MONO_DECL_SECURITY_SIZE, table->rows, sizeof (guint32) * MONO_DECL_SECURITY_SIZE, compare_declsecurity_attrs);
 	table = &assembly->tables [MONO_TABLE_INTERFACEIMPL];
 	if (table->rows)
-		qsort (table->values + MONO_INTERFACEIMPL_SIZE, table->rows, sizeof (guint32) * MONO_INTERFACEIMPL_SIZE, compare_interface_impl);
+		mono_qsort (table->values + MONO_INTERFACEIMPL_SIZE, table->rows, sizeof (guint32) * MONO_INTERFACEIMPL_SIZE, compare_interface_impl);
 
 	/* compress the tables */
 	for (i = 0; i < MONO_TABLE_NUM; i++){
@@ -2477,7 +2492,7 @@ leave_types:
 	mono_ptr_array_destroy (types);
 leave:
 
-	return mono_error_ok (error);
+	return is_ok (error);
 }
 
 #else /* DISABLE_REFLECTION_EMIT_SAVE */
@@ -2807,7 +2822,8 @@ mono_image_create_pefile (MonoReflectionModuleBuilder *mb, HANDLE file, MonoErro
 
 	assemblyb = mb->assemblyb;
 
-	mono_reflection_dynimage_basic_init (assemblyb);
+	mono_reflection_dynimage_basic_init (assemblyb, error);
+	return_val_if_nok (error, FALSE);
 	assembly = mb->dynamic_image;
 
 	assembly->pe_kind = assemblyb->pe_kind;

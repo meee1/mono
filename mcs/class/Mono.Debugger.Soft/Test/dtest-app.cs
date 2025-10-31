@@ -19,6 +19,9 @@ using System.Collections;
 using MonoTests.Helpers;
 #endif
 
+[assembly: A]
+[assembly: B]
+
 public class TestsBase
 {
 #pragma warning disable 0414
@@ -174,6 +177,95 @@ public struct AStruct : ITest2 {
 	}
 }
 
+public struct int4
+{
+	public int w, x, y, z;
+
+	public int4(int w, int x, int y, int z)
+	{
+		this.w = w;
+		this.x = x;
+		this.y = y;
+		this.z = z;
+	}
+}
+
+
+public struct char4
+{
+	public int w, x, y, z;
+
+	public char4(char w, char x, char y, char z)
+	{
+		this.w = w;
+		this.x = x;
+		this.y = y;
+		this.z = z;
+	}
+}
+
+public unsafe struct NodeTestFixedArray
+{
+	private fixed short buffer[4];
+	private fixed char buffer2[4];
+
+	public int4 Buffer
+	{
+		set
+		{
+			fixed (NodeTestFixedArray* p = &this) {
+				p->buffer[0] = (short)value.w;
+				p->buffer[1] = (short)value.x;
+				p->buffer[2] = (short)value.y;
+				p->buffer[3] = (short)value.z;
+			}
+		}
+	}
+	public char4 Buffer2
+	{
+		set
+		{
+			fixed (NodeTestFixedArray* p = &this) {
+				p->buffer2[0] = (char)value.w;
+				p->buffer2[1] = (char)value.x;
+				p->buffer2[2] = (char)value.y;
+				p->buffer2[3] = (char)value.z;
+			}
+		}
+	}
+	public String getBuffer0() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Convert.ToString(p->buffer[0]);
+	}
+	public String getBuffer1() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Convert.ToString(p->buffer[1]);
+	}
+	public String getBuffer2() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Convert.ToString(p->buffer[2]);
+	}
+	public String getBuffer3() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Convert.ToString(p->buffer[3]);
+	}
+	public String getBuffer2_0() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Char.ToString(p->buffer2[0]);
+	}
+	public String getBuffer2_1() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Char.ToString(p->buffer2[1]);
+	}
+	public String getBuffer2_2() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Char.ToString(p->buffer2[2]);
+	}
+	public String getBuffer2_3() {
+		fixed (NodeTestFixedArray* p = &this) 
+			return Char.ToString(p->buffer2[3]);
+	}
+}
 
 public struct BlittableStruct {
 	public int i;
@@ -259,6 +351,17 @@ class TestIfaces : ITest
 	TestIfaces<int> Baz () {
 		return null;
 	}
+}
+
+public class RuntimeInvokeWithThrowClass
+{
+    public RuntimeInvokeWithThrowClass()
+    {
+    }
+    public void RuntimeInvokeThrowMethod()
+    {
+        throw new Exception("thays");
+    }
 }
 
 public sealed class DebuggerTaskScheduler : TaskScheduler, IDisposable
@@ -371,6 +474,14 @@ public class Tests : TestsBase, ITest2
 
 #pragma warning restore 0414
 
+	public string BreakInField
+	{
+		get {
+			Debugger.Break ();
+			return "Foo";
+		}
+	}
+
 	public class NestedClass {
 	}
 
@@ -414,6 +525,14 @@ public class Tests : TestsBase, ITest2
 			unhandled_exception ();
 			return 0;
 		}
+		if (args.Length >0 && args [0] == "unhandled-exception-wrapper") {
+			unhandled_exception_wrapper ();
+			return 0;
+		}
+		if (args.Length >0 && args [0] == "unhandled-exception-perform-wait-callback") {
+			unhandled_exception_perform_wait_callback ();
+			return 0;
+		}
 		if (args.Length >0 && args [0] == "unhandled-exception-endinvoke") {
 			unhandled_exception_endinvoke ();
 			return 0;
@@ -444,6 +563,14 @@ public class Tests : TestsBase, ITest2
 		}
 		if (args.Length > 0 && args [0] == "step-out-void-async") {
 			run_step_out_void_async();
+			return 0;
+		}
+		if (args.Length > 0 && args [0] == "runtime_invoke_hybrid_exceptions") {
+			runtime_invoke_hybrid_exceptions();
+			return 0;
+		}
+		if (args.Length > 0 && args [0] == "new_thread_hybrid_exception") {
+			new_thread_hybrid_exception();
 			return 0;
 		}
 		assembly_load ();
@@ -490,6 +617,19 @@ public class Tests : TestsBase, ITest2
 		field_with_unsafe_cast_value();
 		inspect_enumerator_in_generic_struct();
 		if_property_stepping();
+		fixed_size_array();
+		test_new_exception_filter();
+		test_async_debug_generics();
+		if (args.Length >0 && args [0] == "pointer_arguments2") {
+			pointers2 ();
+			return 0;
+		}
+		if (args.Length >0 && args [0] == "ss_multi_thread") {
+			ss_multi_thread ();
+			return 0;
+		}
+		test_invalid_argument_assembly_get_type ();
+		frame_setvalue_withlist ();
 		return 3;
 	}
 
@@ -498,6 +638,11 @@ public class Tests : TestsBase, ITest2
 		public string OneLineProperty {
 			get { return oneLineProperty; }
 			set { oneLineProperty = value; }
+		}
+	}
+
+	public class MyException : Exception {
+		public MyException(string message) : base(message) {
 		}
 	}
 
@@ -512,6 +657,21 @@ public class Tests : TestsBase, ITest2
 		//Breakpoint line below, and reflect someField via ObjectMirror;
 		LocalReflectClass.RunMe ();
 	}
+
+	public static void test_invalid_argument_assembly_get_type () {
+
+	}
+
+	public static void frame_setvalue_withlist () {
+		string someLocalString = "Hello";
+		string someLocalString2 = "Hello";
+		var aList = new List<string>();
+		aList.Add("a");
+		aList.Add("B");
+		aList.Add("c");
+		someLocalString2 = someLocalString;
+	}
+	
 
 	public static void breakpoints () {
 		/* Call these early so it is JITted by the time a breakpoint is placed on it */
@@ -726,6 +886,93 @@ public class Tests : TestsBase, ITest2
 		Thread.Sleep(300);
 	}
 	
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void fixed_size_array () {
+		var n = new NodeTestFixedArray();
+		n.Buffer = new int4(1, 2, 3, 4);
+		n.Buffer2 = new char4('a', 'b', 'c', 'd');
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void ss_multi_thread () {
+		for (int i = 0; i < 5; i++)
+		{
+			var t = new Thread(mt_ss);
+			t.Name = "Thread_" + i;
+			t.Start();
+		}
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	static void mt_ss()
+	{
+		int a = 12;
+		int b = 13;
+		int c = 13;
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void test_new_exception_filter () {
+		test_new_exception_filter1();
+		test_new_exception_filter2();
+		test_new_exception_filter3();
+		test_new_exception_filter4();
+	}
+
+
+	public static void test_new_exception_filter1 () {
+		try {
+			throw new Exception("excp");
+		}
+		catch (Exception e) {
+		}
+	}
+
+	public static void test_new_exception_filter2 () {
+		try {
+			throw new MyException("excp");
+		}
+		catch (Exception e) {
+		}
+	}
+
+	public static void test_new_exception_filter3 () {
+		try {
+			throw new ArgumentException();
+		}
+		catch (Exception e) {
+		}
+		try {
+			throw new Exception("excp");
+		}
+		catch (Exception e) {
+		}
+	}
+
+	public static void test_new_exception_filter4 () {
+		try {
+			throw new ArgumentException();
+		}
+		catch (Exception e) {
+		}
+		try {
+			throw new Exception("excp");
+		}
+		catch (Exception e) {
+		}
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void test_async_debug_generics () {
+		ExecuteAsync_Broken<object>().Wait ();
+	}
+
+	async static Task<T> ExecuteAsync_Broken<T>()
+	{
+		await Task.Delay(2);
+		return default;
+	}
+
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
 	public static void inspect_enumerator_in_generic_struct() {
 		TestEnumeratorInsideGenericStruct<String, String> generic_struct = new TestEnumeratorInsideGenericStruct<String, String>(new KeyValuePair<string, string>("0", "f1"));
@@ -1484,7 +1731,29 @@ public class Tests : TestsBase, ITest2
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void unhandled_exception_wrapper () {
+		 throw new ArgumentException("test");
+	}
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
 	public static void unhandled_exception_endinvoke_2 () {
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void unhandled_exception_perform_wait_callback () {
+		try
+		{
+			var results = ResolveAsync().GetAwaiter().GetResult();
+		}
+		catch (SocketException sockEx)
+		{
+			//Console.WriteLine("correctly handled");
+		}
+	}
+
+	public static async Task<List<string>> ResolveAsync()
+	{
+		var addresses = await System.Net.Dns.GetHostAddressesAsync("foo.bar.baz");
+		return new List<string>(addresses.Select(addr => addr.ToString()));
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -1975,7 +2244,11 @@ public class Tests : TestsBase, ITest2
 	{
 	}
 
-	public static unsafe void pointer_arguments (int* a, BlittableStruct* s) {
+#if __MonoCS__
+	public static unsafe void pointer_arguments (int* a, BlittableStruct* s, int *del) {
+#else
+	public static unsafe void pointer_arguments (int* a, BlittableStruct* s, delegate*<int> del) {
+#endif
 		*a = 0;
 	}
 
@@ -1984,7 +2257,7 @@ public class Tests : TestsBase, ITest2
 		int[] a = new [] {1,2,3};
 		BlittableStruct s = new BlittableStruct () { i = 2, d = 3.0 };
 		fixed (int* pa = a)
-			pointer_arguments (pa, &s);
+			pointer_arguments (pa, &s, null);
 	}
 
 	[MethodImplAttribute (MethodImplOptions.NoInlining)]
@@ -2006,6 +2279,42 @@ public class Tests : TestsBase, ITest2
 	static BlittableStruct ref_return_struct = new BlittableStruct () { i = 1, d = 2.0 };
 	public static ref BlittableStruct get_ref_struct() {
 		return ref ref_return_struct;
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void runtime_invoke_hybrid_exceptions () {
+		Type rtType = Type.GetType("RuntimeInvokeWithThrowClass");
+		ConstructorInfo rtConstructor = rtType.GetConstructor(Type.EmptyTypes);
+		object rtObject = rtConstructor.Invoke(new object[] { });
+		MethodInfo rtMethod = rtType.GetMethod("RuntimeInvokeThrowMethod");
+		rtMethod.Invoke(rtObject, new object[] { });
+	}
+	
+	public static unsafe void pointer_arguments2 (int* a) {
+		*a = 0;
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static unsafe void pointers2 () {
+		int[] a = new [] {1,2,3};
+		fixed (int* pa = a)
+			pointer_arguments2 (pa);
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	public static void new_thread_hybrid_exception() {
+		try
+           {
+               Thread thread = new Thread(new_thread_hybrid_exception2);
+               thread.Start();
+           }
+           catch (Exception sockEx)
+           {
+           }
+	}
+	public static void new_thread_hybrid_exception2()
+	{
+		throw new Exception("Error");
 	}
 }
 

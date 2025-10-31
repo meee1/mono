@@ -11,11 +11,9 @@
 #include <mono/metadata/assembly.h>
 #include <mono/metadata/metadata-internals.h>
 
-#ifndef ENABLE_NETCORE
 #define MONO_ASSEMBLY_CORLIB_NAME "mscorlib"
-#else
-#define MONO_ASSEMBLY_CORLIB_NAME "System.Private.CoreLib"
-#endif
+#define MONO_ASSEMBLY_RESOURCE_SUFFIX ".resources"
+#define MONO_ASSEMBLY_CORLIB_RESOURCE_NAME (MONO_ASSEMBLY_CORLIB_NAME MONO_ASSEMBLY_RESOURCE_SUFFIX)
 
 /* Flag bits for mono_assembly_names_equal_flags (). */
 typedef enum {
@@ -31,8 +29,13 @@ typedef enum {
 	MONO_ANAME_EQ_MASK = 0x7
 } MonoAssemblyNameEqFlags;
 
+G_ENUM_FUNCTIONS (MonoAssemblyNameEqFlags)
+
 void
 mono_assembly_name_free_internal (MonoAssemblyName *aname);
+
+gboolean
+mono_assembly_name_culture_is_neutral (const MonoAssemblyName *aname);
 
 gboolean
 mono_assembly_names_equal_flags (MonoAssemblyName *l, MonoAssemblyName *r, MonoAssemblyNameEqFlags flags);
@@ -42,12 +45,29 @@ mono_assembly_get_assemblyref_checked (MonoImage *image, int index, MonoAssembly
 
 MONO_API MonoImage*    mono_assembly_load_module_checked (MonoAssembly *assembly, uint32_t idx, MonoError *error);
 
-MonoAssembly* mono_assembly_load_with_partial_name_internal (const char *name, MonoImageOpenStatus *status);
+MonoAssembly* mono_assembly_load_with_partial_name_internal (const char *name, MonoAssemblyLoadContext *alc, MonoImageOpenStatus *status);
 
 
 typedef gboolean (*MonoAssemblyAsmCtxFromPathFunc) (const char *absfname, MonoAssembly *requesting_assembly, gpointer user_data, MonoAssemblyContextKind *out_asmctx);
 
 void mono_install_assembly_asmctx_from_path_hook (MonoAssemblyAsmCtxFromPathFunc func, gpointer user_data);
+
+typedef MonoAssembly * (*MonoAssemblyPreLoadFuncV2) (MonoAssemblyLoadContext *alc, MonoAssemblyName *aname, char **assemblies_path, gboolean refonly, gpointer user_data, MonoError *error);
+
+void mono_install_assembly_preload_hook_v2 (MonoAssemblyPreLoadFuncV2 func, gpointer user_data, gboolean refonly, gboolean append);
+
+typedef MonoAssembly * (*MonoAssemblySearchFuncV2) (MonoAssemblyLoadContext *alc, MonoAssembly *requesting, MonoAssemblyName *aname, gboolean refonly, gboolean postload, gpointer user_data, MonoError *error);
+
+void
+mono_install_assembly_search_hook_v2 (MonoAssemblySearchFuncV2 func, gpointer user_data, gboolean refonly, gboolean postload, gboolean append);
+
+typedef void (*MonoAssemblyLoadFuncV2) (MonoAssemblyLoadContext *alc, MonoAssembly *assembly, gpointer user_data, MonoError *error);
+
+void
+mono_install_assembly_load_hook_v2 (MonoAssemblyLoadFuncV2 func, gpointer user_data, gboolean append);
+
+void
+mono_assembly_invoke_load_hook_internal (MonoAssemblyLoadContext *alc, MonoAssembly *ass);
 
 /* If predicate returns true assembly should be loaded, if false ignore it. */
 typedef gboolean (*MonoAssemblyCandidatePredicate)(MonoAssembly *, gpointer);
@@ -55,6 +75,7 @@ typedef gboolean (*MonoAssemblyCandidatePredicate)(MonoAssembly *, gpointer);
 typedef struct MonoAssemblyLoadRequest {
 	/* Assembly Load context that is requesting an assembly. */
 	MonoAssemblyContextKind asmctx;
+	MonoAssemblyLoadContext *alc;
 	/* Predicate to apply to candidate assemblies. Optional. */
 	MonoAssemblyCandidatePredicate predicate;
 	/* user_data for predicate. Optional. */
@@ -79,9 +100,17 @@ typedef struct MonoAssemblyByNameRequest {
 	/* FIXME: predicate unused? */
 } MonoAssemblyByNameRequest;
 
-void                   mono_assembly_request_prepare (MonoAssemblyLoadRequest *req,
-						      size_t req_size,
-						      MonoAssemblyContextKind asmctx);
+void                   mono_assembly_request_prepare_load (MonoAssemblyLoadRequest *req,
+							   MonoAssemblyContextKind asmctx,
+							   MonoAssemblyLoadContext *alc);
+
+void                   mono_assembly_request_prepare_open (MonoAssemblyOpenRequest *req,
+							   MonoAssemblyContextKind asmctx,
+							   MonoAssemblyLoadContext *alc);
+
+void                   mono_assembly_request_prepare_byname (MonoAssemblyByNameRequest *req,
+							     MonoAssemblyContextKind asmctx,
+							     MonoAssemblyLoadContext *alc);
 
 MonoAssembly*          mono_assembly_request_open (const char *filename,
 						     const MonoAssemblyOpenRequest *req,
@@ -103,16 +132,22 @@ MonoAssembly*          mono_assembly_request_byname (MonoAssemblyName *aname,
 gboolean
 mono_assembly_candidate_predicate_sn_same_name (MonoAssembly *candidate, gpointer wanted_name);
 
-MonoAssembly*
-mono_assembly_binding_applies_to_image (MonoImage* image, MonoImageOpenStatus *status);
+gboolean
+mono_assembly_check_name_match (MonoAssemblyName *wanted_name, MonoAssemblyName *candidate_name);
 
 MonoAssembly*
-mono_assembly_load_from_assemblies_path (gchar **assemblies_path, MonoAssemblyName *aname, MonoAssemblyContextKind asmctx);
+mono_assembly_binding_applies_to_image (MonoAssemblyLoadContext *alc, MonoImage* image, MonoImageOpenStatus *status);
+
+MonoAssembly *
+mono_assembly_loaded_internal (MonoAssemblyLoadContext *alc, MonoAssemblyName *aname, gboolean refonly);
 
 MONO_PROFILER_API MonoAssemblyName*
 mono_assembly_get_name_internal (MonoAssembly *assembly);
 
 MONO_PROFILER_API MonoImage*
 mono_assembly_get_image_internal (MonoAssembly *assembly);
+
+void
+mono_set_assemblies_path_direct (char **path);
 
 #endif /* __MONO_METADATA_ASSEMBLY_INTERNALS_H__ */

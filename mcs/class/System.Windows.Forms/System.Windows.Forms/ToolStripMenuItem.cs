@@ -83,6 +83,8 @@ namespace System.Windows.Forms
 		public ToolStripMenuItem (string text, Image image, EventHandler onClick, Keys shortcutKeys)
 			: this (text, image, onClick, string.Empty)
 		{
+			if (shortcutKeys != null)
+				shortcut_keys = shortcutKeys;
 		}
 
 		public ToolStripMenuItem (string text, Image image, EventHandler onClick, string name)
@@ -419,10 +421,8 @@ namespace System.Windows.Forms
 			if (item.Owner == null)
 				return null;
 
-			if (item.Owner is ContextMenuStrip) {
-				Control container = ((ContextMenuStrip)item.Owner).container;
-				return container == null ? null : container.TopLevelControl;
-			}
+			if (item.Owner is ContextMenuStrip ownerContextMenuStrip) 
+				return ownerContextMenuStrip.SourceControl?.TopLevelControl;
 
 			// MainMenuStrip
 			return item.Owner.TopLevelControl;

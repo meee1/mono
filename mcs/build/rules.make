@@ -9,6 +9,7 @@
 
 empty :=
 space := $(empty) $(empty)
+comma := ,
 _FILTER_OUT = $(foreach x,$(2),$(if $(findstring $(1),$(x)),,$(x)))
 
 # given $(thisdir), we compute the path to the top directory
@@ -30,20 +31,20 @@ ifndef BUILD_TOOLS_PROFILE
 BUILD_TOOLS_PROFILE = build
 endif
 
-ifeq ("$(ENABLE_COMPILER_SERVER)","1")
-COMPILER_SERVER_ARGS=/shared:$(COMPILER_SERVER_PIPENAME)
-CSC_LOCATION=$(SERVER_CSC_LOCATION)
-else
-COMPILER_SERVER_ARGS:=
-CSC_LOCATION=$(STANDALONE_CSC_LOCATION)
-endif
+# NOTE: We have to use conditional functions to branch on the state of ENABLE_COMPILER_SERVER
+#  because the value of this flag can change after rules.make is evaluated. If we use regular ifeq
+#  statements our builds will opt to use or not use the compiler server seemingly at random because
+#  we include rules.make many times and the last observed value from rules.make does not match the
+#  value used when actually executing csc. you can observe this by adding an $ ( info here and an
+#  echo above the csc invocation and printing the values.
+COMPILER_SERVER_ENABLED_ARGS = /shared:$(COMPILER_SERVER_PIPENAME)
+COMPILER_SERVER_ARGS = $(if $(findstring 1,$(ENABLE_COMPILER_SERVER)),$(COMPILER_SERVER_ENABLED_ARGS),)
+CSC_LOCATION = $(if $(findstring 1,$(ENABLE_COMPILER_SERVER)),$(SERVER_CSC_LOCATION),$(STANDALONE_CSC_LOCATION))
 
 USE_MCS_FLAGS = $(COMPILER_SERVER_ARGS) /codepage:$(CODEPAGE) /nologo /noconfig /deterministic $(LOCAL_MCS_FLAGS) $(PLATFORM_MCS_FLAGS) $(PROFILE_MCS_FLAGS) $(MCS_FLAGS)
-USE_MBAS_FLAGS = $(COMPILER_SERVER_ARGS) /codepage:$(CODEPAGE) $(LOCAL_MBAS_FLAGS) $(PLATFORM_MBAS_FLAGS) $(PROFILE_MBAS_FLAGS) $(MBAS_FLAGS)
 USE_CFLAGS = $(LOCAL_CFLAGS) $(CFLAGS) $(CPPFLAGS)
 CSCOMPILE = $(Q_MCS) $(MCS) $(USE_MCS_FLAGS)
 CSC_RUNTIME_FLAGS = --aot-path=$(abspath $(topdir)/class/lib/$(BUILD_TOOLS_PROFILE)) --gc-params=nursery-size=64m
-BASCOMPILE = $(MBAS) $(USE_MBAS_FLAGS)
 CCOMPILE = $(CC) $(USE_CFLAGS)
 BOOT_COMPILE = $(Q_MCS) $(BOOTSTRAP_MCS) $(USE_MCS_FLAGS)
 INSTALL = $(SHELL) $(topdir)/../mono/install-sh
@@ -51,7 +52,6 @@ INSTALL_DATA = $(INSTALL) -c -m 644
 INSTALL_BIN = $(INSTALL) -c -m 755
 INSTALL_LIB = $(INSTALL_BIN)
 MKINSTALLDIRS = $(SHELL) $(topdir)/mkinstalldirs
-INTERNAL_MBAS = $(RUNTIME) $(RUNTIME_FLAGS) $(topdir)/mbas/mbas.exe
 INTERNAL_CSC_LOCATION = $(CSC_LOCATION)
 
 # Using CSC_SDK_PATH_DISABLED for sanity check that all references have path specified
@@ -97,9 +97,6 @@ include $(topdir)/build/platforms/$(BUILD_PLATFORM).make
 PROFILE_PLATFORM = $(if $(PLATFORMS),$(if $(filter $(PLATFORMS),$(HOST_PLATFORM)),$(HOST_PLATFORM),$(error Unknown platform "$(HOST_PLATFORM)" for profile "$(PROFILE)")))
 PROFILE_DIRECTORY = $(PROFILE)$(if $(PROFILE_PLATFORM),-$(PROFILE_PLATFORM))
 
-ifdef PLATFORM_CORLIB
-corlib = $(PLATFORM_CORLIB)
-endif
 # Useful
 
 ifeq ($(PLATFORM_RUNTIME),$(RUNTIME))
@@ -224,8 +221,6 @@ do-%: %-recursive
 
 .PHONY: all-local $(STD_TARGETS:=-local)
 all-local $(STD_TARGETS:=-local):
-
-csproj: do-csproj
 
 # The way this is set up, any profile-specific subdirs list should
 # be listed _before_ including rules.make.  However, the default

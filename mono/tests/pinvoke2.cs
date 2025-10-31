@@ -314,6 +314,9 @@ public unsafe class Tests {
 	[DllImport ("libtest", EntryPoint="mono_test_return_vtype")]
 	public static extern SimpleStruct mono_test_return_vtype (IntPtr i);
 
+	[DllImport ("libtest", EntryPoint="mono_test_return_vtype")]
+	public static extern SimpleStructGen<string> mono_test_return_vtype_gen (IntPtr i);
+
 	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder")]
 	public static extern void mono_test_marshal_stringbuilder (StringBuilder sb, int len);
 
@@ -334,6 +337,12 @@ public unsafe class Tests {
 
 	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder_out_unicode", CharSet=CharSet.Unicode)]
 	public static extern void mono_test_marshal_stringbuilder_out_unicode (out StringBuilder sb);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder_utf16_tolower", CharSet=CharSet.Unicode)]
+	public static extern void mono_test_marshal_stringbuilder_utf16_tolower (StringBuilder sb, int len);
+
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_stringbuilder_utf16_tolower", CharSet=CharSet.Unicode)]
+	public static extern void mono_test_marshal_stringbuilder_utf16_tolower_in ([In] StringBuilder sb, int len);
 
 	[DllImport ("libtest", EntryPoint="mono_test_asany")]
 	public static extern int mono_test_asany ([MarshalAs (UnmanagedType.AsAny)] object o, int what);
@@ -476,6 +485,7 @@ public unsafe class Tests {
 		SimpleStruct ss = new  SimpleStruct ();
 		ss.b = true;
 		ss.d = "TEST";
+		ss.d2 = "OK";
 		
 		return mono_test_marshal_struct (ss);
 	}
@@ -484,6 +494,7 @@ public unsafe class Tests {
 		SimpleStructGen<string> ss = new  SimpleStructGen<string> ();
 		ss.b = true;
 		ss.d = "TEST";
+		ss.d2 = "OK";
 		
 		return mono_test_marshal_struct_gen (ss);
 	}
@@ -846,6 +857,15 @@ public unsafe class Tests {
 		return 1;
 	}
 
+	public static int test_0_return_vtype_gen () {
+		SimpleStructGen<string> ss = mono_test_return_vtype_gen (new IntPtr (5));
+
+		if (!ss.a && ss.b && !ss.c && ss.d == "TEST" && ss.d2 == "TEST2")
+			return 0;
+
+		return 1;
+	}
+
 	public static int test_0_marshal_stringbuilder () {
 		StringBuilder sb = new StringBuilder(255);
 		sb.Append ("ABCD");
@@ -936,6 +956,28 @@ public unsafe class Tests {
 		
 		if (sb.ToString () != "This is my message.  Isn't it nice?")
 			return 2;  
+		return 0;
+	}
+
+	public static int test_0_marshal_stringbuilder_utf16_tolower () {
+		StringBuilder sb = new StringBuilder (3);
+		sb.Append ("ABC").Append ("DEF");
+		
+		mono_test_marshal_stringbuilder_utf16_tolower (sb, sb.Length);
+		if (sb.ToString () != "abcdef")
+			return 1;
+
+		return 0;
+	}
+
+	public static int test_0_marshal_stringbuilder_utf16_tolower_in () {
+		StringBuilder sb = new StringBuilder (3);
+		sb.Append ("ABC").Append ("DEF");
+		
+		mono_test_marshal_stringbuilder_utf16_tolower_in (sb, sb.Length);
+		if (sb.ToString () != "ABCDEF")
+			return 1;
+
 		return 0;
 	}
 
@@ -1045,6 +1087,9 @@ public unsafe class Tests {
 		}
 		catch (ArgumentException) {
 		}
+
+		if (mono_test_asany (new IntPtr(5), 5) != 0)
+			return 7;
 
 		return 0;
 	}
@@ -2102,5 +2147,16 @@ public unsafe class Tests {
 		return 0;
 	}
 
+	[DllImport ("libtest", EntryPoint="mono_test_marshal_return_array")]
+	public static extern int[] mono_test_marshal_return_array ();
+
+	public static int test_0_return_array () {
+		try {
+			var arr = mono_test_marshal_return_array ();
+			return 1;
+		} catch (MarshalDirectiveException) {
+			return 0;
+		}
+	}
 }
 

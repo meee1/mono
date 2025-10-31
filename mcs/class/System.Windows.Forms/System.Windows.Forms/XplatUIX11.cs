@@ -67,6 +67,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading;
 using Mono.Unix.Native;
+using Mono.Unix;
 
 /// X11 Version
 namespace System.Windows.Forms {
@@ -108,9 +109,8 @@ namespace System.Windows.Forms {
 		static object wake_waiting_lock = new object ();
 		static X11Keyboard	Keyboard;		//
 		static X11Dnd		Dnd;
-		static Socket		listen;			//
-		static Socket		wake;			//
-		static Socket		wake_receive;		//
+		static UnixStream	wake;			//
+		static UnixStream	wake_receive;		//
 		static byte[]		network_buffer;		//
 		static bool		detectable_key_auto_repeat;
 
@@ -134,6 +134,9 @@ namespace System.Windows.Forms {
 
 		// Last window containing the pointer
 		static IntPtr		LastPointerWindow;	// The last window containing the pointer
+
+		// Shape extension
+		bool? hasShapeExtension;
 
 		// Our atoms
 		static IntPtr WM_PROTOCOLS;
@@ -482,24 +485,19 @@ namespace System.Windows.Forms {
 				hwnd.whole_window = RootWindow;
 				hwnd.ClientWindow = RootWindow;
 
-				// For sleeping on the X11 socket
-				listen = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
-				IPEndPoint ep = new IPEndPoint(IPAddress.Loopback, 0);
-				listen.Bind(ep);
-				listen.Listen(1);
-
 				// To wake up when a timer is ready
 				network_buffer = new byte[10];
 
-				wake = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.IP);
-				wake.Connect(listen.LocalEndPoint);
+				int[] pipefds = new int[2];
+				Syscall.pipe (pipefds);
+				wake = new UnixStream (pipefds [1]);
 
 				// Make this non-blocking, so it doesn't
 				// deadlock if too many wakes are sent
 				// before the wake_receive end is polled
-				wake.Blocking = false;
+				Syscall.fcntl (pipefds [1], FcntlCommand.F_SETFL, Syscall.fcntl (pipefds [1], FcntlCommand.F_GETFL) | (int) OpenFlags.O_NONBLOCK);
 
-				wake_receive = listen.Accept();
+				wake_receive = new UnixStream (pipefds [0]);
 
 				pollfds = new Pollfd [2];
 				pollfds [0] = new Pollfd ();
@@ -507,7 +505,7 @@ namespace System.Windows.Forms {
 				pollfds [0].events = PollEvents.POLLIN;
 
 				pollfds [1] = new Pollfd ();
-				pollfds [1].fd = wake_receive.Handle.ToInt32 ();
+				pollfds [1].fd = pipefds [0];
 				pollfds [1].events = PollEvents.POLLIN;
 
 				Keyboard = new X11Keyboard(DisplayHandle, FosterParent);
@@ -1229,7 +1227,7 @@ namespace System.Windows.Forms {
 
 		void WakeupMain () {
 			try {
-				wake.Send (new byte [] { 0xFF });
+				wake.Write (new byte [] { 0xFF }, 0, 1);
 			} catch (SocketException ex) {
 				if (ex.SocketErrorCode != SocketError.WouldBlock) {
 					throw;
@@ -1481,11 +1479,11 @@ namespace System.Windows.Forms {
 			}
 		}
 
-		int NextTimeout (ArrayList timers, DateTime now) {
-			int timeout = 0; 
+		int NextTimeout (ArrayList timers, long now) {
+			int timeout = int.MaxValue; 
 
 			foreach (Timer timer in timers) {
-				int next = (int) (timer.Expires - now).TotalMilliseconds;
+				int next = (int) (timer.Expires - now);
 				if (next < 0) {
 					return 0; // Have a timer that has already expired
 				}
@@ -1503,7 +1501,7 @@ namespace System.Windows.Forms {
 			return timeout;
 		}
 
-		void CheckTimers (ArrayList timers, DateTime now) {
+		void CheckTimers (ArrayList timers, long now) {
 			int count;
 
 			count = timers.Count;
@@ -1693,11 +1691,11 @@ namespace System.Windows.Forms {
 		}
 
 		void UpdateMessageQueue (XEventQueue queue, bool allowIdle) {
-			DateTime	now;
+			long	now;
 			int		pending;
 			Hwnd		hwnd;
 
-			now = DateTime.UtcNow;
+			now = Timer.StopWatchNowMilliseconds;
 
 			lock (XlibLock) {
 				pending = XPending (DisplayHandle);
@@ -1736,7 +1734,7 @@ namespace System.Windows.Forms {
 					// Clean out buffer, so we're not busy-looping on the same data
 					if (length == pollfds.Length) {
 						if (pollfds[1].revents != 0)
-							wake_receive.Receive(network_buffer, 0, 1, SocketFlags.None);
+							wake_receive.Read(network_buffer, 0, 1);
 						lock (wake_waiting_lock) {
 							wake_waiting = false;
 						}
@@ -1808,27 +1806,27 @@ namespace System.Windows.Forms {
 
 					// Seems that some apps support asking for supported types
 					if (format_atom == TARGETS) {
-						int[]	atoms;
+						IntPtr[]	atoms;
 						int	atom_count;
 
-						atoms = new int[5];
+						atoms = new IntPtr[5];
 						atom_count = 0;
 
 						if (Clipboard.IsSourceText) {
-							atoms[atom_count++] = (int)Atom.XA_STRING;
-							atoms[atom_count++] = (int)OEMTEXT;
-							atoms[atom_count++] = (int)UTF8_STRING;
-							atoms[atom_count++] = (int)UTF16_STRING;
-							atoms[atom_count++] = (int)RICHTEXTFORMAT;
+							atoms[atom_count++] = (IntPtr)Atom.XA_STRING;
+							atoms[atom_count++] = (IntPtr)OEMTEXT;
+							atoms[atom_count++] = (IntPtr)UTF8_STRING;
+							atoms[atom_count++] = (IntPtr)UTF16_STRING;
+							atoms[atom_count++] = (IntPtr)RICHTEXTFORMAT;
 						} else if (Clipboard.IsSourceImage) {
-							atoms[atom_count++] = (int)Atom.XA_PIXMAP;
-							atoms[atom_count++] = (int)Atom.XA_BITMAP;
+							atoms[atom_count++] = (IntPtr)Atom.XA_PIXMAP;
+							atoms[atom_count++] = (IntPtr)Atom.XA_BITMAP;
 						} else {
 							// FIXME - handle other types
 						}
 
 						XChangeProperty(DisplayHandle, xevent.SelectionRequestEvent.requestor, (IntPtr)xevent.SelectionRequestEvent.property, 
-								(IntPtr)xevent.SelectionRequestEvent.target, 32, PropertyMode.Replace, atoms, atom_count);
+								(IntPtr)Atom.XA_ATOM, 32, PropertyMode.Replace, atoms, atom_count);
 						sel_event.SelectionEvent.property = xevent.SelectionRequestEvent.property;
 					} else if (format_atom == (IntPtr)RICHTEXTFORMAT) {
 						string rtf_text = Clipboard.GetRtfText ();
@@ -5170,7 +5168,7 @@ namespace System.Windows.Forms {
 				}
 			}
 
-			CheckTimers(queue.timer_list, DateTime.UtcNow);
+			CheckTimers(queue.timer_list, Timer.StopWatchNowMilliseconds);
 
 			if (!pending) {
 				return false;
@@ -5562,6 +5560,26 @@ namespace System.Windows.Forms {
 			}
 		}
 
+		internal bool HasShapeExtension {
+			get {
+				if (!hasShapeExtension.HasValue) {
+					try {
+						hasShapeExtension = XShapeQueryExtension(DisplayHandle, out _, out _);
+					} catch {
+						hasShapeExtension = false;
+					}
+				}
+				
+				return hasShapeExtension.Value;
+			}
+		}
+
+		internal override bool UserClipWontExposeParent {
+			get {
+				return !HasShapeExtension;
+			}
+		}
+
 		internal override void SetClipRegion(IntPtr handle, Region region)
 		{
 			Hwnd	hwnd;
@@ -5571,7 +5589,33 @@ namespace System.Windows.Forms {
 				return;
 			}
 
-			hwnd.UserClip = region;
+			if (hwnd.UserClip != region) {
+				hwnd.UserClip = region;
+
+				if (!HasShapeExtension)
+					return;
+
+				XRectangle[] rects = null;;
+				if (region == null) {
+					rects = new XRectangle[1];
+					rects[0].X = 0;
+					rects[0].Y = 0;
+					rects[0].Width = (ushort)hwnd.Width;
+					rects[0].Height = (ushort)hwnd.Height;
+				} else {
+					RectangleF[] scans;
+					using (var m = new Matrix())
+						scans = region.GetRegionScans(m);
+					rects = new XRectangle[scans.Length];
+					for (int i = 0; i < scans.Length; i++) {
+						rects[i].X = (short) Math.Clamp(scans[i].X, short.MinValue, short.MaxValue);
+						rects[i].Y = (short) Math.Clamp(scans[i].Y, short.MinValue, short.MaxValue);
+						rects[i].Width = (ushort) Math.Clamp(scans[i].Width, ushort.MinValue, ushort.MaxValue);
+						rects[i].Height = (ushort) Math.Clamp(scans[i].Height, ushort.MinValue, ushort.MaxValue);
+					}
+				}
+				XShapeCombineRectangles(DisplayHandle, hwnd.WholeWindow, XShapeKind.ShapeBounding, 0, 0, rects, rects.Length, XShapeOperation.ShapeSet, XOrdering.Unsorted);
+			}
 		}
 
 		internal override void SetCursor(IntPtr handle, IntPtr cursor)
@@ -5990,7 +6034,6 @@ namespace System.Windows.Forms {
 			hwnd.y = y;
 			hwnd.width = width;
 			hwnd.height = height;
-			SendMessage(hwnd.client_window, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
 
 			if (!hwnd.zero_sized) {
 				if (hwnd.fixed_size) {
@@ -6005,15 +6048,7 @@ namespace System.Windows.Forms {
 				}
 			}
 
-			// Update our position/size immediately, so
-			// that future calls to SetWindowPos aren't
-			// kept from calling XMoveResizeWindow (by the
-			// "Save a server roundtrip" block above).
-			hwnd.x = x;
-			hwnd.y = y;
-			hwnd.width = width;
-			hwnd.height = height;
-			hwnd.ClientRect = Rectangle.Empty;
+			SendMessage(hwnd.client_window, Msg.WM_WINDOWPOSCHANGED, IntPtr.Zero, IntPtr.Zero);
 		}
 
 		internal override void SetWindowState(IntPtr handle, FormWindowState state)
@@ -6215,9 +6250,9 @@ namespace System.Windows.Forms {
 
 				XSetWMNormalHints(DisplayHandle, hwnd.whole_window, ref size_hints);
 
-				int[] atoms = new int[2];
-				atoms [0] = 1;			// Version 1
-				atoms [1] = 1;			// we want to be mapped
+				IntPtr[] atoms = new IntPtr[2];
+				atoms [0] = (IntPtr)1;			// Version 1
+				atoms [1] = (IntPtr)1;			// we want to be mapped
 
 				// This line cost me 3 days...
 				XChangeProperty(DisplayHandle, hwnd.whole_window, _XEMBED_INFO, _XEMBED_INFO, 32, PropertyMode.Replace, atoms, 2);
@@ -6281,9 +6316,12 @@ namespace System.Windows.Forms {
 
 		internal override bool Text(IntPtr handle, string text)
 {
-			Hwnd	hwnd;
-
-			hwnd = Hwnd.ObjectFromHandle(handle);
+			Hwnd hwnd = Hwnd.ObjectFromHandle(handle);
+            var classHints = new XClassHint
+            {
+                res_name = text,
+                res_class = text
+            };
 
 			lock (XlibLock) {
 				XChangeProperty(DisplayHandle, hwnd.whole_window, _NET_WM_NAME, UTF8_STRING, 8,
@@ -6295,7 +6333,10 @@ namespace System.Windows.Forms {
 				// to compound text if it's in a
 				// different charset.
 				XStoreName(DisplayHandle, Hwnd.ObjectFromHandle(handle).whole_window, text);
+
+				XSetClassHint(DisplayHandle, hwnd.whole_window, ref classHints);
 			}
+
 			return true;
 		}
 
@@ -6543,6 +6584,14 @@ namespace System.Windows.Forms {
 			return _XFlush(display);
 		}
 
+		[DllImport ("libX11", EntryPoint="XSetClassHint")]
+		internal extern static int _XSetClassHint(IntPtr display, IntPtr window, ref XClassHint class_hint);
+		internal static int XSetClassHint(IntPtr display, IntPtr window, ref XClassHint class_hint)
+		{
+			DebugHelper.TraceWriteLine ("XSetClassHint");
+			return _XSetClassHint(display, window, ref class_hint);
+		}
+		
 		[DllImport ("libX11", EntryPoint="XSetWMName")]
 		internal extern static int _XSetWMName(IntPtr display, IntPtr window, ref XTextProperty text_prop);
 		internal static int XSetWMName(IntPtr display, IntPtr window, ref XTextProperty text_prop)
@@ -7242,6 +7291,22 @@ namespace System.Windows.Forms {
 		}
 #endregion
 
+#region Shape extension imports
+		[DllImport("libXext", EntryPoint="XShapeQueryExtension")]
+		internal extern static bool _XShapeQueryExtension(IntPtr display, out int event_base, out int error_base);
+		internal static bool XShapeQueryExtension(IntPtr display, out int event_base, out int error_base) {
+			DebugHelper.TraceWriteLine (nameof(XShapeQueryExtension));
+			return _XShapeQueryExtension(display, out event_base, out error_base);
+		}
+
+		[DllImport("libXext", EntryPoint="XShapeCombineRectangles")]
+		internal extern static void _XShapeCombineRectangles(IntPtr display, IntPtr window, XShapeKind dest_kind, int x_off, int y_off, XRectangle[] rectangles, int n_rects, XShapeOperation op, XOrdering ordering);
+		internal static void XShapeCombineRectangles(IntPtr display, IntPtr window, int dest_kind, int x_off, int y_off, XRectangle[] rectangles, int n_rects, int op, int ordering) {
+			DebugHelper.TraceWriteLine (nameof(XShapeCombineRectangles));
+			_XShapeCombineRectangles(display, window, dest_kind, x_off, y_off, rectangles, n_rects, op, ordering);
+		}
+#endregion
+
 #region Xinerama imports
 		[DllImport ("libXinerama", EntryPoint="XineramaQueryScreens")]
 		extern static IntPtr _XineramaQueryScreens (IntPtr display, out int number);
@@ -7359,6 +7424,9 @@ namespace System.Windows.Forms {
 
 		[DllImport ("libX11", EntryPoint="XFlush")]
 		internal extern static int XFlush(IntPtr display);
+
+        [DllImport("libX11", EntryPoint="XSetClassHint")]
+        internal extern static int XSetClassHint(IntPtr display, IntPtr window, ref XClassHint class_hint);
 
 		[DllImport ("libX11", EntryPoint="XSetWMName")]
 		internal extern static int XSetWMName(IntPtr display, IntPtr window, ref XTextProperty text_prop);
@@ -7640,6 +7708,13 @@ namespace System.Windows.Forms {
 		internal extern static void gtk_clipboard_set_text (IntPtr clipboard, string text, int len);
 #endregion
 
+#region Shape extension imports
+		[DllImport("libXext")]
+		internal extern static bool XShapeQueryExtension(IntPtr display, out int event_base, out int error_base);
+
+		[DllImport("libXext")]
+		internal extern static void XShapeCombineRectangles(IntPtr display, IntPtr window, XShapeKind dest_kind, int x_off, int y_off, XRectangle[] rectangles, int n_rects, XShapeOperation op, XOrdering ordering);
+#endregion
 
 #region Xinerama imports
 		[DllImport ("libXinerama")]

@@ -193,7 +193,7 @@ mono_w32process_get_modules (pid_t pid)
 			mod = g_new0 (MonoW32ProcessModule, 1);
 			mod->address_start = module.pr_vaddr;
 			mod->address_end = module.pr_vaddr + module.pr_size;
-			mod->address_offset = module.pr_off;
+			mod->address_offset = (void*)module.pr_off;
 			mod->perms = g_strdup ("r--p"); /* XXX? */
 
 			/* AIX has what appears to be device, channel and inode information,
@@ -325,6 +325,8 @@ mono_w32process_get_modules (pid_t pid)
 #if defined(MAJOR_IN_MKDEV) || defined(MAJOR_IN_SYSMACROS)
 		device = makedev ((int)maj_dev, (int)min_dev);
 #else
+		(void)maj_dev;
+		(void)min_dev;
 		device = 0;
 #endif
 		if ((device == 0) && (inode == 0)) {
@@ -357,5 +359,14 @@ mono_w32process_get_modules (pid_t pid)
 	return(ret);
 #endif
 }
+
+void
+mono_w32process_platform_init_once (void)
+{
+}
+
+#else
+
+MONO_EMPTY_SOURCE_FILE (w32process_unix_default);
 
 #endif

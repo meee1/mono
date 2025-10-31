@@ -250,10 +250,13 @@ sgen_client_bridge_processing_stw_step (void)
 	sgen_bridge_processing_stw_step ();
 }
 
+void
+mono_gc_wait_for_bridge_processing_internal (void);
+
 static void G_GNUC_UNUSED
 sgen_client_bridge_wait_for_processing (void)
 {
-	mono_gc_wait_for_bridge_processing ();
+	mono_gc_wait_for_bridge_processing_internal ();
 }
 
 static void G_GNUC_UNUSED
@@ -716,18 +719,13 @@ sgen_client_binary_protocol_ephemeron_ref (gpointer list, gpointer key, gpointer
 
 guint64 mono_time_since_last_stw (void);
 
-typedef MonoSemType SgenSemaphore;
-
-#define SGEN_SEMAPHORE_INIT(sem,initial)	mono_os_sem_init ((sem), (initial))
-#define SGEN_SEMAPHORE_POST(sem)		mono_os_sem_post ((sem))
-#define SGEN_SEMAPHORE_WAIT(sem)		mono_os_sem_wait ((sem), MONO_SEM_FLAGS_NONE)
-
 gboolean sgen_has_critical_method (void);
 gboolean sgen_is_critical_method (MonoMethod *method);
 
 void sgen_set_use_managed_allocator (gboolean flag);
 gboolean sgen_is_managed_allocator (MonoMethod *method);
 gboolean sgen_has_managed_allocator (void);
+void sgen_disable_native_stack_scan (void);
 
 void sgen_scan_for_registered_roots_in_domain (MonoDomain *domain, int root_type);
 void sgen_null_links_for_domain (MonoDomain *domain);

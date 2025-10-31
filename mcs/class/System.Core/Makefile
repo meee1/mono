@@ -37,10 +37,8 @@ else
 	MANAGED_INTERP := $(filter orbis winaot monotouch monotouch_tv monotouch_watch, $(PROFILE))
 	ifdef MANAGED_INTERP
 	LIB_MCS_FLAGS += -d:NO_FEATURE_STATIC_DELEGATE,FEATURE_MAKE_RUN_METHODS
-	PROFILE_TEST_HARNESS_EXCLUDES := $(PROFILE_TEST_HARNESS_EXCLUDES)NotWorkingLinqInterpreter,
 	else
 	LIB_MCS_FLAGS += -d:FEATURE_COMPILE,FEATURE_COMPILE_TO_METHODBUILDER
-	PROFILE_TEST_HARNESS_EXCLUDES := $(PROFILE_TEST_HARNESS_EXCLUDES)SRE,
 	endif
 endif
 
@@ -63,5 +61,7 @@ XTEST_LIB_REFS = System Facades/System.Threading.Tasks Microsoft.CSharp Facades/
 # FEATURE_INTERPRET, FEATURE_COMPILE, NO_FEATURE_STATIC_DELEGATE
 XTEST_LIB_FLAGS = -unsafe -d:FEATURE_COMPILE
 XTEST_RESX_RESOURCE_STRING = ../../../external/corefx/src/System.Collections.Immutable/src/Resources/Strings.resx
+
+XTEST_SPLIT_ASSEMBLIES := $(filter monotouch%, $(PROFILE))
 
 include ../../build/library.make

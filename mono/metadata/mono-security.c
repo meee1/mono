@@ -20,8 +20,11 @@
 #include <mono/metadata/metadata-internals.h>
 #include <mono/metadata/security.h>
 #include <mono/utils/strenc.h>
+#include <mono/utils/w32subset.h>
 #include "reflection-internals.h"
 #include "icall-decl.h"
+
+
 #ifndef HOST_WIN32
 #ifdef HAVE_GRP_H
 #include <grp.h>
@@ -39,19 +42,23 @@
 
 #if defined(__GNUC__)
 
+#ifdef HAVE_GRP_H
 #ifndef HAVE_GETGRGID_R
 	#warning Non-thread safe getgrgid being used!
 #endif
 #ifndef HAVE_GETGRNAM_R
 	#warning Non-thread safe getgrnam being used!
 #endif
+#endif
+
+#ifdef HAVE_PWD_H
 #ifndef HAVE_GETPWNAM_R
 	#warning Non-thread safe getpwnam being used!
 #endif
 #ifndef HAVE_GETPWUID_R
 	#warning Non-thread safe getpwuid being used!
 #endif
-
+#endif
 #endif /* defined(__GNUC__) */
 #endif /* !HOST_WIN32 */
 
@@ -329,22 +336,15 @@ ves_icall_System_Security_Principal_WindowsIdentity_GetUserToken (MonoStringHand
 */
 
 #ifndef HOST_WIN32
-MonoArray*
-ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token)
+MonoArrayHandle
+ves_icall_System_Security_Principal_WindowsIdentity_GetRoles (gpointer token, MonoError *error)
 {
-	ERROR_DECL (error);
-	MonoArray *array = NULL;
 	MonoDomain *domain = mono_domain_get ();
 
 	/* POSIX-compliant systems should use IsMemberOfGroupId or IsMemberOfGroupName */
 	g_warning ("WindowsIdentity._GetRoles should never be called on POSIX");
 
-	if (!array) {
-		/* return empty array of string, i.e. string [0] */
-		array = mono_array_new_checked (domain, mono_get_string_class (), 0, error);
-		mono_error_set_pending_exception (error);
-	}
-	return array;
+	return mono_array_new_handle (domain, mono_get_string_class (), 0, error);
 }
 #endif /* !HOST_WIN32 */
 
@@ -366,7 +366,7 @@ ves_icall_System_Security_Principal_WindowsImpersonationContext_DuplicateToken (
 }
 #endif /* !HOST_WIN32 */
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
+#if HAVE_API_SUPPORT_WIN32_SECURITY
 MonoBoolean
 ves_icall_System_Security_Principal_WindowsImpersonationContext_SetCurrentToken (gpointer token, MonoError *error)
 {
@@ -406,7 +406,25 @@ ves_icall_System_Security_Principal_WindowsImpersonationContext_RevertToSelf (Mo
 	return geteuid () == suid;
 #endif
 }
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+#elif !HAVE_EXTERN_DEFINED_WIN32_SECURITY
+MonoBoolean
+ves_icall_System_Security_Principal_WindowsImpersonationContext_SetCurrentToken (gpointer token, MonoError *error)
+{
+	g_unsupported_api ("ImpersonateLoggedOnUser");
+	mono_error_set_not_supported (error, G_UNSUPPORTED_API, "ImpersonateLoggedOnUser");
+	SetLastError (ERROR_NOT_SUPPORTED);
+	return FALSE;
+}
+
+MonoBoolean
+ves_icall_System_Security_Principal_WindowsImpersonationContext_RevertToSelf (MonoError *error)
+{
+	g_unsupported_api ("RevertToSelf");
+	mono_error_set_not_supported (error, G_UNSUPPORTED_API, "RevertToSelf");
+	SetLastError (ERROR_NOT_SUPPORTED);
+	return FALSE;
+}
+#endif /* HAVE_API_SUPPORT_WIN32_SECURITY */
 
 /* System.Security.Principal.WindowsPrincipal */
 
@@ -526,7 +544,7 @@ Protect (const gunichar2 *path, gint32 file_mode, gint32 add_dir_mode)
 #ifdef HAVE_CHMOD
 			result = (chmod (utf8_name, mode) == 0);
 #else
-			result = -1;
+			result = -1; // FIXME Huh? This must be TRUE or FALSE.
 #endif
 		}
 		g_free (utf8_name);
@@ -535,14 +553,14 @@ Protect (const gunichar2 *path, gint32 file_mode, gint32 add_dir_mode)
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_CanSecure (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_CanSecure (const gunichar2 *path)
 {
 	/* we assume some kind of security is applicable outside Windows */
 	return TRUE;
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsMachineProtected (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsMachineProtected (const gunichar2 *path)
 {
 	gboolean ret = FALSE;
 
@@ -552,7 +570,7 @@ ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsMachineProtected (cons
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsUserProtected (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsUserProtected (const gunichar2 *path)
 {
 	gboolean ret = FALSE;
 
@@ -562,7 +580,7 @@ ves_icall_Mono_Security_Cryptography_KeyPairPersistence_IsUserProtected (const g
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectMachine (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectMachine (const gunichar2 *path)
 {
 	gboolean ret = FALSE;
 
@@ -572,7 +590,7 @@ ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectMachine (const gu
 }
 
 MonoBoolean
-ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectUser (const gunichar2 *path, MonoError *error)
+ves_icall_Mono_Security_Cryptography_KeyPairPersistence_ProtectUser (const gunichar2 *path)
 {
 	gboolean ret = FALSE;
 	
@@ -613,11 +631,13 @@ mono_invoke_protected_memory_method (MonoArrayHandle data, MonoObjectHandle scop
 	const char *method_name, MonoMethod **method, MonoError *error)
 {
 	if (!*method) {
+		MonoDomain *domain = mono_domain_get ();
+		MonoAssemblyLoadContext *alc = mono_domain_default_alc (domain);
 		if (system_security_assembly == NULL) {
-			system_security_assembly = mono_image_loaded_internal ("System.Security", FALSE);
+			system_security_assembly = mono_image_loaded_internal (alc, "System.Security", FALSE);
 			if (!system_security_assembly) {
 				MonoAssemblyOpenRequest req;
-				mono_assembly_request_prepare (&req.request, sizeof (req), MONO_ASMCTX_DEFAULT);
+				mono_assembly_request_prepare_open (&req, MONO_ASMCTX_DEFAULT, alc);
 				MonoAssembly *sa = mono_assembly_request_open ("System.Security.dll", &req, NULL);
 				g_assert (sa);
 				system_security_assembly = mono_assembly_get_image_internal (sa);
@@ -646,3 +666,4 @@ ves_icall_System_Security_SecureString_EncryptInternal (MonoArrayHandle data, Mo
 {
 	mono_invoke_protected_memory_method (data, scope, "Protect", &mono_method_securestring_encrypt, error);
 }
+

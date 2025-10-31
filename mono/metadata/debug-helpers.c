@@ -470,6 +470,13 @@ mono_method_desc_match (MonoMethodDesc *desc, MonoMethod *method)
 	char *sig;
 	gboolean name_match;
 
+	if (desc->name_glob && !strcmp (desc->name, "*"))
+		return TRUE;
+#if 0
+	/* FIXME: implement g_pattern_match_simple in eglib */
+	if (desc->name_glob && g_pattern_match_simple (desc->name, method->name))
+		return TRUE;
+#endif
 	name_match = strcmp (desc->name, method->name) == 0;
 	if (!name_match)
 		return FALSE;
@@ -1108,10 +1115,10 @@ print_field_value (const char *field_ptr, MonoClassField *field, int type_offset
 		g_print ("%u\n", *(guint32*)field_ptr);
 		break;
 	case MONO_TYPE_I8:
-		g_print ("%lld\n", (long long int)*(gint64*)field_ptr);
+		g_print ("%" PRId64 "\n", *(gint64*)field_ptr);
 		break;
 	case MONO_TYPE_U8:
-		g_print ("%llu\n", (long long unsigned int)*(guint64*)field_ptr);
+		g_print ("%" PRIu64 "\n", *(guint64*)field_ptr);
 		break;
 	case MONO_TYPE_R4:
 		g_print ("%f\n", *(gfloat*)field_ptr);

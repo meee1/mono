@@ -16,7 +16,9 @@
 
 #include <config.h>
 
-#ifndef DISABLE_SOCKETS
+#include <mono/metadata/w32socket.h>
+
+#if !defined(DISABLE_SOCKETS)
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
 #define __APPLE_USE_RFC_3542
@@ -66,7 +68,6 @@
 #include <mono/utils/mono-memory-model.h>
 #include <mono/utils/networking.h>
 #include <mono/metadata/w32handle.h>
-#include <mono/metadata/w32socket.h>
 #include <mono/metadata/w32socket-internals.h>
 #include <mono/metadata/w32error.h>
 
@@ -97,11 +98,16 @@
 #ifdef HAVE_GETIFADDRS
 // <net/if.h> must be included before <ifaddrs.h>
 #include <ifaddrs.h>
+#elif defined(HAVE_QP2GETIFADDRS)
+/* Bizarrely, IBM i implements this, but AIX doesn't, so on i, it has a different name... */
+#include <as400_types.h>
+#include <as400_protos.h>
+/* Defines to just reuse ifaddrs code */
+#define ifaddrs ifaddrs_pase
+#define freeifaddrs Qp2freeifaddrs
+#define getifaddrs Qp2getifaddrs
 #endif
 
-#if defined(_MSC_VER) && G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
-#include <MSWSock.h>
-#endif
 #include "icall-decl.h"
 
 #define LOGDEBUG(...)  
@@ -377,6 +383,7 @@ convert_proto (MonoProtocolType mono_proto)
 	case ProtocolType_Pup:
 	case ProtocolType_Udp:
 	case ProtocolType_Idp:
+	case ProtocolType_IcmpV6:
 		/* These protocols are known (on my system at least) */
 		return mono_proto;
 	case ProtocolType_ND:
@@ -670,8 +677,8 @@ convert_sockopt_level_and_name (MonoSocketOptionLevel mono_level, MonoSocketOpti
 			*system_name = TCP_NODELAY;
 			break;
 #if 0
-			/* The documentation is talking complete
-			 * bollocks here: rfc-1222 is titled
+			/* The documentation is
+			 * very vague here: rfc-1222 is titled
 			 * 'Advancing the NSFNET Routing Architecture'
 			 * and doesn't mention either of the words
 			 * "expedite" or "urgent".
@@ -713,11 +720,12 @@ get_socket_assembly (void)
 	
 	if (domain->socket_assembly == NULL) {
 		MonoImage *socket_assembly;
+		MonoAssemblyLoadContext *alc = mono_domain_default_alc (domain);
 
-		socket_assembly = mono_image_loaded_internal ("System", FALSE);
+		socket_assembly = mono_image_loaded_internal (alc, "System", FALSE);
 		if (!socket_assembly) {
 			MonoAssemblyOpenRequest req;
-			mono_assembly_request_prepare (&req.request, sizeof (req), MONO_ASMCTX_DEFAULT);
+			mono_assembly_request_prepare_open (&req, MONO_ASMCTX_DEFAULT, alc);
 			MonoAssembly *sa = mono_assembly_request_open ("System.dll", &req, NULL);
 		
 			if (!sa) {
@@ -733,7 +741,7 @@ get_socket_assembly (void)
 }
 
 gpointer
-ves_icall_System_Net_Sockets_Socket_Socket_internal (MonoObjectHandle this_obj, gint32 family, gint32 type, gint32 proto, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Socket_icall (gint32 family, gint32 type, gint32 proto, gint32 *werror, MonoError *error)
 {
 	SOCKET sock;
 	gint32 sock_family;
@@ -775,11 +783,10 @@ ves_icall_System_Net_Sockets_Socket_Socket_internal (MonoObjectHandle this_obj, 
  * file) is really an IntPtr which needs to be converted to a guint32.
  */
 void
-ves_icall_System_Net_Sockets_Socket_Close_internal (gsize sock, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Close_icall (gsize sock, gint32 *werror)
 {
 	LOGDEBUG (g_message ("%s: closing 0x%x", __func__, sock));
 
-	error_init (error);
 	*werror = 0;
 
 	/* Clear any pending work item from this socket if the underlying
@@ -790,7 +797,7 @@ ves_icall_System_Net_Sockets_Socket_Close_internal (gsize sock, gint32 *werror, 
 }
 
 gint32
-ves_icall_System_Net_Sockets_SocketException_WSAGetLastError_internal (void)
+ves_icall_System_Net_Sockets_SocketException_WSAGetLastError_icall (void)
 {
 	LOGDEBUG (g_message("%s: returning %d", __func__, mono_w32socket_get_last_error ()));
 
@@ -798,12 +805,11 @@ ves_icall_System_Net_Sockets_SocketException_WSAGetLastError_internal (void)
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_Available_internal (gsize sock, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Available_icall (gsize sock, gint32 *werror)
 {
 	int ret;
 	guint64 amount;
-	
-	error_init (error);
+
 	*werror = 0;
 
 	/* FIXME: this might require amount to be unsigned long. */
@@ -817,11 +823,10 @@ ves_icall_System_Net_Sockets_Socket_Available_internal (gsize sock, gint32 *werr
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_Blocking_internal (gsize sock, MonoBoolean block, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Blocking_icall (gsize sock, MonoBoolean block, gint32 *werror)
 {
 	int ret;
 	
-	error_init (error);
 	*werror = 0;
 
 	ret = mono_w32socket_set_blocking (sock, block);
@@ -830,11 +835,10 @@ ves_icall_System_Net_Sockets_Socket_Blocking_internal (gsize sock, MonoBoolean b
 }
 
 gpointer
-ves_icall_System_Net_Sockets_Socket_Accept_internal (gsize sock, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Accept_icall (gsize sock, gint32 *werror, MonoBoolean blocking)
 {
 	SOCKET newsock;
 
-	error_init (error);
 	*werror = 0;
 
 	newsock = mono_w32socket_accept (sock, NULL, 0, blocking);
@@ -847,11 +851,10 @@ ves_icall_System_Net_Sockets_Socket_Accept_internal (gsize sock, gint32 *werror,
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_Listen_internal(gsize sock, guint32 backlog, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Listen_icall (gsize sock, guint32 backlog, gint32 *werror)
 {
 	int ret;
 	
-	error_init (error);
 	*werror = 0;
 
 	ret = mono_w32socket_listen (sock, backlog);
@@ -1073,13 +1076,13 @@ exit:
 }
 
 MonoObjectHandle
-ves_icall_System_Net_Sockets_Socket_LocalEndPoint_internal (gsize sock, gint32 af, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_LocalEndPoint_icall (gsize sock, gint32 af, gint32 *werror, MonoError *error)
 {
 	return mono_w32socket_getname (sock, af, TRUE, werror, error);
 }
 
 MonoObjectHandle
-ves_icall_System_Net_Sockets_Socket_RemoteEndPoint_internal (gsize sock, gint32 af, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_RemoteEndPoint_icall (gsize sock, gint32 af, gint32 *werror, MonoError *error)
 {
 	return mono_w32socket_getname (sock, af, FALSE, werror, error);
 }
@@ -1122,7 +1125,7 @@ create_sockaddr_from_handle (MonoObjectHandle saddr_obj, socklen_t *sa_size, gin
 	len = MONO_HANDLE_GET_FIELD_VAL (saddr_obj, int, domain->sockaddr_data_length_field);
 	g_assert (len >= 2);
 
-	uint32_t gchandle;
+	MonoGCHandle gchandle;
 	guint8 *buf = MONO_ARRAY_HANDLE_PIN (data, guint8, 0, &gchandle);
 	family = convert_family ((MonoAddressFamily)(buf[0] + (buf[1] << 8)));
 	if (family == AF_INET) {
@@ -1186,7 +1189,7 @@ create_sockaddr_from_handle (MonoObjectHandle saddr_obj, socklen_t *sa_size, gin
 		 * two bytes hold the SocketAddress family
 		 */
 		if (len - 2 >= sizeof (sock_un->sun_path)) {
-			mono_error_set_argument_out_of_range (error, "SocketAddress.Size");
+			mono_error_set_argument_out_of_range (error, "SocketAddress.Size", "MonoArgumentException:SocketAddress.Size");
 			mono_gchandle_free_internal (gchandle);
 			return NULL;
 		}
@@ -1210,7 +1213,7 @@ create_sockaddr_from_handle (MonoObjectHandle saddr_obj, socklen_t *sa_size, gin
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_Bind_internal (gsize sock, MonoObjectHandle sockaddr, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Bind_icall (gsize sock, MonoObjectHandle sockaddr, gint32 *werror, MonoError *error)
 {
 	struct sockaddr *sa;
 	socklen_t sa_size;
@@ -1241,8 +1244,7 @@ enum {
 };
 
 MonoBoolean
-ves_icall_System_Net_Sockets_Socket_Poll_internal (gsize sock, gint mode,
-						   gint timeout, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Poll_icall (gsize sock, gint mode, gint timeout, gint32 *werror)
 {
 	MonoInternalThread *thread = mono_thread_internal_current ();
 	mono_pollfd *pfds;
@@ -1250,7 +1252,6 @@ ves_icall_System_Net_Sockets_Socket_Poll_internal (gsize sock, gint mode,
 	time_t start;
 	gint rtimeout;
 
-	error_init (error);
 	*werror = 0;
 
 	pfds = g_new0 (mono_pollfd, 1);
@@ -1315,7 +1316,7 @@ ves_icall_System_Net_Sockets_Socket_Poll_internal (gsize sock, gint mode,
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_Connect_internal (gsize sock, MonoObjectHandle sockaddr, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Connect_icall (gsize sock, MonoObjectHandle sockaddr, gint32 *werror, MonoBoolean blocking, MonoError *error)
 {
 	struct sockaddr *sa;
 	socklen_t sa_size;
@@ -1338,24 +1339,17 @@ ves_icall_System_Net_Sockets_Socket_Connect_internal (gsize sock, MonoObjectHand
 	g_free (sa);
 }
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
-
 void
-ves_icall_System_Net_Sockets_Socket_Disconnect_internal (gsize sock, MonoBoolean reuse, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Disconnect_icall (gsize sock, MonoBoolean reuse, gint32 *werror)
 {
-	error_init (error);
-
 	LOGDEBUG (g_message("%s: disconnecting from socket %p (reuse %d)", __func__, sock, reuse));
 
 	*werror = mono_w32socket_disconnect (sock, reuse);
 }
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT) */
 
 MonoBoolean
-ves_icall_System_Net_Sockets_Socket_Duplicate_internal (gpointer handle, gint32 targetProcessId, gpointer *duplicate_handle, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Duplicate_icall (gpointer handle, gint32 targetProcessId, gpointer *duplicate_handle, gint32 *werror)
 {
-	error_init (error);
-
 	*werror = 0;
 	if (!mono_w32socket_duplicate (handle, targetProcessId, duplicate_handle)) {
 		*werror = mono_w32error_get_last ();
@@ -1366,12 +1360,11 @@ ves_icall_System_Net_Sockets_Socket_Duplicate_internal (gpointer handle, gint32 
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_Receive_internal (gsize sock, gchar *buffer, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Receive_icall (gsize sock, gchar *buffer, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking)
 {
 	int ret;
 	int recvflags = 0;
 	
-	error_init (error);
 	*werror = 0;
 	
 	recvflags = convert_socketflags (flags);
@@ -1390,13 +1383,12 @@ ves_icall_System_Net_Sockets_Socket_Receive_internal (gsize sock, gchar *buffer,
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_Receive_array_internal (gsize sock, WSABUF *buffers, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Receive_array_icall (gsize sock, WSABUF *buffers, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking)
 {
 	int ret;
 	guint32 recv;
 	guint32 recvflags = 0;
 	
-	error_init (error);
 	*werror = 0;
 	
 	recvflags = convert_socketflags (flags);
@@ -1415,7 +1407,7 @@ ves_icall_System_Net_Sockets_Socket_Receive_array_internal (gsize sock, WSABUF *
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_ReceiveFrom_internal (gsize sock, gchar *buffer, gint32 count, gint32 flags, MonoObjectHandleInOut sockaddr, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_ReceiveFrom_icall (gsize sock, gchar *buffer, gint32 count, gint32 flags, MonoObjectHandleInOut sockaddr, gint32 *werror, MonoBoolean blocking, MonoError *error)
 {
 	int ret;
 	int recvflags = 0;
@@ -1464,12 +1456,11 @@ ves_icall_System_Net_Sockets_Socket_ReceiveFrom_internal (gsize sock, gchar *buf
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_Send_internal (gsize sock, gchar *buffer, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Send_icall (gsize sock, gchar *buffer, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking)
 {
 	int ret;
 	int sendflags = 0;
 	
-	error_init (error);
 	*werror = 0;
 	
 	LOGDEBUG (g_message("%s: Sending %d bytes", __func__, count));
@@ -1490,13 +1481,12 @@ ves_icall_System_Net_Sockets_Socket_Send_internal (gsize sock, gchar *buffer, gi
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_Send_array_internal (gsize sock, WSABUF *buffers, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Send_array_icall (gsize sock, WSABUF *buffers, gint32 count, gint32 flags, gint32 *werror, MonoBoolean blocking)
 {
 	int ret;
 	guint32 sent;
 	guint32 sendflags = 0;
 	
-	error_init (error);
 	*werror = 0;
 	
 	sendflags = convert_socketflags (flags);
@@ -1515,7 +1505,7 @@ ves_icall_System_Net_Sockets_Socket_Send_array_internal (gsize sock, WSABUF *buf
 }
 
 gint32
-ves_icall_System_Net_Sockets_Socket_SendTo_internal (gsize sock, gchar *buffer, gint32 count, gint32 flags, MonoObjectHandle sockaddr, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_SendTo_icall (gsize sock, gchar *buffer, gint32 count, gint32 flags, MonoObjectHandle sockaddr, gint32 *werror, MonoBoolean blocking, MonoError *error)
 {
 	int ret;
 	int sendflags = 0;
@@ -1618,7 +1608,7 @@ leave:
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_Select_internal (MonoArrayHandleOut sockets, gint32 timeout, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Select_icall (MonoArrayHandleOut sockets, gint32 timeout, gint32 *werror, MonoError *error)
 {
 	MonoInternalThread *thread = mono_thread_internal_current ();
 	mono_pollfd *pfds;
@@ -1718,7 +1708,7 @@ int_to_object_handle (MonoDomain *domain, int val, MonoError *error)
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_GetSocketOption_obj_internal (gsize sock, gint32 level, gint32 name, MonoObjectHandleOut obj_val, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_GetSocketOption_obj_icall (gsize sock, gint32 level, gint32 name, MonoObjectHandleOut obj_val, gint32 *werror, MonoError *error)
 {
 	int system_level = 0;
 	int system_name = 0;
@@ -1841,10 +1831,11 @@ ves_icall_System_Net_Sockets_Socket_GetSocketOption_obj_internal (gsize sock, gi
 		static MonoImage *mono_posix_image = NULL;
 		
 		if (mono_posix_image == NULL) {
-			mono_posix_image = mono_image_loaded_internal ("Mono.Posix", FALSE);
+			MonoAssemblyLoadContext *alc = mono_domain_default_alc (domain);
+			mono_posix_image = mono_image_loaded_internal (alc, "Mono.Posix", FALSE);
 			if (!mono_posix_image) {
 				MonoAssemblyOpenRequest req;
-				mono_assembly_request_prepare (&req.request, sizeof (req), MONO_ASMCTX_DEFAULT);
+				mono_assembly_request_prepare_open (&req, MONO_ASMCTX_DEFAULT, alc);
 				MonoAssembly *sa = mono_assembly_request_open ("Mono.Posix.dll", &req, NULL);
 				if (!sa) {
 					*werror = WSAENOPROTOOPT;
@@ -1882,9 +1873,8 @@ ves_icall_System_Net_Sockets_Socket_GetSocketOption_obj_internal (gsize sock, gi
 	}
 	}
 }
-
 void
-ves_icall_System_Net_Sockets_Socket_GetSocketOption_arr_internal (gsize sock, gint32 level, gint32 name, MonoArrayHandle byte_val, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_GetSocketOption_arr_icall (gsize sock, gint32 level, gint32 name, MonoArrayHandle byte_val, gint32 *werror, MonoError *error)
 {
 	int system_level = 0;
 	int system_name = 0;
@@ -1905,7 +1895,7 @@ ves_icall_System_Net_Sockets_Socket_GetSocketOption_arr_internal (gsize sock, gi
 
 	valsize = mono_array_handle_length (byte_val);
 
-	uint32_t gchandle;
+	MonoGCHandle gchandle;
 	guchar *buf = MONO_ARRAY_HANDLE_PIN (byte_val, guchar, 0, &gchandle);
 
 	ret = mono_w32socket_getsockopt (sock, system_level, system_name, buf, &valsize);
@@ -1965,12 +1955,12 @@ ipaddress_handle_to_struct_in6_addr (MonoObjectHandle ipaddr)
 #endif
 #endif
 
+#ifdef HAVE_STRUCT_SOCKADDR_IN6
 #if defined(__APPLE__) || defined(__FreeBSD__)
-
 static int
 get_local_interface_id (int family)
 {
-#if !defined(HAVE_GETIFADDRS) || !defined(HAVE_IF_NAMETOINDEX)
+#if !(defined(HAVE_GETIFADDRS) || defined(HAVE_QP2GETIFADDRS)) || !defined(HAVE_IF_NAMETOINDEX)
 	return 0;
 #else
 	struct ifaddrs *ifap = NULL, *ptr;
@@ -1997,11 +1987,11 @@ get_local_interface_id (int family)
 	return idx;
 #endif
 }
-
 #endif /* defined(__APPLE__) || defined(__FreeBSD__) */
+#endif /* HAVE_STRUCT_SOCKADDR_IN6 */
 
 void
-ves_icall_System_Net_Sockets_Socket_SetSocketOption_internal (gsize sock, gint32 level, gint32 name, MonoObjectHandle obj_val, MonoArrayHandle byte_val, gint32 int_val, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_SetSocketOption_icall (gsize sock, gint32 level, gint32 name, MonoObjectHandle obj_val, MonoArrayHandle byte_val, gint32 int_val, gint32 *werror, MonoError *error)
 {
 	struct linger linger;
 	int system_level = 0;
@@ -2141,7 +2131,7 @@ ves_icall_System_Net_Sockets_Socket_SetSocketOption_internal (gsize sock, gint32
 		}
 	} else if (!MONO_HANDLE_IS_NULL (byte_val)) {
 		int valsize = mono_array_handle_length (byte_val);
-		uint32_t gchandle;
+		MonoGCHandle gchandle;
 		guchar *buf = MONO_ARRAY_HANDLE_PIN (byte_val, guchar, 0, &gchandle);
 		
 		switch(name) {
@@ -2236,11 +2226,10 @@ ves_icall_System_Net_Sockets_Socket_SetSocketOption_internal (gsize sock, gint32
 }
 
 void
-ves_icall_System_Net_Sockets_Socket_Shutdown_internal (gsize sock, gint32 how, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_Shutdown_icall (gsize sock, gint32 how, gint32 *werror)
 {
 	int ret;
 
-	error_init (error);
 	*werror = 0;
 
 	/* Currently, the values for how (recv=0, send=1, both=2) match the BSD API */
@@ -2250,7 +2239,7 @@ ves_icall_System_Net_Sockets_Socket_Shutdown_internal (gsize sock, gint32 how, g
 }
 
 gint
-ves_icall_System_Net_Sockets_Socket_IOControl_internal (gsize sock, gint32 code, MonoArrayHandle input, MonoArrayHandle output, gint32 *werror, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_IOControl_icall (gsize sock, gint32 code, MonoArrayHandle input, MonoArrayHandle output, gint32 *werror, MonoError *error)
 {
 #ifdef HOST_WIN32
 	DWORD output_bytes = 0;
@@ -2259,8 +2248,8 @@ ves_icall_System_Net_Sockets_Socket_IOControl_internal (gsize sock, gint32 code,
 #endif
 	gchar *i_buffer, *o_buffer;
 	gint i_len, o_len;
-	uint32_t i_gchandle = 0;
-	uint32_t o_gchandle = 0;
+	MonoGCHandle i_gchandle = 0;
+	MonoGCHandle o_gchandle = 0;
 	gint ret;
 
 	error_init (error);
@@ -2434,7 +2423,7 @@ leave:
 }
 
 MonoBoolean
-ves_icall_System_Net_Dns_GetHostByName_internal (MonoStringHandle host, MonoStringHandleOut h_name, MonoArrayHandleOut h_aliases, MonoArrayHandleOut h_addr_list, gint32 hint, MonoError *error)
+ves_icall_System_Net_Dns_GetHostByName (MonoStringHandle host, MonoStringHandleOut h_name, MonoArrayHandleOut h_aliases, MonoArrayHandleOut h_addr_list, gint32 hint, MonoError *error)
 {
 	gboolean add_local_ips = FALSE, add_info_ok = TRUE;
 	gchar this_hostname [256];
@@ -2478,7 +2467,7 @@ ves_icall_System_Net_Dns_GetHostByName_internal (MonoStringHandle host, MonoStri
 }
 
 MonoBoolean
-ves_icall_System_Net_Dns_GetHostByAddr_internal (MonoStringHandle addr, MonoStringHandleOut h_name, MonoArrayHandleOut h_aliases, MonoArrayHandleOut h_addr_list, gint32 hint, MonoError *error)
+ves_icall_System_Net_Dns_GetHostByAddr (MonoStringHandle addr, MonoStringHandleOut h_name, MonoArrayHandleOut h_aliases, MonoArrayHandleOut h_addr_list, gint32 hint, MonoError *error)
 {
 	char *address;
 	struct sockaddr_in saddr;
@@ -2548,7 +2537,7 @@ ves_icall_System_Net_Dns_GetHostByAddr_internal (MonoStringHandle addr, MonoStri
 }
 
 MonoBoolean
-ves_icall_System_Net_Dns_GetHostName_internal (MonoStringHandleOut h_name, MonoError *error)
+ves_icall_System_Net_Dns_GetHostName (MonoStringHandleOut h_name, MonoError *error)
 {
 	gchar hostname [NI_MAXHOST] = { 0 };
 	int ret;
@@ -2564,15 +2553,14 @@ ves_icall_System_Net_Dns_GetHostName_internal (MonoStringHandleOut h_name, MonoE
 	return TRUE;
 }
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT)
 MonoBoolean
-ves_icall_System_Net_Sockets_Socket_SendFile_internal (gsize sock, MonoStringHandle filename, MonoArrayHandle pre_buffer, MonoArrayHandle post_buffer, gint flags, gint32 *werror, MonoBoolean blocking, MonoError *error)
+ves_icall_System_Net_Sockets_Socket_SendFile_icall (gsize sock, MonoStringHandle filename, MonoArrayHandle pre_buffer, MonoArrayHandle post_buffer, gint flags, gint32 *werror, MonoBoolean blocking, MonoError *error)
 {
 	HANDLE file;
 	gboolean ret;
 	TRANSMIT_FILE_BUFFERS buffers;
-	uint32_t pre_buffer_gchandle = 0;
-	uint32_t post_buffer_gchandle = 0;
+	MonoGCHandle pre_buffer_gchandle = 0;
+	MonoGCHandle post_buffer_gchandle = 0;
 
 	error_init (error);
 	*werror = 0;
@@ -2582,7 +2570,7 @@ ves_icall_System_Net_Sockets_Socket_SendFile_internal (gsize sock, MonoStringHan
 
 	/* FIXME: replace file by a proper fd that we can call open and close on, as they are interruptible */
 
-	uint32_t filename_gchandle;
+	MonoGCHandle filename_gchandle;
 	gunichar2 *filename_chars = mono_string_handle_pin_chars (filename, &filename_gchandle);
 	file = mono_w32file_create (filename_chars, GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, 0);
 	mono_gchandle_free_internal (filename_gchandle);
@@ -2618,7 +2606,6 @@ ves_icall_System_Net_Sockets_Socket_SendFile_internal (gsize sock, MonoStringHan
 
 	return ret;
 }
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_UWP_WINAPI_SUPPORT) */
 
 void
 mono_network_init (void)
@@ -2645,4 +2632,16 @@ ves_icall_cancel_blocking_socket_operation (MonoThreadObjectHandle thread, MonoE
 	mono_thread_info_abort_socket_syscall_for_close (MONO_UINT_TO_NATIVE_THREAD_ID (tid));
 }
 
-#endif /* #ifndef DISABLE_SOCKETS */
+#else
+
+void
+mono_network_init (void)
+{
+}
+
+void
+mono_network_cleanup (void)
+{
+}
+
+#endif // !defined(DISABLE_SOCKETS)

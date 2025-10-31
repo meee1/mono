@@ -246,12 +246,14 @@ program that comes with Mono, and calling it like this:
 
 .fi
 .TP
-.I llcopts=[options]
-Use this option to add more flags to the built-in set of flags passed to the
-LLVM system compiler. If not provided, it will fallback to
-.I -mcpu=generic
-on x86 systems.
-.TP
+.I mcpu=[native o generic]
+cpu=native allows AOT mode to use all instructions current CPU supports, e.g. AVX2, SSE42, etc.
+Default value is 'generic'.
+.I mattr=[cpu feature]
+Allows AOT code generator to use specified CPU features where possible including `System.Runtime.Intrinsics.*'.
+E.g. `mattr=+avx2,mattr=-lzcnt' unlocks sse1-4.2, avx1-2 and disables lzcnt. 
+It's useful for cross-compilation or when it's not possible to use `-mcpu=native' (which enables 
+all cpu feature current cpu has).
 .I llvm-outfile=[filename]
 Gives the path for the temporary LLVM bitcode file created during AOT.
 .I dedup
@@ -273,6 +275,9 @@ Print the architecture the AOT in this copy of Mono targets and quit.
 Generates all required wrappers, so that it is possible to run --interpreter without
 any code generation at runtime.  This option only makes sense with \fBmscorlib.dll\fR.
 Embedders can set
+.TP
+.I depfile=[filename]
+Outputs a gcc -M style dependency file.
 
 .nf
 mono_jit_set_aot_mode (MONO_AOT_MODE_INTERP);
@@ -399,6 +404,15 @@ when compiling the methods.
 Prepends <PREFIX> to the name of tools ran by the AOT compiler, i.e. 'as'/'ld'. For
 example, --tool=prefix=arm-linux-gnueabi- will make the AOT compiler run
 'arm-linux-gnueabi-as' instead of 'as'.
+.TP
+.I ld-name=NAME
+One of the tools used for AOT builds is the linker. Its name differs between various
+systems and it may happen that the assumed default name of the binary is not present.
+If the toolchain used does not have a linker with the default name (e.g. Android NDK
+r22 does not have the default 'ld' linker prefixed with 'tool-prefix' above, instead
+it has prefixed 'ld.gold' and 'ld.bfd' linkers) this option can be used to set the
+linker binary name. It will be prefixed with 'tool-prefix' to form the full linker
+executable name.
 .TP
 .I verbose
 Prints additional information about type loading failures.
@@ -558,6 +572,10 @@ generation engine to JIT or AOT compile.
 .Sp
 For more information, consult: http://www.mono-project.com/docs/advanced/mono-llvm/
 .TP
+\fB--ffast-math\fR
+This flag allows Mono and LLVM to apply aggressive floating point optimizations.
+Can break IEEE754 compliance.
+.TP
 \fB--nollvm\fR
 When using a Mono that has been compiled with LLVM support, it forces
 Mono to fallback to its JIT engine and not use the LLVM backend.
@@ -646,6 +664,10 @@ running a 1.1 program on a 2.0 version:
 Configures the virtual machine to be better suited for server
 operations (currently, allows a heavier threadpool initialization).
 .TP
+\fB--use-map-jit\fR
+Instructs Mono to generate code using MAP_JIT on MacOS.  Necessary for
+bundled applications.
+.TP
 \fB--verify-all\fR 
 Verifies mscorlib and assemblies in the global
 assembly cache for valid IL, and all user code for IL
@@ -658,6 +680,9 @@ mscorlib and assemblies located on the global assembly cache.
 \fB-V\fR, \fB--version\fR
 Prints JIT version information (system configuration, release number
 and branch names if available). 
+.TP
+\fB--version=number\fR
+Print version number only.
 
 
 .SH DEVELOPMENT OPTIONS
@@ -844,9 +869,11 @@ Instruct the runtime on the number of times that the method specified
 by --compile (or all the methods if --compile-all is used) to be
 compiled.  This is used for testing the code generator performance. 
 .TP 
-\fB--stats\fR
+\fB--stats=[method]\fR
 Displays information about the work done by the runtime during the
-execution of an application. 
+execution of an application. If a method (namespace.name:methodname)
+is specified, it will display that information when the method is
+first run in addition to the end of program execution.
 .TP
 \fB--wapi=hps|semdel\fR
 Perform maintenance of the process shared data.
@@ -1175,23 +1202,26 @@ If set, tells mono to attempt using native asynchronous I/O services. If not
 set, a default select/poll implementation is used. Currently epoll and kqueue
 are supported.
 .TP
-\fBMONO_THREADS_SUSPEND\fR
-Selects a mechanism that Mono will use to suspend threads.  May be set to
-"preemptive", "coop", or "hybrid".  Threads may need to be suspended by the
-debugger, or using some .NET threading APIs, and most commonly when the SGen
-garbage collector needs to stop all threads during a critical phase of garbage
-collection.  Preemptive mode is the mode that Mono has used historically, going
-back to the Boehm days, where the garbage collector would run at any point and
-suspend execution of all threads as required to perform a garbage collection.
-The cooperative mode on the other hand requires the cooperation of all threads
-to stop at a safe point.  This makes for an easier to debug garbage collector.
-As of Mono 4.3.0 it is a work in progress, and while it works, it has not been
-used extensively.  This option enables the feature and allows us to find spots
-that need to be tuned for this mode of operation.  Hybrid mode is a combination
-of the two that retains better compatability with scenarios where Mono is
-embedded in another application: threads that are running managed code or code
-that comprises the Mono runtime will be cooperatively suspended, while threads
-running embedder code will be preemptively suspended.
+\fBMONO_THREADS_SUSPEND\fR Selects a mechanism that Mono will use to suspend
+threads.  May be set to "preemptive", "coop", or "hybrid".  Threads may need to
+be suspended by the debugger, or using some .NET threading APIs, and most
+commonly when the SGen garbage collector needs to stop all threads during a
+critical phase of garbage collection.  Preemptive mode is the mode that Mono
+has used historically, going back to the Boehm days, where the garbage
+collector would run at any point and suspend execution of all threads as
+required to perform a garbage collection.  The cooperative mode on the other
+hand requires the cooperation of all threads to stop at a safe point.  This
+makes for an easier to debug garbage collector and it improves the stability of
+the runtime because threads are not suspended when accessing critical
+resources.  In scenarios where Mono is embedded in another application,
+cooperative suspend requires the embedder code to follow coding guidelines in
+order to cooperate with the garbage collector.  Cooperative suspend in embedded
+Mono is currently experimental.  Hybrid mode is a combination of the two that
+retains better compatability with scenarios where Mono is embedded in another
+application: threads that are running managed code or code that comprises the
+Mono runtime will be cooperatively suspended, while threads running embedder
+code will be preemptively suspended.  Hybrid suspend is the default on some
+desktop platforms.
 
 Alternatively, coop and hybrid mode can be enabled at compile time by using the
 --enable-cooperative-suspend or --enable-hybrid-suspend flags, respectively,
@@ -1439,11 +1469,9 @@ Checks that mark bits in the major heap are consistent at the end of
 each major collection.  Consistent mark bits mean that if an object is
 marked, all objects that it had references to must also be marked.
 .TP
-\fBcheck-nursery-pinned\fR
-After nursery collections, and before starting concurrent collections,
-check whether all nursery objects are pinned, or not pinned -
-depending on context.  Does nothing when the split nursery collector
-is used.
+\fBcheck-nursery-untag\fR
+After garbage collections, check whether all vtable pointers are no
+longer tagged.
 .TP
 \fBxdomain-checks\fR
 Performs a check to make sure that no references are left to an
@@ -1479,6 +1507,9 @@ scanning is available.
 \fBno-managed-allocator\fR
 Disables the managed allocator.
 .TP
+\fBmanaged-allocator\fR
+Enables the managed allocator.
+.TP
 \fBcheck-scan-starts\fR
 If set, does a plausibility check on the scan_starts before and after each collection
 .TP
@@ -1504,7 +1535,10 @@ sgen-gc.c.   You can then use this command to explore the output
 \fBnursery-canaries\fR
 If set, objects allocated in the nursery are suffixed with a canary (guard)
 word, which is checked on each minor collection. Can be used to detect/debug
-heap corruption issues.
+heap corruption issues. This disables the usage of the managed allocator,
+because allocation from full aot code is inconsistent with this option. If
+the application is guaranteed not to use aot code, the managed allocator can
+be enabled back with managed-allocator option.
 
 .TP
 \fBdo-not-finalize(=\fIclasses\fB)\fR
@@ -1529,31 +1563,8 @@ install. Or to the directory provided in the gacutil /gacdir command. Example:
 .B /home/username/.mono:/usr/local/mono/
 .TP
 \fBMONO_IOMAP\fR
-Enables some filename rewriting support to assist badly-written
-applications that hard-code Windows paths.  Set to a colon-separated
-list of "drive" to strip drive letters, or "case" to do
-case-insensitive file matching in every directory in a path.  "all"
-enables all rewriting methods.  (Backslashes are always mapped to
-slashes if this variable is set to a valid option).
-.fi
-.Sp
-For example, this would work from the shell:
-.nf
-
-	MONO_IOMAP=drive:case
-	export MONO_IOMAP
-
-.fi
-If you are using mod_mono to host your web applications, you can use
-the 
-.B MonoIOMAP
-directive instead, like this:
-.nf
-
-	MonoIOMAP <appalias> all
-
-.fi
-See mod_mono(8) for more details.
+(deprecated) Enabled some filename rewriting support to assist badly-written
+applications that hard-code Windows paths. It no longer works as of Mono 6.0.
 .TP
 \fBMONO_LLVM\fR
 When Mono is using the LLVM code generation backend you can use this
@@ -1769,6 +1780,12 @@ Automatically generates sequence points where the
 IL stack is empty.  These are places where the debugger can set a
 breakpoint.
 .TP
+\fBllvm-disable-implicit-null-checks\fR
+Makes the LLVM backend use explicit NULL checks on variable dereferences
+instead of depending on operating system support for signals or traps when
+an invalid memory location is accessed. Unconditionally enabled by
+explicit-null-checks.
+.TP
 \fBno-compact-seq-points\fR
 Unless the option is used, the runtime generates sequence points data that
 maps native offsets to IL offsets. Sequence point data is used to
@@ -1836,6 +1853,11 @@ This option will suspend the program when an unhandled exception occurs.
 .TP
 \fBthread-dump-dir=DIR\fR
 Use DIR for storage thread dumps created by SIGQUIT.
+.TP
+\fBweak-memory-model\fR
+Don't enforce the CLR memory model on platforms with weak memory models. This can introduce
+random crashes in some rare cases, for multithreaded environments. This can be used for a
+performance boost on applications that are single threaded.
 .TP
 \fBverbose-gdb\fR
 Make gdb output on native crashes more verbose.
@@ -1938,6 +1960,9 @@ If set, the JIT will not perform any hardware capability detection. This
 may be useful to pinpoint the cause of JIT issues. This is the default
 when Mono is built as an AOT cross compiler, so that the generated code
 will run on most hardware.
+.TP
+\fBMONO_PROFILE\fR
+Equivalent to \fB--profile\fR argument.
 .SH VALGRIND
 If you want to use Valgrind, you will find the file `mono.supp'
 useful, it contains the suppressions for the GC which trigger

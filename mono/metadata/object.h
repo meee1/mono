@@ -368,6 +368,11 @@ MONO_API MONO_RT_EXTERNAL_ONLY uint32_t     mono_gchandle_new_weakref (MonoObjec
 MONO_API MONO_RT_EXTERNAL_ONLY MonoObject*  mono_gchandle_get_target  (uint32_t gchandle);
 MONO_API MONO_RT_EXTERNAL_ONLY void         mono_gchandle_free        (uint32_t gchandle);
 
+MONO_API MONO_RT_EXTERNAL_ONLY MonoGCHandle mono_gchandle_new_v2         (MonoObject *obj, mono_bool pinned);
+MONO_API MONO_RT_EXTERNAL_ONLY MonoGCHandle mono_gchandle_new_weakref_v2 (MonoObject *obj, mono_bool track_resurrection);
+MONO_API MONO_RT_EXTERNAL_ONLY MonoObject*  mono_gchandle_get_target_v2  (MonoGCHandle gchandle);
+MONO_API MONO_RT_EXTERNAL_ONLY void         mono_gchandle_free_v2        (MonoGCHandle gchandle);
+
 /* Reference queue support
  *
  * A reference queue is used to get notifications of when objects are collected.
@@ -387,7 +392,7 @@ MONO_API MONO_RT_EXTERNAL_ONLY mono_bool mono_gc_reference_queue_add (MonoRefere
 /* GC write barriers support */
 MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_set_field     (MonoObject *obj, void* field_ptr, MonoObject* value);
 MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_set_arrayref  (MonoArray *arr, void* slot_ptr, MonoObject* value);
-MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_arrayref_copy (void* dest_ptr, void* src_ptr, int count);
+MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_arrayref_copy (void* dest_ptr, /*const*/ void* src_ptr, int count);
 MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_generic_store (void* ptr, MonoObject* value);
 MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_generic_store_atomic (void *ptr, MonoObject *value);
 MONO_API MONO_RT_EXTERNAL_ONLY void mono_gc_wbarrier_generic_nostore (void* ptr);

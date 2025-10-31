@@ -61,6 +61,19 @@ namespace MonoTests.System
 		C
 	};
 
+	class GenericEnum<T>
+	{
+		public enum TheEnum { A, B };
+	}
+
+	class SampleGeneric<T> where T : IFace1
+	{
+	}
+
+	class SampleGenericConstrained<U> where U : class, IFace1
+	{
+	}
+
 	abstract class Base
 	{
 		public int level;
@@ -435,6 +448,16 @@ namespace MonoTests.System
 			Assert.IsFalse (typeof (Array).IsAssignableFrom (gparams[0]), "#45");
 			Assert.IsFalse (typeof (Delegate).IsAssignableFrom (gparams[0]), "#46");
 
+			// Arrays of generic parameters and arrays of interfaces, see https://github.com/mono/mono/pull/15749
+			var t = typeof (SampleGeneric<>).GetTypeInfo ().GenericTypeParameters [0];
+			var ta = t.MakeArrayType ();
+			var i = typeof (IFace1);
+			var ia = i.MakeArrayType ();
+			var t2 = typeof (SampleGenericConstrained<>).GetTypeInfo ().GenericTypeParameters [0];
+			var ta2 = t2.MakeArrayType ();
+			Assert.IsTrue (i.IsAssignableFrom (t), "#47");
+			Assert.IsFalse (ia.IsAssignableFrom (ta), "#48");
+			Assert.IsTrue (ia.IsAssignableFrom (ta2), "#49");
 		}
 
 		[Test]
@@ -1950,6 +1973,29 @@ namespace MonoTests.System
 			else
 				throw new COMException ();
 		}
+
+		[Test]
+		public void TypeFromProgID ()
+		{
+			try {
+				Type t1 = Type.GetTypeFromProgID("file");
+
+				Type t2 = Type.GetTypeFromProgID("bogus_progid");
+
+				Assert.AreEqual (t1.FullName, "System.__ComObject");
+
+				if (!isMono && (Environment.OSVersion.Platform == PlatformID.Win32Windows ||
+					Environment.OSVersion.Platform == PlatformID.Win32NT))
+					Activator.CreateInstance(t1);
+
+				Assert.AreEqual (t2.FullName, "System.__ComObject");
+
+				Assert.AreNotEqual (t1, t2);
+			}
+			catch (NotImplementedException) {
+				// Currently fails on Mono (unmanaged activation is not supported)
+			}
+		}
 #endif
 		[Test]
 		public void ExerciseFilterName ()
@@ -2894,6 +2940,7 @@ namespace MonoTests.System
 			Assert.AreEqual (TypeCode.UInt16, Type.GetTypeCode (typeof (ushort)), "#16");
 			Assert.AreEqual (TypeCode.UInt32, Type.GetTypeCode (typeof (uint)), "#17");
 			Assert.AreEqual (TypeCode.UInt64, Type.GetTypeCode (typeof (ulong)), "#18");
+			Assert.AreEqual (TypeCode.Int32, Type.GetTypeCode (typeof (GenericEnum<int>.TheEnum)));
 		}
 
 		[Test]
@@ -5063,6 +5110,16 @@ namespace MonoTests.System
 		public void IsByRefLike_ArrayOfByrefLike_TLE ()
 		{
 			typeof(UserByRefLikeStruct).MakeArrayType ();
+		}
+
+		[Test]
+		public void GetConstructorsOnArrayOfGenericArgumentsToArraySpecialInterfaceGtd ()
+		{
+			// Regression test for https://github.com/mono/mono/issues/7095#issuecomment-470465597
+			// The assertion here isn't very important; what matters is that the runtime doesn't crash.
+			Type ilist_arg = typeof(IList<>).GetGenericArguments () [0];
+			Type ilist_arg_array = ilist_arg.MakeArrayType ();
+			Assert.NotNull (ilist_arg_array.GetConstructors ());
 		}
 
 	}

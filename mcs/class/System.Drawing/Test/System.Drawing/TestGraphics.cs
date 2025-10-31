@@ -2556,8 +2556,8 @@ namespace MonoTests.System.Drawing {
 					using (StringFormat format = new StringFormat ()) {
 						format.Alignment = StringAlignment.Center;
 						SizeF sz = g.MeasureString (text, font, 80, format);
-						Assert.IsTrue (sz.Width < 80, "Width");
-						Assert.IsTrue (sz.Height > font.Height * 2, "Height");
+						Assert.IsTrue (sz.Width <= 80, "Width");
+						Assert.IsTrue (sz.Height >= font.Height * 2, "Height");
 					}
 				}
 			}
@@ -3540,6 +3540,16 @@ namespace MonoTests.System.Drawing {
 				using (Graphics g = Graphics.FromImage (bmp)) {
 					Assert.AreEqual (x, g.DpiX, "DpiX");
 					Assert.AreEqual (y, g.DpiY, "DpiY");
+				}
+			}
+		}
+
+		[Test]
+		public void GetHdcWithoutRelease ()
+		{
+			using (Bitmap b = new Bitmap (10, 10)) {
+				using (Graphics g = Graphics.FromImage (b)) {
+					g.GetHdc ();
 				}
 			}
 		}

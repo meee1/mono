@@ -16,12 +16,6 @@
     <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-codeman.c">
       <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClCompile>
-    <ClCompile Include="$(MonoSourceLocation)\mono\utils\dlmalloc.c">
-      <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
-    </ClCompile>
-    <ClInclude Include="$(MonoSourceLocation)\mono\utils\dlmalloc.h">
-      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
-    </ClInclude>
     <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-counters.c">
       <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClCompile>
@@ -100,9 +94,6 @@
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-mmap-internals.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
-    <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-mmap-windows-internals.h">
-      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
-    </ClInclude>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-os-mutex.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
@@ -149,6 +140,9 @@
       <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClCompile>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-time.h">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MonoSourceLocation)\mono\utils\strenc-internals.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\strenc.h">
@@ -272,6 +266,12 @@
       <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClCompile>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\hazard-pointer.h">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClInclude>
+   <ClCompile Include="$(MonoSourceLocation)\mono\utils\lifo-semaphore.c">
+      <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClCompile>
+    <ClInclude Include="$(MonoSourceLocation)\mono\utils\lifo-semaphore.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
     <ClCompile Include="$(MonoSourceLocation)\mono\utils\lock-free-queue.c">
@@ -406,6 +406,9 @@
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-signal-handler.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
+    <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-signal-handler.c">
+      <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClCompile>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-conc-hashtable.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
@@ -460,6 +463,9 @@
     <ClCompile Include="$(MonoSourceLocation)\mono\utils\checked-build.c">
       <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClCompile>
+    <ClCompile Include="$(MonoSourceLocation)\mono\utils\options.c">
+      <Filter>Source Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClCompile>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\checked-build.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
@@ -475,9 +481,24 @@
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\unlocked.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
     </ClInclude>
+    <ClCompile Include="$(MonoSourceLocation)\mono\utils\mono-state.c">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClCompile>
+    <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-state.h">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MonoSourceLocation)\mono\utils\options.h">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MonoSourceLocation)\mono\utils\options-def.h">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup Label="libmonoutilsinclude_headers">
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-logger.h">
+      <Filter>Header Files$(MonoUtilsFilterSubFolder)\common\public</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-private-unstable.h">
       <Filter>Header Files$(MonoUtilsFilterSubFolder)\common\public</Filter>
     </ClInclude>
     <ClInclude Include="$(MonoSourceLocation)\mono\utils\mono-error.h">

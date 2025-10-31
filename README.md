@@ -5,7 +5,26 @@ standards for C# and the Common Language Runtime.
 
 The Mono project is part of the [.NET Foundation](https://www.dotnetfoundation.org/)
 
-[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/mono/mono?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+> [!IMPORTANT]
+> The [Mono Project (mono/mono)]( https://github.com/mono/mono) (‘original mono’) has been an important part of the .NET ecosystem since it was launched in 2001. Microsoft became the steward of the Mono Project when it acquired Xamarin in 2016.
+>
+> The last major release of the Mono Project was in July 2019, with minor patch releases since that time. The last patch release was February 2024.
+>
+> We are happy to announce that the WineHQ organization will be taking over as the stewards of the Mono Project upstream at [wine-mono / Mono · GitLab (winehq.org)](https://gitlab.winehq.org/wine-mono/mono).  Source code in existing [mono/mono](https://github.com/mono/mono) and other repos will remain available, although repos may be archived. Binaries will remain available for up to four years.
+>
+> Microsoft maintains a modern fork of [Mono runtime in the dotnet/runtime repo](https://github.com/dotnet/runtime/tree/main/src/mono) and has been progressively moving workloads to that fork. That work is now complete, and we recommend that active Mono users and maintainers of Mono-based app frameworks migrate to [.NET](https://github.com/dotnet/core) which includes work from this fork.
+>
+> We want to recognize that the Mono Project was the first .NET implementation on Android, iOS, Linux, and other operating systems. The Mono Project was a trailblazer for the .NET platform across many operating systems. It helped make cross-platform .NET a reality and enabled .NET in many new places and we appreciate the work of those who came before us.
+>
+> Thank you to all the Mono developers!
+
+Join us on [Discord](https://aka.ms/dotnet-discord) in the `#monovm` channel:
+
+<a href="https://aka.ms/dotnet-discord">
+  <img src="https://img.shields.io/discord/732297728826277939?style=flat-square&label=Discord&logo=discord&logoColor=white&color=7289DA">
+</a>
+
+### Contents
 
 1. [Compilation and Installation](#compilation-and-installation)
 2. [Using Mono](#using-mono)
@@ -16,6 +35,10 @@ The Mono project is part of the [.NET Foundation](https://www.dotnetfoundation.o
 7. [Working with Submodules](#working-with-submodules)
 
 ### Build Status
+
+Public CI: [![Azure Pipelines](https://dev.azure.com/dnceng/public/_apis/build/status/mono/mono-ci?branchName=main)](https://dev.azure.com/dnceng/public/_build/latest?definitionId=952&branchName=main)
+
+Legacy Jenkins CI (no longer available publicly):
 
 | OS           | Architecture       | Status                       |
 |--------------|--------------------|------------------------------|
@@ -30,7 +53,8 @@ The Mono project is part of the [.NET Foundation](https://www.dotnetfoundation.o
 | Windows      | i386               | [![windows-i386][17]][18]    |
 | CentOS       | s390x (cs)         | [![centos-s390x][19]][20]    |
 | Debian 9     | ppc64el (cs)       | [![debian-9-ppc64el][21]][22]|
-| AIX          | ppc64 (cs)         | [![aix-ppc64][23]][24]       |
+| AIX 6.1      | ppc64 (cs)         | [![aix-ppc64][23]][24]       |
+| FreeBSD 12   | amd64 (cs)         | [![freebsd-amd64][25]][26]   |
 
 _(cs) = community supported architecture_
 
@@ -58,6 +82,8 @@ _(cs) = community supported architecture_
 [22]: https://jenkins.mono-project.com/job/test-mono-mainline-community-chroot/label=debian-9-ppc64el
 [23]: https://jenkins.mono-project.com/job/test-mono-mainline-community/label=aix-ppc64/badge/icon
 [24]: https://jenkins.mono-project.com/job/test-mono-mainline-community/label=aix-ppc64
+[25]: https://jenkins.mono-project.com/job/test-mono-mainline-community/label=freebsd-12-amd64/badge/icon
+[26]: https://jenkins.mono-project.com/job/test-mono-mainline-community/label=freebsd-12-amd64
 
 Compilation and Installation
 ============================
@@ -193,8 +219,6 @@ runtime as an embedded library.
 
 * `scripts/` - Scripts used to invoke Mono and the corresponding program.
 
-* `sdks/` - A new way of embedding Mono into Xamarin.iOS, Xamarin.Android and other products.
-
 * `support/` - Various support libraries.
 
 * `tools/` - A collection of tools, mostly used during Mono development.
@@ -305,6 +329,9 @@ faster under the Xen virtualization system.
   * This defaults to `yes`.
 
 * `--with-large-heap=yes,no` - Enable support for GC heaps larger than 3GB.
+
+  * This only applies only to the Boehm garbage collector, the SGen garbage
+collector does not use this configuration option.
 
   * This defaults to `no`.
 
@@ -428,7 +455,6 @@ Disables compilation for the SSA optimization
 framework, and the various SSA-based optimizations.
 
 * `--enable-llvm`
-* `--enable-loadedllvm`
 
   * This enables the use of LLVM as a code generation engine
 for Mono.  The LLVM code generator and optimizer will be 
@@ -440,10 +466,6 @@ full details and up-to-date information on this feature.
 
   * You will need to have an LLVM built that Mono can link
 against.
-
-  * The `--enable-loadedllvm` variant will make the LLVM backend
-into a runtime-loadable module instead of linking it directly
-into the main mono binary.
 
 * `--enable-big-arrays` - Enable use of arrays with indexes larger
 than Int32.MaxValue.
@@ -579,21 +601,3 @@ Mono Trademark Use Policy
 =========================
 
 The use of trademarks and logos for Mono can be found [here](https://www.dotnetfoundation.org/legal/mono-tm). 
-
-Maintaining the Class Library Solution Files
-============================================
-
-Mono now ships with a solution file that can be used to build the
-assemblies from an IDE.  Either by opening the topmost `net_4_x.sln`
-file, or to by loading one of the individual `csproj` files located in
-each directory.
-
-These are maintained by extracting the configuration information from
-our Makefiles, which as of May 2016 remain the canonical location for
-configuration information.
-
-When changes are made to the Makefiles, a user would need to run the
-following command to re-generate the solution files at the top level:
-
-	$ make update-solution-files
-

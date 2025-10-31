@@ -45,7 +45,9 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Remoting;
 using System.Runtime.Remoting.Contexts;
+#if !DISABLE_REMOTING
 using System.Runtime.Remoting.Channels;
+#endif
 using System.Runtime.Remoting.Messaging;
 using System.Security;
 using System.Security.Permissions;
@@ -72,7 +74,9 @@ namespace System {
 #endif
         #pragma warning disable 169
         #region Sync with object-internals.h
+		#region Sync with LinkerDescriptor/mscorlib.xml
 		IntPtr _mono_app_domain;
+		#endregion
 		#endregion
         #pragma warning restore 169
 		static string _process_guid;
@@ -194,6 +198,7 @@ namespace System {
 			}
 		}
 
+#if !DISABLE_SECURITY
 		public Evidence Evidence {
 			get {
 #if MONOTOUCH
@@ -239,6 +244,7 @@ namespace System {
 				return (IPrincipal)_principal; 
 			}
 		}
+#endif
 
 		// for AppDomain there is only an allowed (i.e. granted) set
 		// http://msdn.microsoft.com/library/en-us/cpguide/html/cpcondetermininggrantedpermissions.asp
@@ -269,7 +275,11 @@ namespace System {
 					if (rd == CurrentDomain)
 						default_domain = rd;
 					else
+#if DISABLE_REMOTING
+						throw new PlatformNotSupportedException ();
+#else
 						default_domain = (AppDomain) RemotingServices.GetDomainProxy (rd);
+#endif
 				}
 				return default_domain;
 			}
@@ -748,7 +758,7 @@ namespace System {
 				throw new FileNotFoundException (null, assemblyRef.Name);
 
 			string cb = assemblyRef.CodeBase;
-			if (cb.ToLower (CultureInfo.InvariantCulture).StartsWith ("file://"))
+			if (cb.StartsWith ("file://", StringComparison.OrdinalIgnoreCase))
 				cb = new Mono.Security.Uri (cb).LocalPath;
 
 			try {
@@ -990,11 +1000,17 @@ namespace System {
 		}
 
 #if MONO_FEATURE_MULTIPLE_APPDOMAINS
+#if MONODROID
+		[Obsolete ("AppDomain.CreateDomain will no longer be supported in .NET 5 and later.  Consider AssemblyLoadContext when it becomes available https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/understanding-assemblyloadcontext")]
+#endif
 		public static AppDomain CreateDomain (string friendlyName)
 		{
 			return CreateDomain (friendlyName, null, null);
 		}
-		
+
+#if MONODROID
+		[Obsolete ("AppDomain.CreateDomain will no longer be supported in .NET 5 and later.  Consider AssemblyLoadContext when it becomes available https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/understanding-assemblyloadcontext")]
+#endif
 		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo)
 		{
 			return CreateDomain (friendlyName, securityInfo, null);
@@ -1005,6 +1021,9 @@ namespace System {
 
 		[MonoLimitationAttribute ("Currently it does not allow the setup in the other domain")]
 		[SecurityPermission (SecurityAction.Demand, ControlAppDomain = true)]
+#if MONODROID
+		[Obsolete ("AppDomain.CreateDomain will no longer be supported in .NET 5 and later.  Consider AssemblyLoadContext when it becomes available https://docs.microsoft.com/en-us/dotnet/core/dependency-loading/understanding-assemblyloadcontext")]
+#endif
 		public static AppDomain CreateDomain (string friendlyName, Evidence securityInfo, AppDomainSetup info)
 		{
 			if (friendlyName == null)
@@ -1043,6 +1062,7 @@ namespace System {
 			info.SerializeNonPrimitives ();
 
 			AppDomain ad = (AppDomain) RemotingServices.GetDomainProxy (createDomain (friendlyName, info));
+#if !DISABLE_SECURITY
 			if (securityInfo == null) {
 				// get default domain's Evidence (unless we're are the default!)
 				if (def == null)
@@ -1052,6 +1072,7 @@ namespace System {
 			}
 			else
 				ad._evidence = new Evidence (securityInfo);	// copy
+#endif
 
 #if !MOBILE
 			if (info.AppDomainInitializer != null) {
@@ -1409,6 +1430,7 @@ namespace System {
 				UnhandledException (this, args);
 		}
 
+#if !DISABLE_REMOTING
 		internal byte[] GetMarshalledDomainObjRef ()
 		{
 			ObjRef oref = RemotingServices.Marshal (AppDomain.CurrentDomain, null, typeof (AppDomain));
@@ -1434,6 +1456,7 @@ namespace System {
 			else
 				arrResponse = null;
 		}
+#endif
 
 #pragma warning restore 169
 

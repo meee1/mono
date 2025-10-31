@@ -18,13 +18,13 @@
 *.vssscc
 *_i.c
 *_p.c
+*.mdb
 *.ncb
 *.suo
 *.tlb
 *.tlh
 *.bak
 *.ilk
-*.log
 *.lib
 *.sbr
 *.sdf
@@ -129,9 +129,19 @@ docs/perlmod*
 compile
 mono.h
 mono-*.tar.*
+mono_crash*
 tmpinst-dir.stamp
-msvc/scripts/inputs/
 extensions-config.h
+*.dylib.dSYM
 *.mlpd
 llvm/build/
 llvm/usr/
+mcs/build/compiler-server.log
+
+##############################################################################
+# Arcade output directories
+##############################################################################
+
+.packages
+artifacts
+.dotnet

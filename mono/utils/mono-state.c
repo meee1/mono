@@ -8,13 +8,16 @@
  * (C) 2018 Microsoft, Inc.
  *
  */
-#ifndef DISABLE_CRASH_REPORTING
-
 #include <config.h>
 #include <glib.h>
 #include <mono/utils/mono-state.h>
+#include <mono/utils/atomic.h>
+
+#ifndef DISABLE_CRASH_REPORTING
+
 #include <mono/utils/mono-threads-coop.h>
 #include <mono/metadata/object-internals.h>
+#include <mono/metadata/mono-config-dirs.h>
 
 #include <sys/param.h>
 #include <fcntl.h>
@@ -41,6 +44,18 @@ extern GCStats mono_gc_stats;
 
 #ifdef HAVE_SYS_MMAN_H
 #include <sys/mman.h>
+#endif
+
+#ifdef TARGET_OSX
+// OSX 10.9 does not have MAP_ANONYMOUS
+#if !defined(MAP_ANONYMOUS)
+  #define NO_MAP_ANONYMOUS
+  #if defined(MAP_ANON)
+    #define MAP_ANONYMOUS MAP_ANON
+  #else
+    #define MAP_ANONYMOUS 0
+  #endif
+#endif
 #endif
 
 #ifdef HAVE_EXECINFO_H
@@ -127,12 +142,60 @@ typedef struct {
 } MonoSummaryTimeline;
 
 static const char *configured_timeline_dir;
-static MonoSummaryTimeline log;
+static MonoSummaryTimeline mlog;
 
 static void
-file_for_summary_stage (const char *directory, MonoSummaryStage stage, gchar *buff, size_t sizeof_buff)
+file_for_stage_breadcrumb (const char *directory, MonoSummaryStage stage, gchar *buff, size_t sizeof_buff)
 {
 	g_snprintf (buff, sizeof_buff, "%s%scrash_stage_%d", directory, G_DIR_SEPARATOR_S, stage);
+}
+
+static void
+file_for_dump_reason_breadcrumb (const char *directory, const char *dump_reason, gchar *buff, size_t sizeof_buff)
+{
+	g_snprintf (buff, sizeof_buff, "%s%scrash_reason_%s", directory, G_DIR_SEPARATOR_S, dump_reason);
+}
+
+static void
+file_for_hash_breadcrumb (const char *directory, MonoStackHash hashes, gchar *buff, size_t sizeof_buff)
+{
+	g_snprintf (buff, sizeof_buff, "%s%scrash_hash_0x%" PRIx64 "", directory, G_DIR_SEPARATOR_S, (uint64_t)hashes.offset_rich_hash);
+}
+
+static void create_breadcrumb (const char *path)
+{
+	int handle = g_open (path, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+	if (handle < 0) {
+		g_async_safe_printf ("Failed to create breadcrumb file %s\n", path);
+		return;
+	}
+
+	if (close(handle) < 0)
+		g_async_safe_printf ("Failed to close breadcrumb file %s\n", path);
+}
+
+static void
+create_stage_breadcrumb (void)
+{
+	char out_file [200];
+	file_for_stage_breadcrumb (mlog.directory, mlog.level, out_file, sizeof(out_file));
+	create_breadcrumb (out_file);
+}
+
+static void
+create_dump_reason_breadcrumb (const char *dump_reason)
+{
+	char out_file [200];
+	file_for_dump_reason_breadcrumb (mlog.directory, dump_reason, out_file, sizeof(out_file));
+	create_breadcrumb (out_file);
+}
+
+void
+mono_create_crash_hash_breadcrumb (MonoThreadSummary *thread)
+{
+	char out_file [200];
+	file_for_hash_breadcrumb (mlog.directory, thread->hashes, out_file, sizeof(out_file));
+	create_breadcrumb (out_file);
 }
 
 gboolean
@@ -148,37 +211,35 @@ mono_summarize_set_timeline_dir (const char *directory)
 }
 
 void
-mono_summarize_timeline_start (void)
+mono_summarize_timeline_start (const char *dump_reason)
 {
-	memset (&log, 0, sizeof (log));
+	memset (&mlog, 0, sizeof (mlog));
 
 	if (!configured_timeline_dir)
 		return;
 
-	log.level = MonoSummarySetup;
-	log.directory = configured_timeline_dir;
+	mlog.directory = configured_timeline_dir;
+	create_dump_reason_breadcrumb (dump_reason);
+	mono_summarize_timeline_phase_log (MonoSummarySetup);
 }
 
 void
 mono_summarize_double_fault_log (void)
 {
-	char out_file [200];
-	file_for_summary_stage (log.directory, MonoSummaryDoubleFault, out_file, sizeof(out_file));
-	int handle = g_open (out_file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
-	close(handle);
+	mono_summarize_timeline_phase_log (MonoSummaryDoubleFault);
 }
 
 void
 mono_summarize_timeline_phase_log (MonoSummaryStage next)
 {
-	if (log.level == MonoSummaryNone)
-		return;
-
-	if (!log.directory)
+	if (!mlog.directory)
 		return;
 
 	MonoSummaryStage out_level;
-	switch (log.level) {
+	switch (mlog.level) {
+		case MonoSummaryNone:
+			out_level = MonoSummarySetup;
+			break;
 		case MonoSummarySetup:
 			out_level = MonoSummarySuspendHandshake;
 			break;
@@ -215,32 +276,25 @@ mono_summarize_timeline_phase_log (MonoSummaryStage next)
 			break;
 
 		case MonoSummaryDone:
-			g_async_safe_printf ("Trying to log crash reporter timeline, already at done %d\n", log.level);
+			g_async_safe_printf ("Trying to log crash reporter timeline, already at done %d\n", mlog.level);
 			return;
 		default:
-			g_async_safe_printf ("Trying to log crash reporter timeline, illegal state %d\n", log.level);
+			g_async_safe_printf ("Trying to log crash reporter timeline, illegal state %d\n", mlog.level);
 			return;
 	}
 
-	g_assertf(out_level == next, "Log Error: Log transition to %d, actual expected next step is %d\n", next, out_level);
+	g_assertf(out_level == next || next == MonoSummaryDoubleFault, "Log Error: Log transition to %d, actual expected next step is %d\n", next, out_level);
 
-	char out_file [200];
-	memset (out_file, 0, sizeof(out_file));
-	file_for_summary_stage (log.directory, out_level, out_file, sizeof(out_file));
-
-	int handle = g_open (out_file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
-	close(handle);
-
+	mlog.level = out_level;
+	create_stage_breadcrumb ();
 	// To check, comment out normally
 	// DO NOT MERGE UNCOMMENTED
 	// As this does a lot of FILE io
 	//
-	// g_assert (out_level == mono_summarize_timeline_read_level (log.directory,  FALSE));
-
-	log.level = out_level;
+	// g_assert (out_level == mono_summarize_timeline_read_level (mlog.directory,  FALSE));
 
 	if (out_level == MonoSummaryDone)
-		memset (&log, 0, sizeof (log));
+		memset (&mlog, 0, sizeof (mlog));
 
 	return;
 }
@@ -262,8 +316,11 @@ mono_state_alloc_mem (MonoStateMem *mem, long tag, size_t size)
 	memset (mem, 0, sizeof (*mem));
 	mem->tag = tag;
 	mem->size = size;
+	mem->handle = 0;
 
-	mem->handle = g_open (name, O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+	if (!g_hasenv ("MONO_CRASH_NOFILE"))
+		mem->handle = g_open (name, O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+
 	if (mem->handle < 1) {
 		mem->mem = (gpointer *) mmap (0, mem->size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	} else {
@@ -284,7 +341,6 @@ mono_state_free_mem (MonoStateMem *mem)
 	if (!mem->mem)
 		return;
 
-  msync(mem->mem, mem->size, MS_SYNC);
 	munmap (mem->mem, mem->size);
 
 	// Note: We aren't calling msync on this file.
@@ -306,7 +362,7 @@ static gboolean
 timeline_has_level (const char *directory, char *log_file, size_t log_file_size, gboolean clear, MonoSummaryStage stage)
 {
 	memset (log_file, 0, log_file_size);
-	file_for_summary_stage (directory, stage, log_file, log_file_size);
+	file_for_stage_breadcrumb (directory, stage, log_file, log_file_size);
 	gboolean exists = g_file_test (log_file, G_FILE_TEST_EXISTS);
 	if (clear && exists) 
 		remove (log_file);
@@ -320,7 +376,7 @@ mono_summarize_timeline_read_level (const char *directory, gboolean clear)
 	char out_file [200];
 
 	if (!directory)
-		directory = log.directory;
+		directory = mlog.directory;
 
 	if (!directory)
 		return MonoSummaryNone;
@@ -438,12 +494,10 @@ mono_native_state_add_frame (MonoStateWriter *writer, MonoFrameSummary *frame)
 	mono_state_writer_printf(writer, "{\n");
 	writer->indent++;
 
-	if (frame->is_managed) {
-		assert_has_space (writer);
-		mono_state_writer_indent (writer);
-		mono_state_writer_object_key (writer, "is_managed");
-		mono_state_writer_printf(writer, "\"%s\",", frame->is_managed ? "true" : "false");
-	}
+	assert_has_space (writer);
+	mono_state_writer_indent (writer);
+	mono_state_writer_object_key (writer, "is_managed");
+	mono_state_writer_printf(writer, "\"%s\",", frame->is_managed ? "true" : "false");
 
 	if (frame->unmanaged_data.is_trampoline) {
 		mono_state_writer_printf(writer, "\n");
@@ -500,6 +554,7 @@ mono_native_state_add_frame (MonoStateWriter *writer, MonoFrameSummary *frame)
 		mono_state_writer_printf(writer, "\"0x%05x\"\n", frame->managed_data.il_offset);
 
 	} else {
+		mono_state_writer_printf(writer, "\n");
 		assert_has_space (writer);
 		mono_state_writer_indent (writer);
 		mono_state_writer_object_key (writer, "native_address");
@@ -517,7 +572,7 @@ mono_native_state_add_frame (MonoStateWriter *writer, MonoFrameSummary *frame)
 			mono_state_writer_printf(writer, "\"0x%05x\"", frame->unmanaged_data.offset);
 		}
 
-		if (frame->unmanaged_data.module) {
+		if (frame->unmanaged_data.module [0] != '\0') {
 			mono_state_writer_printf(writer, ",\n");
 
 			assert_has_space (writer);
@@ -897,12 +952,12 @@ mono_native_state_add_memory (MonoStateWriter *writer)
 	assert_has_space (writer);
 	mono_state_writer_indent (writer);
 	mono_state_writer_object_key (writer, "minor_gc_time");
-	mono_state_writer_printf(writer, "\"%lld\",\n", stats.minor_gc_time);
+	mono_state_writer_printf(writer, "\"%" PRId64 "\",\n", (gint64)stats.minor_gc_time);
 
 	assert_has_space (writer);
 	mono_state_writer_indent (writer);
 	mono_state_writer_object_key (writer, "major_gc_time");
-	mono_state_writer_printf(writer, "\"%lld\",\n", stats.major_gc_time);
+	mono_state_writer_printf(writer, "\"%" PRId64 "\",\n", (gint64)stats.major_gc_time);
 
 	assert_has_space (writer);
 	mono_state_writer_indent (writer);
@@ -917,11 +972,92 @@ mono_native_state_add_memory (MonoStateWriter *writer)
 	assert_has_space (writer);
 	mono_state_writer_indent (writer);
 	mono_state_writer_object_key (writer, "major_gc_time_concurrent");
-	mono_state_writer_printf(writer, "\"%lld\"\n", stats.major_gc_time_concurrent);
+	mono_state_writer_printf(writer, "\"%" PRId64 "\"\n", (gint64)stats.major_gc_time_concurrent);
 
 	writer->indent--;
 	mono_state_writer_indent (writer);
 	mono_state_writer_printf(writer, "},\n");
+}
+
+#define MONO_CRASH_REPORTING_MAPPING_LINE_LIMIT 30
+
+#if !MONO_PRIVATE_CRASHES
+
+static void
+mono_native_state_add_process_map (MonoStateWriter *writer)
+{
+#if defined(__linux__) && !defined(HOST_ANDROID)
+	int handle = g_open ("/proc/self/maps", O_RDONLY, S_IWUSR | S_IRUSR | S_IRGRP | S_IROTH);
+	if (handle == -1) {
+		g_async_safe_printf ("Couldn't find /proc/self/maps on Linux system. Continuing.");
+		return;
+	}
+
+	assert_has_space (writer);
+	mono_state_writer_indent (writer);
+	mono_state_writer_object_key (writer, "process_map");
+	mono_state_writer_printf(writer, "[\n");
+
+	int mapping = 0;
+	while (mapping < MONO_CRASH_REPORTING_MAPPING_LINE_LIMIT) {
+		if (mapping > 0)
+			mono_state_writer_printf (writer, "\",\n");
+
+		mono_state_writer_printf (writer, "\t\"");
+
+		while (TRUE) {
+			char line [10];
+			gboolean newline = FALSE;
+			int charsCopied = g_async_safe_fgets (line, sizeof (line), handle, &newline);
+
+			if (charsCopied == 0)
+				break;
+
+			for (int i=0; i < charsCopied; i++)
+				g_assert (isprint (line [i]));
+
+			g_assert (line [charsCopied] == '\0');
+
+			mono_state_writer_printf (writer, "%s", line);
+
+			if (newline)
+				break;
+		}
+
+		mapping++;
+	}
+
+	if (mapping > 0)
+		mono_state_writer_printf (writer, "\"");
+
+	mono_state_writer_indent (writer);
+	writer->indent--;
+	mono_state_writer_printf(writer, "],\n");
+
+	close (handle);
+#endif
+}
+
+#endif
+
+static void
+mono_native_state_add_logged_message (MonoStateWriter *writer, const char *object_key, const char *msg)
+{
+	if (msg != NULL) {
+		assert_has_space (writer);
+		mono_state_writer_indent (writer);
+		mono_state_writer_object_key (writer, object_key);
+
+		size_t length;
+		const char *pos;
+		if ((pos = strchr (msg, '\n')) != NULL)
+			length = (size_t)(pos - msg);
+		else
+			length = strlen (msg);
+		length = MIN (length, INT_MAX);
+
+		mono_state_writer_printf(writer, "\"%.*s\",\n", (int)length, msg);
+	}
 }
 
 static void
@@ -942,21 +1078,15 @@ mono_native_state_add_prologue (MonoStateWriter *writer)
 	mono_native_state_add_memory (writer);
 
 	const char *assertion_msg = g_get_assertion_message ();
-	if (assertion_msg != NULL) {
-		assert_has_space (writer);
-		mono_state_writer_indent (writer);
-		mono_state_writer_object_key (writer, "assertion_message");
+	mono_native_state_add_logged_message (writer, "assertion_message", assertion_msg);
 
-		size_t length;
-		const char *pos;
-		if ((pos = strchr (assertion_msg, '\n')) != NULL)
-			length = (size_t)(pos - assertion_msg);
-		else
-			length = strlen (assertion_msg);
-		length = MIN (length, INT_MAX);
+	const char *failfast_msg = mono_crash_get_failfast_msg ();
+	mono_native_state_add_logged_message (writer, "failfast_message", failfast_msg);
+	
 
-		mono_state_writer_printf(writer, "\"%.*s\",\n", (int)length, assertion_msg);
-	}
+#ifndef MONO_PRIVATE_CRASHES
+	mono_native_state_add_process_map (writer);
+#endif
 
 	// Start threads array
 	assert_has_space (writer);
@@ -1041,6 +1171,9 @@ mono_summarize_native_state_add_thread (MonoStateWriter *writer, MonoThreadSumma
 void
 mono_crash_dump (const char *jsonFile, MonoStackHash *hashes)
 {
+	if (g_hasenv ("MONO_CRASH_NOFILE"))
+		return;
+
 	size_t size = strlen (jsonFile);
 
 	gboolean success = FALSE;
@@ -1069,4 +1202,38 @@ mono_crash_dump (const char *jsonFile, MonoStackHash *hashes)
 	return;
 }
 
+static char *saved_failfast_msg;
+
+/**
+ * mono_crash_save_failfast_msg:
+ * \param msg the message to save.  Takes ownership, caller shouldn't free
+ *
+ * \returns the previous message - caller is responsible for freeing.
+ */
+char*
+mono_crash_save_failfast_msg (char *msg)
+{
+	return (char*) mono_atomic_xchg_ptr ((gpointer*)&saved_failfast_msg, (void*)msg);
+}
+
+const char*
+mono_crash_get_failfast_msg (void)
+{
+	return saved_failfast_msg;
+}
+
 #endif // DISABLE_CRASH_REPORTING
+
+static volatile int32_t dump_status;
+
+gboolean
+mono_dump_start (void)
+{
+	return (mono_atomic_xchg_i32(&dump_status, 1) == 0);  // return true if we started the dump
+}
+
+gboolean
+mono_dump_complete (void)
+{
+	return (mono_atomic_xchg_i32(&dump_status, 0) == 1);  // return true if we completed the dump
+}

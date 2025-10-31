@@ -38,12 +38,10 @@ using System.Text;
 
 namespace System.Reflection
 {
-#if !NETCORE
 	[ComVisible (true)]
 	[ComDefaultInterfaceAttribute (typeof (_ParameterInfo))]
 	[Serializable]
 	[ClassInterfaceAttribute (ClassInterfaceType.None)]
-#endif
 	class RuntimeParameterInfo : ParameterInfo {		
 		internal MarshalAsAttribute marshalAs;
 
@@ -192,14 +190,20 @@ namespace System.Reflection
 		override
 		object[] GetCustomAttributes (bool inherit)
 		{
-			return MonoCustomAttrs.GetCustomAttributes (this, inherit);
+			// It is documented that the inherit flag is ignored.
+			// Attribute.GetCustomAttributes is to be used to search
+			// inheritance chain.
+			return MonoCustomAttrs.GetCustomAttributes (this, false);
 		}
 
 		public
 		override
 		object[] GetCustomAttributes (Type attributeType, bool inherit)
 		{
-			return MonoCustomAttrs.GetCustomAttributes (this, attributeType, inherit);
+			// It is documented that the inherit flag is ignored.
+			// Attribute.GetCustomAttributes is to be used to search
+			// inheritance chain.
+			return MonoCustomAttrs.GetCustomAttributes (this, attributeType, false);
 		}
 
 		internal object GetDefaultValueImpl (ParameterInfo pinfo)
@@ -249,11 +253,7 @@ namespace System.Reflection
 				attrs [count ++] = new OptionalAttribute ();
 
 			if (marshalAs != null) {
-#if NETCORE
-				attrs [count ++] = (MarshalAsAttribute)marshalAs.CloneInternal ();
-#else
 				attrs [count ++] = marshalAs.Copy ();
-#endif
 			}
 
 			return attrs;

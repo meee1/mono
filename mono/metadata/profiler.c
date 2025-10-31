@@ -1,7 +1,6 @@
 /*
  * Licensed to the .NET Foundation under one or more agreements.
  * The .NET Foundation licenses this file to you under the MIT license.
- * See the LICENSE file in the project root for more information.
  */
 
 #include <config.h>
@@ -9,11 +8,13 @@
 #include <mono/metadata/gc-internals.h>
 #include <mono/metadata/mono-config-dirs.h>
 #include <mono/metadata/mono-debug.h>
+#include <mono/metadata/profiler-legacy.h>
 #include <mono/metadata/profiler-private.h>
 #include <mono/metadata/debug-internals.h>
 #include <mono/utils/mono-dl.h>
 #include <mono/utils/mono-error-internals.h>
 #include <mono/utils/mono-logger-internals.h>
+#include <mono/utils/w32subset.h>
 
 MonoProfilerState mono_profiler_state;
 
@@ -148,7 +149,11 @@ mono_profiler_load (const char *desc)
 	mname = libname = NULL;
 
 	if (!desc || !strcmp ("default", desc))
+#if HAVE_API_SUPPORT_WIN32_PIPE_OPEN_CLOSE && !defined (HOST_WIN32)
 		desc = "log:report";
+#else
+		desc = "log";
+#endif
 
 	if ((col = strchr (desc, ':')) != NULL) {
 		mname = (char *) g_memdup (desc, col - desc + 1);
@@ -334,7 +339,6 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 	MonoDebugMethodInfo *minfo = mono_debug_lookup_method (method);
 
 	if (!info) {
-		char *source_file;
 		int i, n_il_offsets;
 		int *source_files;
 		GPtrArray *source_file_list;
@@ -345,7 +349,7 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 
 		/* Return 0 counts for all locations */
 
-		mono_debug_get_seq_points (minfo, &source_file, &source_file_list, &source_files, &sym_seq_points, &n_il_offsets);
+		mono_debug_get_seq_points (minfo, NULL, &source_file_list, &source_files, &sym_seq_points, &n_il_offsets);
 		for (i = 0; i < n_il_offsets; ++i) {
 			MonoSymSeqPoint *sp = &sym_seq_points [i];
 			const char *srcfile = "";
@@ -428,17 +432,14 @@ MonoProfilerCoverageInfo *
 mono_profiler_coverage_alloc (MonoMethod *method, guint32 entries)
 {
 	if (!mono_profiler_state.code_coverage)
-		return FALSE;
-
-	if (method->wrapper_type)
-		return FALSE;
+		return NULL;
 
 	if (!mono_profiler_coverage_instrumentation_enabled (method))
 		return NULL;
 
 	coverage_lock ();
 
-	MonoProfilerCoverageInfo *info = g_malloc0 (sizeof (MonoProfilerCoverageInfo) + SIZEOF_VOID_P * 2 * entries);
+	MonoProfilerCoverageInfo *info = g_malloc0 (sizeof (MonoProfilerCoverageInfo) + sizeof (MonoProfilerCoverageInfoEntry) * entries);
 
 	info->entries = entries;
 
@@ -956,25 +957,6 @@ update_callback (volatile gpointer *location, gpointer new_, volatile gint32 *co
 #undef MONO_PROFILER_EVENT_5
 #undef _MONO_PROFILER_EVENT
 
-/*
- * The following code is here to maintain compatibility with a few profiler API
- * functions used by Xamarin.{Android,iOS,Mac} so that they keep working
- * regardless of which system Mono version is used.
- *
- * TODO: Remove this some day if we're OK with breaking compatibility.
- */
-
-typedef void *MonoLegacyProfiler;
-
-typedef void (*MonoLegacyProfileFunc) (MonoLegacyProfiler *prof);
-typedef void (*MonoLegacyProfileThreadFunc) (MonoLegacyProfiler *prof, uintptr_t tid);
-typedef void (*MonoLegacyProfileGCFunc) (MonoLegacyProfiler *prof, MonoProfilerGCEvent event, int generation);
-typedef void (*MonoLegacyProfileGCResizeFunc) (MonoLegacyProfiler *prof, int64_t new_size);
-typedef void (*MonoLegacyProfileJitResult) (MonoLegacyProfiler *prof, MonoMethod *method, MonoJitInfo *jinfo, int result);
-typedef void (*MonoLegacyProfileAllocFunc) (MonoLegacyProfiler *prof, MonoObject *obj, MonoClass *klass);
-typedef void (*MonoLegacyProfileMethodFunc) (MonoLegacyProfiler *prof, MonoMethod *method);
-typedef void (*MonoLegacyProfileExceptionFunc) (MonoLegacyProfiler *prof, MonoObject *object);
-typedef void (*MonoLegacyProfileExceptionClauseFunc) (MonoLegacyProfiler *prof, MonoMethod *method, int clause_type, int clause_num);
 
 struct _MonoProfiler {
 	MonoProfilerHandle handle;
@@ -993,15 +975,6 @@ struct _MonoProfiler {
 };
 
 static MonoProfiler *current;
-
-MONO_API void mono_profiler_install (MonoLegacyProfiler *prof, MonoLegacyProfileFunc callback);
-MONO_API void mono_profiler_install_thread (MonoLegacyProfileThreadFunc start, MonoLegacyProfileThreadFunc end);
-MONO_API void mono_profiler_install_gc (MonoLegacyProfileGCFunc callback, MonoLegacyProfileGCResizeFunc heap_resize_callback);
-MONO_API void mono_profiler_install_jit_end (MonoLegacyProfileJitResult end);
-MONO_API void mono_profiler_set_events (int flags);
-MONO_API void mono_profiler_install_allocation (MonoLegacyProfileAllocFunc callback);
-MONO_API void mono_profiler_install_enter_leave (MonoLegacyProfileMethodFunc enter, MonoLegacyProfileMethodFunc fleave);
-MONO_API void mono_profiler_install_exception (MonoLegacyProfileExceptionFunc throw_callback, MonoLegacyProfileMethodFunc exc_method_leave, MonoLegacyProfileExceptionClauseFunc clause_callback);
 
 static void
 shutdown_cb (MonoProfiler *prof)

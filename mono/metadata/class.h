@@ -18,6 +18,13 @@ typedef struct _MonoClassField MonoClassField;
 typedef struct _MonoProperty MonoProperty;
 typedef struct _MonoEvent MonoEvent;
 
+typedef enum {
+	MONO_TYPE_NAME_FORMAT_IL,
+	MONO_TYPE_NAME_FORMAT_REFLECTION,
+	MONO_TYPE_NAME_FORMAT_FULL_NAME,
+	MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED
+} MonoTypeNameFormat;
+
 MONO_API MONO_RT_EXTERNAL_ONLY
 MonoClass *
 mono_class_get             (MonoImage *image, uint32_t type_token);
@@ -92,7 +99,7 @@ mono_class_get_field_token (MonoClassField *field);
 MONO_API uint32_t
 mono_class_get_event_token (MonoEvent *event);
 
-MONO_API MonoProperty*
+MONO_API MONO_RT_EXTERNAL_ONLY MonoProperty *
 mono_class_get_property_from_name (MonoClass *klass, const char *name);
 
 MONO_API uint32_t
@@ -119,7 +126,7 @@ mono_class_min_align       (MonoClass *klass);
 MONO_API MONO_RT_EXTERNAL_ONLY MonoClass *
 mono_class_from_mono_type  (MonoType *type);
 
-MONO_API mono_bool
+MONO_API MONO_RT_EXTERNAL_ONLY mono_bool
 mono_class_is_subclass_of (MonoClass *klass, MonoClass *klassc, 
 						   mono_bool check_interfaces);
 
@@ -129,6 +136,9 @@ mono_class_is_assignable_from (MonoClass *klass, MonoClass *oklass);
 MONO_API MONO_RT_EXTERNAL_ONLY
 void*
 mono_ldtoken               (MonoImage *image, uint32_t token, MonoClass **retclass, MonoGenericContext *context);
+
+MONO_API char *
+mono_type_get_name_full (MonoType *type, MonoTypeNameFormat format);
 
 MONO_API char*         
 mono_type_get_name         (MonoType *type);
@@ -291,6 +301,12 @@ mono_method_can_access_field (MonoMethod *method, MonoClassField *field);
 
 MONO_API mono_bool
 mono_method_can_access_method (MonoMethod *method, MonoMethod *called);
+
+MONO_API mono_bool
+mono_class_is_nullable (MonoClass *klass);
+
+MONO_API MONO_RT_EXTERNAL_ONLY MonoClass*
+mono_class_get_nullable_param (MonoClass *klass);
 
 MONO_END_DECLS
 

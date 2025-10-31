@@ -26,6 +26,10 @@
 #include <mono/utils/mono-counters.h>
 #endif
 
+#if _MSC_VER
+#pragma warning(disable:4312) // FIXME pointer cast to different size
+#endif
+
 typedef struct {
 	gpointer p;
 	MonoHazardousFreeFunc free_func;
@@ -119,7 +123,7 @@ mono_thread_small_id_alloc (void)
 		int num_pages = (hazard_table_size * sizeof (MonoThreadHazardPointers) + pagesize - 1) / pagesize;
 
 		if (hazard_table == NULL) {
-			hazard_table = (MonoThreadHazardPointers *volatile) mono_valloc (NULL,
+			hazard_table = (MonoThreadHazardPointers*) mono_valloc (NULL,
 				sizeof (MonoThreadHazardPointers) * HAZARD_TABLE_MAX_SIZE,
 				table_prot, MONO_MEM_ACCOUNT_HAZARD_POINTERS);
 		}
@@ -187,7 +191,7 @@ mono_hazard_pointer_get (void)
 
 	if (small_id < 0) {
 		static MonoThreadHazardPointers emerg_hazard_table;
-		g_warning ("Thread %p may have been prematurely finalized", (gpointer) (gsize) mono_native_thread_id_get ());
+		g_warning ("Thread %p may have been prematurely finalized\n", (gpointer) (gsize) mono_native_thread_id_get ());
 		return &emerg_hazard_table;
 	}
 
@@ -401,7 +405,7 @@ mono_thread_smr_init (void)
 {
 	int i;
 
-	mono_os_mutex_init_recursive(&small_id_mutex);
+	mono_os_mutex_init (&small_id_mutex);
 	mono_counters_register ("Hazardous pointers", MONO_COUNTER_JIT | MONO_COUNTER_INT, &hazardous_pointer_count);
 
 	for (i = 0; i < HAZARD_TABLE_OVERFLOW; ++i) {

@@ -267,7 +267,7 @@ namespace MonoTests.System.Net {
 	}
 
 	[Test]
-#if FEATURE_NO_BSD_SOCKETS
+#if FEATURE_NO_BSD_SOCKETS && !WASM
 	[ExpectedException (typeof (PlatformNotSupportedException))]
 #endif
 	public void DefaultWebProxy ()
@@ -279,7 +279,7 @@ namespace MonoTests.System.Net {
 		Assert.AreSame (proxy, WebRequest.DefaultWebProxy, "#A2");
 
 		HttpWebRequest req = (HttpWebRequest) WebRequest.CreateDefault (
-			new Uri ("http://www.mono-project.com"));
+			new Uri ("http://www.example.com"));
 		Assert.IsNotNull (req.Proxy, "#B1");
 		Assert.AreSame (proxy, req.Proxy, "#B2");
 
@@ -289,7 +289,7 @@ namespace MonoTests.System.Net {
 		Assert.AreSame (proxy, req.Proxy, "#C3");
 
 		req = (HttpWebRequest) WebRequest.CreateDefault (
-			new Uri ("http://www.mono-project.com"));
+			new Uri ("http://www.example.com"));
 		Assert.IsNull (req.Proxy, "#D");
 	}
 
@@ -297,7 +297,7 @@ namespace MonoTests.System.Net {
 	public void RegisterPrefix_Creator_Null ()
 	{
 		try {
-			WebRequest.RegisterPrefix ("http://www.mono-project.com", (IWebRequestCreate) null);
+			WebRequest.RegisterPrefix ("http://www.example.com", (IWebRequestCreate) null);
 			Assert.Fail ("#1");
 		} catch (ArgumentNullException ex) {
 			Assert.AreEqual (typeof (ArgumentNullException), ex.GetType (), "#2");
@@ -326,7 +326,8 @@ namespace MonoTests.System.Net {
 	[Test] //BNC#323452
 	// Throws exception with Status == Timeout. The same code behaves as the test expects when run from a regular app.
 	// Might be an issue with the test suite. To investigate.
-	[Category("AndroidNotWorking")] 
+	[Category("AndroidNotWorking")]
+	[Category("MultiThreaded")]
 	public void TestFailedConnection ()
 	{
 		try {
@@ -353,6 +354,7 @@ namespace MonoTests.System.Net {
 
 	[Test] //BNC#323452
 	[Category ("AndroidNotWorking")] // Fails when ran as part of the entire BCL test suite. Works when only this fixture is ran
+	[Category ("MultiThreaded")]
 	public void TestFailedResolution ()
 	{
 		try {
@@ -377,7 +379,7 @@ namespace MonoTests.System.Net {
 			Assert.IsTrue (e is WebException);
 			//#if NET_2_0 e.Message == "The underlying connection was closed: The remote name could not be resolved."
 			//#if NET_1_1 e.Message == "The remote name could not be resolved: 'thisdomaindoesnotexist.monotestcase.x'"
-			Assert.AreEqual (((WebException)e).Status, WebExceptionStatus.NameResolutionFailure);
+			Assert.AreEqual (WebExceptionStatus.NameResolutionFailure, ((WebException)e).Status);
 			Assert.IsNull (e.InnerException);
 		}
 	}

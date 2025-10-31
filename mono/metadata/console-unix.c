@@ -36,6 +36,10 @@
 #include <mono/utils/mono-proclib.h>
 #include <mono/utils/w32api.h>
 #include <mono/utils/mono-errno.h>
+#include <mono/metadata/console-io.h>
+#include <mono/metadata/exception.h>
+#include "icall-decl.h"
+
 
 /* On solaris, curses.h must come before both termios.h and term.h */
 #ifdef HAVE_CURSES_H
@@ -56,10 +60,6 @@
 #    include <sys/ioctl.h>
 #endif
 
-#include <mono/metadata/console-io.h>
-#include <mono/metadata/exception.h>
-#include "icall-decl.h"
-
 static gboolean setup_finished;
 static gboolean atexit_called;
 
@@ -77,9 +77,7 @@ static struct termios mono_attr;
 /* static void console_restore_signal_handlers (void); */
 static void console_set_signal_handlers (void);
 
-
 static GENERATE_TRY_GET_CLASS_WITH_CACHE (console, "System", "Console");
-
 
 void
 mono_console_init (void)
@@ -269,7 +267,11 @@ MONO_SIG_HANDLER_FUNC (static, sigint_handler)
 	in_sigint = FALSE;
 }
 
-static struct sigaction save_sigcont, save_sigint, save_sigwinch;
+static struct sigaction save_sigcont, save_sigwinch;
+
+#if HAVE_SIGACTION
+static struct sigaction save_sigint;
+#endif
 
 MONO_SIG_HANDLER_FUNC (static, sigcont_handler)
 {
@@ -481,7 +483,7 @@ ves_icall_System_ConsoleDriver_TtySetup (MonoStringHandle keypad, MonoStringHand
 	if (ret == -1)
 		return FALSE;
 
-	uint32_t h;
+	MonoGCHandle h;
 	set_control_chars (MONO_ARRAY_HANDLE_PIN (control_chars_arr, gchar, 0, &h), mono_attr.c_cc);
 	mono_gchandle_free_internal (h);
 	/* If initialized from another appdomain... */
@@ -507,3 +509,4 @@ ves_icall_System_ConsoleDriver_TtySetup (MonoStringHandle keypad, MonoStringHand
 
 	return TRUE;
 }
+

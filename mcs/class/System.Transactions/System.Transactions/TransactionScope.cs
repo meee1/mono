@@ -9,6 +9,7 @@
 // (C)2006 Novell Inc,
 //
 
+using System.Threading;
 
 using DTCOption = System.Transactions.EnterpriseServicesInteropOption;
 
@@ -19,6 +20,7 @@ namespace System.Transactions
 		static TransactionOptions defaultOptions =
 			new TransactionOptions (0, TransactionManager.DefaultTimeout);
 
+		Timer scopeTimer;
 		Transaction transaction;
 		Transaction oldTransaction;
 		TransactionScope parentScope;
@@ -29,6 +31,7 @@ namespace System.Transactions
 
 		bool disposed;
 		bool completed;
+		bool aborted;
 		bool isRoot;
 
 		bool asyncFlowEnabled;
@@ -99,7 +102,7 @@ namespace System.Transactions
 			DTCOption interopOption)
 		{
 			Initialize (scopeOption, null, transactionOptions, interopOption,
-				TransactionManager.DefaultTimeout, TransactionScopeAsyncFlowOption.Suppress);
+				transactionOptions.Timeout, TransactionScopeAsyncFlowOption.Suppress);
 		}
 
 		public TransactionScope (Transaction transactionToUse,
@@ -138,14 +141,41 @@ namespace System.Transactions
 
 			oldTransaction = Transaction.CurrentInternal;
 
-			Transaction.CurrentInternal = transaction = InitTransaction (tx, scopeOption);
+			Transaction.CurrentInternal = transaction = InitTransaction (tx, scopeOption, options);
 			if (transaction != null)
 				transaction.InitScope (this);
 			if (parentScope != null)
 				parentScope.nested ++;
+			if (timeout != TimeSpan.Zero)
+				scopeTimer = new Timer (TransactionScope.TimerCallback, this, scopeTimeout, TimeSpan.Zero);
 		}
 
-		Transaction InitTransaction (Transaction tx, TransactionScopeOption scopeOption)
+		private static void TimerCallback (object state)
+		{
+			TransactionScope scope = state as TransactionScope;
+			if (null == scope)
+			{
+				throw new TransactionException ("TransactionScopeTimerObjectInvalid", null);
+			}
+
+			scope.TimeoutScope ();
+		}
+
+		private void TimeoutScope()
+		{
+			if (!completed && transaction != null)
+			{
+				try
+				{
+					this.transaction.Rollback ();
+					this.aborted = true;
+				}
+				catch (ObjectDisposedException ex) { }
+				catch (TransactionException txEx) { }
+			}
+ 		}
+
+		Transaction InitTransaction (Transaction tx, TransactionScopeOption scopeOption, TransactionOptions options)
 		{
 			if (tx != null)
 				return tx;
@@ -159,7 +189,7 @@ namespace System.Transactions
 			if (scopeOption == TransactionScopeOption.Required) {
 				if (Transaction.CurrentInternal == null) {
 					isRoot = true;
-					return new Transaction ();
+					return new Transaction (options.IsolationLevel);
 				}
 
 				parentScope = Transaction.CurrentInternal.Scope;
@@ -170,8 +200,8 @@ namespace System.Transactions
 			if (Transaction.CurrentInternal != null)
 				parentScope = Transaction.CurrentInternal.Scope;
 			isRoot = true;
-			return new Transaction ();
-		}
+			return new Transaction (options.IsolationLevel);
+        }
 
 		public void Complete ()
 		{
@@ -179,6 +209,14 @@ namespace System.Transactions
 				throw new InvalidOperationException ("The current TransactionScope is already complete. You should dispose the TransactionScope.");
 
 			completed = true;
+		}
+
+		internal bool IsAborted {
+			get { return aborted; }
+		}
+
+		internal bool IsDisposed {
+			get { return disposed; }
 		}
 
 		internal bool IsComplete {
@@ -214,6 +252,9 @@ namespace System.Transactions
 				throw new InvalidOperationException ("Transaction.Current has changed inside of the TransactionScope");
 			} 
 
+			if (scopeTimer != null)
+				scopeTimer.Dispose();
+
 			if (asyncFlowEnabled) {
 				if (oldTransaction != null)
 					oldTransaction.Scope = parentScope;
@@ -229,7 +270,10 @@ namespace System.Transactions
 
 				transaction.Scope = null;
 
-				if (!IsComplete) {
+				if (IsAborted) {
+					throw new TransactionAbortedException("Transaction has aborted");
+				}
+				else if (!IsComplete) {
 					transaction.Rollback ();
 					variedTransaction.Rollback();
 					return;
@@ -251,9 +295,11 @@ namespace System.Transactions
 					/* scope was not in a transaction, (Suppress) */
 					return;
 
-				transaction.Scope = null;
-
-				if (!IsComplete)
+				if (IsAborted) {
+					transaction.Scope = null;
+					throw new TransactionAbortedException("Transaction has aborted");
+				}
+				else if (!IsComplete)
 				{
 					transaction.Rollback();
 					return;
@@ -265,10 +311,10 @@ namespace System.Transactions
 
 				transaction.CommitInternal();
 
+				transaction.Scope = null;
 			}
 		}
 
 
 	}
 }
-

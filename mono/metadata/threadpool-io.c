@@ -10,22 +10,27 @@
  */
 
 #include <config.h>
+#include <mono/utils/mono-compiler.h>
+
+
+#include <glib.h>
+#include <mono/metadata/threadpool-io.h>
 
 #ifndef DISABLE_SOCKETS
 
-#include <glib.h>
-
 #if defined(HOST_WIN32)
 #include <windows.h>
+#include <mono/utils/networking.h>
 #else
 #include <errno.h>
 #include <fcntl.h>
 #endif
 
 #include <mono/metadata/gc-internals.h>
+#include <mono/metadata/mono-hash-internals.h>
 #include <mono/metadata/mono-mlist.h>
 #include <mono/metadata/threadpool.h>
-#include <mono/metadata/threadpool-io.h>
+#include <mono/metadata/icall-decl.h>
 #include <mono/utils/atomic.h>
 #include <mono/utils/mono-threads.h>
 #include <mono/utils/mono-lazy-init.h>
@@ -34,6 +39,7 @@
 
 typedef struct {
 	gboolean (*init) (gint wakeup_pipe_fd);
+	gboolean (*can_register_fd) (int fd);
 	void     (*register_fd) (gint fd, gint events, gboolean is_new);
 	void     (*remove_fd) (gint fd);
 	gint     (*event_wait) (void (*callback) (gint fd, gint events, gpointer user_data), gpointer user_data);
@@ -173,6 +179,7 @@ selector_thread_wakeup_drain_pipes (void)
 {
 	gchar buffer [128];
 	gint received;
+	static gint warnings_issued = 0;
 
 	for (;;) {
 #if !defined(HOST_WIN32)
@@ -185,11 +192,16 @@ selector_thread_wakeup_drain_pipes (void)
 			 * some unices (like AIX) send ERESTART, which doesn't
 			 * exist on some other OSes errno
 			 */
-			if (errno != EINTR && errno != EAGAIN && errno != ERESTART)
+			if (errno != EINTR && errno != EAGAIN && errno != ERESTART) {
 #else
-			if (errno != EINTR && errno != EAGAIN)
+			if (errno != EINTR && errno != EAGAIN) {
 #endif
-				g_warning ("selector_thread_wakeup_drain_pipes: read () failed, error (%d) %s\n", errno, g_strerror (errno));
+				// limit amount of spam we write
+				if (warnings_issued < 100) {
+					g_warning ("selector_thread_wakeup_drain_pipes: read () failed, error (%d) %s\n", errno, g_strerror (errno));
+					warnings_issued++;
+				}
+			}
 			break;
 		}
 #else
@@ -197,8 +209,13 @@ selector_thread_wakeup_drain_pipes (void)
 		if (received == 0)
 			break;
 		if (received == SOCKET_ERROR) {
-			if (WSAGetLastError () != WSAEINTR && WSAGetLastError () != WSAEWOULDBLOCK)
-				g_warning ("selector_thread_wakeup_drain_pipes: recv () failed, error (%d)\n", WSAGetLastError ());
+			if (WSAGetLastError () != WSAEINTR && WSAGetLastError () != WSAEWOULDBLOCK) {
+				// limit amount of spam we write
+				if (warnings_issued < 100) {
+					g_warning ("selector_thread_wakeup_drain_pipes: recv () failed, error (%d)\n", WSAGetLastError ());
+					warnings_issued++;
+				}
+			}
 			break;
 		}
 #endif
@@ -325,20 +342,18 @@ selector_thread_interrupt (gpointer unused)
 static gsize WINAPI
 selector_thread (gpointer data)
 {
-	ERROR_DECL (error);
 	MonoGHashTable *states;
 
-	MonoString *thread_name = mono_string_new_checked (mono_get_root_domain (), "Thread Pool I/O Selector", error);
-	mono_error_assert_ok (error);
-	mono_thread_set_name_internal (mono_thread_internal_current (), thread_name, FALSE, TRUE, error);
-	mono_error_assert_ok (error);
+	mono_thread_set_name_constant_ignore_error (mono_thread_internal_current (), "Thread Pool I/O Selector", MonoSetThreadNameFlag_Reset);
+
+	ERROR_DECL (error);
 
 	if (mono_runtime_is_shutting_down ()) {
 		io_selector_running = FALSE;
 		return 0;
 	}
 
-	states = mono_g_hash_table_new_type (g_direct_hash, NULL, MONO_HASH_VALUE_GC, MONO_ROOT_SOURCE_THREAD_POOL, NULL, "Thread Pool I/O State Table");
+	states = mono_g_hash_table_new_type_internal (g_direct_hash, NULL, MONO_HASH_VALUE_GC, MONO_ROOT_SOURCE_THREAD_POOL, NULL, "Thread Pool I/O State Table");
 
 	while (!mono_runtime_is_shutting_down ()) {
 		gint i, j;
@@ -514,8 +529,8 @@ wakeup_pipes_init (void)
 	g_assert (threadpool_io->wakeup_pipes [1] != INVALID_SOCKET);
 
 	server.sin_family = AF_INET;
-	server.sin_addr.s_addr = inet_addr ("127.0.0.1");
 	server.sin_port = 0;
+	inet_pton (server.sin_family, "127.0.0.1", &server.sin_addr);
 	if (bind (server_sock, (SOCKADDR*) &server, sizeof (server)) == SOCKET_ERROR) {
 		closesocket (server_sock);
 		g_error ("wakeup_pipes_init: bind () failed, error (%d)\n", WSAGetLastError ());
@@ -601,8 +616,9 @@ mono_threadpool_io_cleanup (void)
 }
 
 void
-ves_icall_System_IOSelector_Add (gpointer handle, MonoIOSelectorJob *job)
+ves_icall_System_IOSelector_Add (gpointer handle, MonoIOSelectorJobHandle job_handle, MonoError* error)
 {
+	MonoIOSelectorJob* const job = MONO_HANDLE_RAW (job_handle);
 	ThreadPoolIOUpdate *update;
 
 	g_assert (handle);
@@ -624,9 +640,18 @@ ves_icall_System_IOSelector_Add (gpointer handle, MonoIOSelectorJob *job)
 		return;
 	}
 
+	int const fd = GPOINTER_TO_INT (handle);
+
+	if (!threadpool_io->backend.can_register_fd (fd)) {
+		mono_coop_mutex_unlock (&threadpool_io->updates_lock);
+		mono_trace (G_LOG_LEVEL_WARNING, MONO_TRACE_IO_SELECTOR, "Could not register to wait for file descriptor %d", fd);
+		mono_error_set_not_supported (error, "Could not register to wait for file descriptor %d", fd);
+		return;
+	}
+
 	update = update_get_new ();
 	update->type = UPDATE_ADD;
-	update->data.add.fd = GPOINTER_TO_INT (handle);
+	update->data.add.fd = fd;
 	update->data.add.job = job;
 	mono_memory_barrier (); /* Ensure this is safely published before we wake up the selector */
 
@@ -658,7 +683,7 @@ mono_threadpool_io_remove_socket (int fd)
 
 	update = update_get_new ();
 	update->type = UPDATE_REMOVE_SOCKET;
-	update->data.add.fd = fd;
+	update->data.remove_socket.fd = fd;
 	mono_memory_barrier (); /* Ensure this is safely published before we wake up the selector */
 
 	selector_thread_wakeup ();
@@ -698,7 +723,7 @@ mono_threadpool_io_remove_domain_jobs (MonoDomain *domain)
 #else
 
 void
-ves_icall_System_IOSelector_Add (gpointer handle, MonoIOSelectorJob *job)
+ves_icall_System_IOSelector_Add (gpointer handle, MonoIOSelectorJobHandle job_handle, MonoError* error)
 {
 	g_assert_not_reached ();
 }
@@ -728,3 +753,6 @@ mono_threadpool_io_remove_domain_jobs (MonoDomain *domain)
 }
 
 #endif
+
+
+MONO_EMPTY_SOURCE_FILE (threadpool_io);

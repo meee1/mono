@@ -35,27 +35,23 @@ namespace System.Windows.Forms
 	[DefaultEvent ("Opening")]
 	public class ContextMenuStrip : ToolStripDropDownMenu
 	{
-		Control source_control;
-		internal Control container;
-
 		#region Public Construtors
 		public ContextMenuStrip () : base ()
 		{
-			source_control = null;
 		}
 		
-		public ContextMenuStrip (IContainer container) : base ()
+		public ContextMenuStrip (IContainer container) : this ()
 		{
-			source_control = null;
+			// TODO: handle `container` argument
 		}
 		#endregion
 
 		#region Public Properties
+
 		[Browsable (false)]
 		[DesignerSerializationVisibility (DesignerSerializationVisibility.Hidden)]
-		public Control SourceControl {
-			get { return this.source_control; }
-		}
+		public Control SourceControl { get; protected set; }
+		
 		#endregion
 
 		#region Protected Methods
@@ -70,11 +66,39 @@ namespace System.Windows.Forms
 			if (visible)
 				XplatUI.SetTopmost (this.Handle, true);
 		}
+
+		protected override void SetOwnerControl (Control newOwner)
+		{
+			base.SetOwnerControl (newOwner);
+			SourceControl = newOwner;
+			OnSetOwnerControlDone (new SetOwnerControlDoneArgs (newOwner));
+		}
 		#endregion
 
-		internal void SetSourceControl (Control source_control)
+		#region Internal Events
+
+		internal delegate void SetOwnerControlDoneHandler (object sender, SetOwnerControlDoneArgs e);
+		
+		// Is used by UIA API.
+		[Browsable (false)]
+		internal static event SetOwnerControlDoneHandler SetOwnerControlDone; 
+
+		private void OnSetOwnerControlDone (SetOwnerControlDoneArgs e)
 		{
-			container = this.source_control = source_control;
+			if (SetOwnerControlDone != null)
+				SetOwnerControlDone (this, e);
 		}
+
+		internal class SetOwnerControlDoneArgs : EventArgs
+		{
+			public readonly Control NewOwner;
+
+			public SetOwnerControlDoneArgs (Control newOwner)
+			{
+				NewOwner = newOwner;
+			}
+		}
+
+		#endregion
 	}
 }

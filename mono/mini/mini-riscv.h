@@ -1,7 +1,6 @@
 /*
  * Licensed to the .NET Foundation under one or more agreements.
  * The .NET Foundation licenses this file to you under the MIT license.
- * See the LICENSE file in the project root for more information.
  */
 
 #ifndef __MONO_MINI_RISCV_H__
@@ -116,6 +115,8 @@
 #endif
 
 #define MONO_ARCH_EMULATE_CONV_R8_UN        (1)
+#define MONO_ARCH_EMULATE_FCONV_TO_U8       (1)
+#define MONO_ARCH_EMULATE_FCONV_TO_U4       (1)
 #define MONO_ARCH_EMULATE_FCONV_TO_I8       (1)
 #define MONO_ARCH_EMULATE_LCONV_TO_R8       (1)
 #define MONO_ARCH_EMULATE_LCONV_TO_R4       (1)
@@ -185,6 +186,7 @@ struct MonoLMF {
 #define MONO_ARCH_INIT_TOP_LMF_ENTRY(lmf)
 
 typedef struct {
+	guint8 *stack;
 } CallContext;
 
 enum {

@@ -48,14 +48,6 @@ namespace Mono {
 			internal IntPtr* data;
 			internal int len;
 		}
-
-		// mono-error.h MonoError
-		struct MonoError {
-			ushort error_code;
-			ushort hidden_0;
-			IntPtr hidden_1, hidden_2, hidden_3, hidden_4, hidden_5, hidden_6, hidden_7, hidden_8;
-			IntPtr hidden_11, hidden_12, hidden_13, hidden_14, hidden_15, hidden_16, hidden_17, hidden_18;
-		}
 	}
 
 	//Maps to metadata-internals.h:: MonoAssemblyName
@@ -71,11 +63,7 @@ namespace Mono {
 		internal uint hash_alg;
 		internal uint hash_len;
 		internal uint flags;
-#if NETCORE
-		internal int major, minor, build, revision;
-#else
 		internal ushort major, minor, build, revision;
-#endif
 		internal ushort arch;
 	}
 
@@ -120,5 +108,12 @@ namespace Mono {
         public T3 Item3;
         public T4 Item4;
         public T5 Item5;
+	}
+
+	internal class NullByRefReturnException : Exception
+	{
+		public NullByRefReturnException ()
+		{
+		}
 	}
 }

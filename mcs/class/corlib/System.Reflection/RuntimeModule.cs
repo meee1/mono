@@ -32,19 +32,15 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
-#if !NETCORE
 using System.Security.Cryptography.X509Certificates;
 using System.Security;
 using System.Security.Permissions;
-#endif
 using System.Runtime.Serialization;
 
 namespace System.Reflection {
 
 	[ComVisible (true)]
-#if !NETCORE
 	[ComDefaultInterfaceAttribute (typeof (_Module))]
-#endif
 	[Serializable]
 	[ClassInterface(ClassInterfaceType.None)]
 	[StructLayout (LayoutKind.Sequential)]
@@ -105,7 +101,7 @@ namespace System.Reflection {
 		public override
 		string FullyQualifiedName {
 			get {
-#if !MOBILE && !NETCORE
+#if !MOBILE
 				if (SecurityManager.SecurityEnabled) {
 					new FileIOPermission (FileIOPermissionAccess.PathDiscovery, fqname).Demand ();
 				}
@@ -199,9 +195,7 @@ namespace System.Reflection {
 			return (globalType != null) ? globalType.GetMethods (bindingFlags) : new MethodInfo [0];
 		}
 
-#if !NETCORE
 		internal override ModuleHandle GetModuleHandleImpl() => new ModuleHandle (_impl);
-#endif
 
 		public override
 		void GetPEKind (out PortableExecutableKinds peKind, out ImageFileMachine machine) {
@@ -320,7 +314,6 @@ namespace System.Reflection {
 				return res;
 		}
 
-#if !NETCORE
 		public override void GetObjectData (SerializationInfo info, StreamingContext context)
 		{
 			if (info == null)
@@ -328,9 +321,8 @@ namespace System.Reflection {
 
 			UnitySerializationHolder.GetUnitySerializationInfo (info, UnitySerializationHolder.ModuleUnity, this.ScopeName, this.GetRuntimeAssembly ());
 		}
-#endif
 
-#if !MOBILE && !NETCORE
+#if !MOBILE
 		public
 		override
 		X509Certificate GetSignerCertificate ()
@@ -365,13 +357,11 @@ namespace System.Reflection {
 			}
 		}
 
-#if NETCORE
-		internal Guid GetModuleVersionId ()
-#else
 		internal override Guid GetModuleVersionId ()
-#endif
 		{
-			return new Guid (GetGuidInternal (_impl));
+			var guid = new byte [16];
+			GetGuidInternal (_impl, guid);
+			return new Guid (guid);
 		}
 
 		internal static Exception resolve_token_exception (string name, int metadataToken, ResolveTokenError error, string tokenType) {
@@ -409,7 +399,7 @@ namespace System.Reflection {
 		internal static extern IntPtr GetHINSTANCE (IntPtr module);
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
-		private static extern string GetGuidInternal (IntPtr module);
+		private static extern void GetGuidInternal (IntPtr module, byte[] guid);
 
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		internal static extern Type GetGlobalType (IntPtr module);

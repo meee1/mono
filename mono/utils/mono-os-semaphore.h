@@ -33,6 +33,7 @@
 #else
 #include <mono/utils/mono-os-wait.h>
 #endif
+#include <mono/utils/w32subset.h>
 
 #define MONO_HAS_SEMAPHORES 1
 
@@ -280,20 +281,31 @@ mono_os_sem_post (MonoSemType *sem)
 
 #else
 
+#include <mono/utils/mono-compiler.h>
+
 typedef HANDLE MonoSemType;
 
+#if HAVE_API_SUPPORT_WIN32_CREATE_SEMAPHORE || HAVE_API_SUPPORT_WIN32_CREATE_SEMAPHORE_EX
 static inline void
 mono_os_sem_init (MonoSemType *sem, int value)
 {
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
-	*sem = CreateSemaphore (NULL, value, 0x7FFFFFFF, NULL);
-#else
-	*sem = CreateSemaphoreEx (NULL, value, 0x7FFFFFFF, NULL, 0, SEMAPHORE_ALL_ACCESS);
+#if HAVE_API_SUPPORT_WIN32_CREATE_SEMAPHORE
+	*sem = CreateSemaphoreW (NULL, value, 0x7FFFFFFF, NULL);
+#elif HAVE_API_SUPPORT_WIN32_CREATE_SEMAPHORE_EX
+	*sem = CreateSemaphoreExW (NULL, value, 0x7FFFFFFF, NULL, 0, SEMAPHORE_ALL_ACCESS);
 #endif
-
 	if (G_UNLIKELY (*sem == NULL))
 		g_error ("%s: CreateSemaphore failed with error %d", __func__, GetLastError ());
 }
+#elif !HAVE_EXTERN_DEFINED_WIN32_CREATE_SEMAPHORE && !HAVE_EXTERN_DEFINED_WIN32_CREATE_SEMAPHORE_EX
+static inline void
+mono_os_sem_init (MonoSemType *sem, int value)
+{
+	*sem = NULL;
+	g_unsupported_api ("CreateSemaphore, CreateSemaphoreEx");
+	SetLastError (ERROR_NOT_SUPPORTED);
+}
+#endif /* HAVE_API_SUPPORT_WIN32_CREATE_SEMAPHORE || HAVE_API_SUPPORT_WIN32_CREATE_SEMAPHORE_EX */
 
 static inline void
 mono_os_sem_destroy (MonoSemType *sem)
@@ -305,30 +317,8 @@ mono_os_sem_destroy (MonoSemType *sem)
 		g_error ("%s: CloseHandle failed with error %d", __func__, GetLastError ());
 }
 
-static inline MonoSemTimedwaitRet
-mono_os_sem_timedwait (MonoSemType *sem, guint32 timeout_ms, MonoSemFlags flags)
-{
-	BOOL res;
-
-retry:
-	res = mono_win32_wait_for_single_object_ex (*sem, timeout_ms, flags & MONO_SEM_FLAGS_ALERTABLE);
-	if (G_UNLIKELY (res != WAIT_OBJECT_0 && res != WAIT_IO_COMPLETION && res != WAIT_TIMEOUT))
-		g_error ("%s: mono_win32_wait_for_single_object_ex failed with error %d", __func__, GetLastError ());
-
-	if (res == WAIT_IO_COMPLETION && !(flags & MONO_SEM_FLAGS_ALERTABLE))
-		goto retry;
-
-	switch (res) {
-	case WAIT_OBJECT_0:
-		return MONO_SEM_TIMEDWAIT_RET_SUCCESS;
-	case WAIT_IO_COMPLETION:
-		return MONO_SEM_TIMEDWAIT_RET_ALERTED;
-	case WAIT_TIMEOUT:
-		return MONO_SEM_TIMEDWAIT_RET_TIMEDOUT;
-	default:
-		g_assert_not_reached ();
-	}
-}
+MONO_PROFILER_API MonoSemTimedwaitRet
+mono_os_sem_timedwait (MonoSemType *sem, guint32 timeout_ms, MonoSemFlags flags);
 
 static inline int
 mono_os_sem_wait (MonoSemType *sem, MonoSemFlags flags)

@@ -1,8 +1,10 @@
+if !ENABLE_MSVC_ONLY
 if MONO_NATIVE_COMPAT
 lib_LTLIBRARIES = libmono-native-compat.la libmono-native-unified.la
 else
 lib_LTLIBRARIES = libmono-native.la
 endif
+endif # !ENABLE_MSVC_ONLY
 
 CC = $(MONO_NATIVE_CC)
 CCLD = $(MONO_NATIVE_CC)
@@ -11,6 +13,8 @@ CPP = $(MONO_NATIVE_CC) -E
 CXX = $(MONO_NATIVE_CXX)
 CXXCPP = $(MONO_NATIVE_CXX) -E
 CC_FOR_BUILD = $(MONO_NATIVE_CC)
+
+if !ENABLE_MSVC_ONLY
 
 common_sources = \
 	pal_config.h \
@@ -30,28 +34,35 @@ common_sources = \
 	../../external/corefx/src/Native/Unix/System.Native/pal_uid.h \
 	../../external/corefx/src/Native/Unix/System.Native/pal_time.c \
 	../../external/corefx/src/Native/Unix/System.Native/pal_time.h \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/dictionary_hash.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/backward_references_hq.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/histogram.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/memory.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/entropy_encode.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/compress_fragment_two_pass.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/block_splitter.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/encode.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/cluster.c \
 	../../external/corefx/src/Native/AnyOS/brotli/enc/backward_references.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/utf8_util.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/compress_fragment.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/brotli_bit_stream.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/backward_references_hq.c \
 	../../external/corefx/src/Native/AnyOS/brotli/enc/bit_cost.c \
-	../../external/corefx/src/Native/AnyOS/brotli/enc/static_dict.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/block_splitter.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/brotli_bit_stream.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/cluster.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/command.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/compress_fragment.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/compress_fragment_two_pass.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/dictionary_hash.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/encode.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/encoder_dict.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/entropy_encode.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/fast_log.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/histogram.c \
 	../../external/corefx/src/Native/AnyOS/brotli/enc/literal_cost.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/memory.c \
 	../../external/corefx/src/Native/AnyOS/brotli/enc/metablock.c \
-	../../external/corefx/src/Native/AnyOS/brotli/dec/state.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/static_dict.c \
+	../../external/corefx/src/Native/AnyOS/brotli/enc/utf8_util.c \
+	../../external/corefx/src/Native/AnyOS/brotli/dec/bit_reader.c \
 	../../external/corefx/src/Native/AnyOS/brotli/dec/decode.c \
 	../../external/corefx/src/Native/AnyOS/brotli/dec/huffman.c \
-	../../external/corefx/src/Native/AnyOS/brotli/dec/bit_reader.c \
-	../../external/corefx/src/Native/AnyOS/brotli/common/dictionary.c
+	../../external/corefx/src/Native/AnyOS/brotli/dec/state.c \
+	../../external/corefx/src/Native/AnyOS/brotli/common/constants.c \
+	../../external/corefx/src/Native/AnyOS/brotli/common/context.c \
+	../../external/corefx/src/Native/AnyOS/brotli/common/dictionary.c \
+	../../external/corefx/src/Native/AnyOS/brotli/common/platform.c \
+	../../external/corefx/src/Native/AnyOS/brotli/common/transform.c
 
 macos_sources = $(unix_sources)
 
@@ -72,6 +83,10 @@ linux_sources = $(unix_sources)
 aix_sources = $(unix_sources)
 
 freebsd_sources = $(unix_sources)
+
+netbsd_sources = $(unix_sources)
+
+haiku_sources = $(unix_sources)
 
 android_sources = \
 	pal-android.h \
@@ -106,11 +121,12 @@ gss_sources = \
 
 if ENABLE_GSS
 macos_sources += $(gss_sources)
-
+linux_sources += $(gss_sources)
 ios_sources += $(gss_sources)
+android_sources += $(gss_sources)
 endif
 
-EXTRA_libmono_native_la_SOURCES = $(common_sources) $(macos_sources) $(ios_sources) $(linux_sources) $(aix_sources) $(freebsd) $(unix_sources) $(gss_sources)
+EXTRA_libmono_native_la_SOURCES = $(common_sources) $(macos_sources) $(ios_sources) $(linux_sources) $(aix_sources) $(freebsd_sources) $(netbsd_sources) $(haiku_sources) $(unix_sources) $(gss_sources)
 
 if MONO_NATIVE_PLATFORM_MACOS
 platform_sources = $(macos_sources)
@@ -129,6 +145,14 @@ platform_sources = $(android_sources)
 else
 if MONO_NATIVE_PLATFORM_FREEBSD
 platform_sources = $(freebsd_sources)
+else
+if MONO_NATIVE_PLATFORM_NETBSD
+platform_sources = $(netbsd_sources)
+else
+if MONO_NATIVE_PLATFORM_HAIKU
+platform_sources = $(haiku_sources)
+endif
+endif
 endif
 endif
 endif
@@ -147,12 +171,16 @@ common_cflags = \
 	-DBROTLI_BUILD_NO_RBIT \
 	-Wno-typedef-redefinition
 
+endif # !ENABLE_MSVC_ONLY
+
 # clear these flags as we set values for each target separately and automake always appends CFLAGS
 CFLAGS=
 CPPFLAGS=
 CXXFLAGS=
 LDFLAGS=
 CCASFLAGS=
+
+if !ENABLE_MSVC_ONLY
 
 libmono_native_la_SOURCES = $(common_sources) $(platform_sources) platform-type.c
 
@@ -199,3 +227,5 @@ libmono_native_unified_la_LIBADD = $(MONO_NATIVE_LIBADD)
 test-bundle-local:
 	mkdir -p $(TEST_BUNDLE_PATH)
 	cp -L .libs/libmono-native$(libsuffix) $(TEST_BUNDLE_PATH)/
+
+endif # !ENABLE_MSVC_ONLY

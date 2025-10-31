@@ -12,10 +12,7 @@
 
 #ifdef HOST_WIN32
 #include <windows.h>
-/* use SIG* defines if possible */
-#ifdef HAVE_SIGNAL_H
 #include <signal.h>
-#endif
 
 #if !defined(_MSC_VER)
 /* sigcontext surrogate */
@@ -26,7 +23,7 @@ struct sigcontext {
 	guint64 edx;
 	guint64 ebp;
 	guint64 esp;
-    guint64 esi;
+	guint64 esi;
 	guint64 edi;
 	guint64 eip;
 };
@@ -323,6 +320,7 @@ typedef struct {
 	// Size in bytes for small arguments
 	int byte_arg_size;
 	guint8 pass_empty_struct : 1; // Set in scenarios when empty structs needs to be represented as argument.
+	guint8 is_signed : 1;
 } ArgInfo;
 
 struct CallInfo {
@@ -392,7 +390,7 @@ typedef struct {
 
 #endif /* !HOST_WIN32 */
 
-#if !defined(__linux__)
+#if !defined(__linux__) && !defined(__sun)
 #define MONO_ARCH_NOMAP32BIT 1
 #endif
 
@@ -411,7 +409,10 @@ typedef struct {
 #define MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS
 #define MONO_ARCH_NO_EMULATE_LONG_MUL_OPTS
 
-#define MONO_ARCH_EMULATE_CONV_R8_UN    1
+#define MONO_ARCH_EMULATE_CONV_R8_UN 1
+#define MONO_ARCH_EMULATE_FCONV_TO_U8 1
+// x64 FullAOT+LLVM fails to pass the basic-float tests without this.
+#define MONO_ARCH_EMULATE_FCONV_TO_U4 1
 #define MONO_ARCH_EMULATE_FREM 1
 #define MONO_ARCH_HAVE_IS_INT_OVERFLOW 1
 #define MONO_ARCH_HAVE_INVALIDATE_METHOD 1
@@ -460,6 +461,7 @@ typedef struct {
 #define MONO_ARCH_HAVE_OP_GENERIC_CLASS_INIT 1
 #define MONO_ARCH_HAVE_GENERAL_RGCTX_LAZY_FETCH_TRAMPOLINE 1
 #define MONO_ARCH_FLOAT32_SUPPORTED 1
+#define MONO_ARCH_LLVM_TARGET_LAYOUT "e-i64:64-i128:128-n8:16:32:64-S128"
 
 #define MONO_ARCH_HAVE_INTERP_PINVOKE_TRAMP
 #define MONO_ARCH_HAVE_INTERP_ENTRY_TRAMPOLINE 1
@@ -472,22 +474,23 @@ typedef struct {
 #define MONO_ARCH_GSHAREDVT_SUPPORTED 1
 
 
-#if defined(HOST_TVOS)
-/* No signals */
+#if defined(HOST_TVOS) || defined(HOST_WATCHOS)
+/* Neither tvOS nor watchOS give signal handlers access to a ucontext_t, so we
+ * can't use signals to translate SIGFPE into a .NET-level exception. */
 #define MONO_ARCH_NEED_DIV_CHECK 1
 #endif
 
 /* Used for optimization, not complete */
 #define MONO_ARCH_IS_OP_MEMBASE(opcode) ((opcode) == OP_X86_PUSH_MEMBASE)
 
-#define MONO_ARCH_EMIT_BOUNDS_CHECK(cfg, array_reg, offset, index_reg) do { \
+#define MONO_ARCH_EMIT_BOUNDS_CHECK(cfg, array_reg, offset, index_reg, ex_name) do { \
             MonoInst *inst; \
             MONO_INST_NEW ((cfg), inst, OP_AMD64_ICOMPARE_MEMBASE_REG); \
             inst->inst_basereg = array_reg; \
             inst->inst_offset = offset; \
             inst->sreg2 = index_reg; \
             MONO_ADD_INS ((cfg)->cbb, inst); \
-            MONO_EMIT_NEW_COND_EXC (cfg, LE_UN, "IndexOutOfRangeException"); \
+            MONO_EMIT_NEW_COND_EXC (cfg, LE_UN, ex_name); \
        } while (0)
 
 // Does the ABI have a volatile non-parameter register, so tailcall
@@ -519,7 +522,7 @@ GSList*
 mono_amd64_get_exception_trampolines (gboolean aot);
 
 int
-mono_amd64_get_tls_gs_offset (void) MONO_LLVM_INTERNAL;
+mono_amd64_get_tls_gs_offset (void);
 
 #if defined(TARGET_WIN32) && !defined(DISABLE_JIT)
 

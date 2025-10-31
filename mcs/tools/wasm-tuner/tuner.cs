@@ -23,6 +23,7 @@ class Icall : IComparable<Icall>
 	public string Assembly;
 	public bool Handles;
 	public int TokenIndex;
+	public MethodReference Method;
 
 	public int CompareTo (Icall other) {
 		return TokenIndex - other.TokenIndex;
@@ -76,12 +77,101 @@ public class WasmTuner
 		}
 	}
 
+	void Usage () {
+		Console.WriteLine ("Usage: tuner.exe <arguments>");
+		Console.WriteLine ("Arguments:");
+		Console.WriteLine ("--gen-icall-table icall-table.json <assemblies>.");
+		Console.WriteLine ("--gen-pinvoke-table <list of native library names separated by commas> <assemblies>.");
+		Console.WriteLine ("--gen-interp-to-native <output file name> <assemblies>.");
+		Console.WriteLine ("--gen-empty-assemblies <filenames>.");
+	}
+
 	int Run (String[] args) {
-		if (args.Length < 3 || args [0] != "--gen-icall-table") {
-			Console.WriteLine ("Usage: tuner.exe --gen-icall-table icall-table.json <assemblies>.");
+		if (args.Length < 1) {
+			Usage ();
 			return 1;
 		}
-		return GenIcallTable (args);
+		string cmd = args [0];
+		if (cmd == "--gen-icall-table") {
+			if (args.Length < 3) {
+				Usage ();
+				return 1;
+			}
+			return GenIcallTable (args);
+		} else if (cmd == "--gen-pinvoke-table") {
+			return GenPinvokeTable (args);
+		} else if (cmd == "--gen-empty-assemblies") {
+			return GenEmptyAssemblies (args);
+		} else if (cmd == "--gen-interp-to-native") {
+			return GenInterpToNative (args);
+		} else {
+			Usage ();
+			return 1;
+		}
+	}
+
+	public static string MapType (TypeReference t) {
+		if (t.Name == "Void")
+			return "void";
+		else if (t.Name == "Double")
+			return "double";
+		else if (t.Name == "Single")
+			return "float";
+		else if (t.Name == "Int64")
+			return "int64_t";
+		else if (t.Name == "UInt64")
+			return "uint64_t";
+		else
+			return "int";
+	}
+
+	int GenPinvokeTable (String[] args) {
+		var modules = new Dictionary<string, string> ();
+		foreach (var module in args [1].Split (','))
+			modules [module] = module;
+
+		args = args.Skip (2).ToArray ();
+		var assemblies = new List<AssemblyDefinition> ();
+		foreach (var fname in args)
+			assemblies.Add (AssemblyDefinition.ReadAssembly (fname));
+
+		var generator = new PInvokeTableGenerator ();
+		generator.Run (assemblies, modules);
+
+		return 0;
+	}
+
+	void Error (string msg) {
+		Console.Error.WriteLine (msg);
+		Environment.Exit (1);
+	}
+
+	static string GenIcallDecl (Icall icall) {
+		var sb = new StringBuilder ();
+		var method = icall.Method;
+		sb.Append (MapType (method.ReturnType));
+		sb.Append ($" {icall.Func} (");
+		int pindex = 0;
+		int aindex = 0;
+		if (method.HasThis) {
+			sb.Append ("int");
+			aindex ++;
+		}
+		foreach (var p in method.Parameters) {
+			if (aindex > 0)
+				sb.Append (",");
+			sb.Append (MapType (method.Parameters [pindex].ParameterType));
+			pindex ++;
+			aindex ++;
+		}
+		if (icall.Handles) {
+			if (aindex > 0)
+				sb.Append (",");
+			sb.Append ("int");
+			pindex ++;
+		}
+		sb.Append (");");
+		return sb.ToString ();
 	}
 
 	//
@@ -114,21 +204,26 @@ public class WasmTuner
 			var sorted = icalls.Where (i => i.Assembly == assembly).ToArray ();
 			Array.Sort (sorted);
 
-			Console.WriteLine ($"#define ICALL_TABLE_{assembly} 1\n");
+			string aname;
+			if (assembly == "mscorlib" || assembly == "System.Private.CoreLib")
+				aname = "corlib";
+			else
+				aname = assembly.Replace (".", "_");
+			Console.WriteLine ($"#define ICALL_TABLE_{aname} 1\n");
 
-			Console.WriteLine ($"static int {assembly}_icall_indexes [] = {{");
+			Console.WriteLine ($"static int {aname}_icall_indexes [] = {{");
 			foreach (var icall in sorted)
 				Console.WriteLine (String.Format ("{0},", icall.TokenIndex));
 			Console.WriteLine ("};");
 			foreach (var icall in sorted)
-				Console.WriteLine (String.Format ("void {0} ();", icall.Func));
-			Console.WriteLine ($"static void *{assembly}_icall_funcs [] = {{");
+				Console.WriteLine (GenIcallDecl (icall));
+			Console.WriteLine ($"static void *{aname}_icall_funcs [] = {{");
 			foreach (var icall in sorted) {
 				Console.WriteLine (String.Format ("// token {0},", icall.TokenIndex));
 				Console.WriteLine (String.Format ("{0},", icall.Func));
 			}
 			Console.WriteLine ("};");
-			Console.WriteLine ($"static uint8_t {assembly}_icall_handles [] = {{");
+			Console.WriteLine ($"static uint8_t {aname}_icall_handles [] = {{");
 			foreach (var icall in sorted)
 				Console.WriteLine (String.Format ("{0},", icall.Handles ? "1" : "0"));
 			Console.WriteLine ("};");
@@ -248,9 +343,48 @@ public class WasmTuner
 				// Registered at runtime
 				continue;
 
+			icall.Method = method;
 			icall.TokenIndex = (int)method.MetadataToken.RID;
 			icall.Assembly = method.DeclaringType.Module.Assembly.Name.Name;
 			icalls.Add (icall);
 		}
+	}
+
+	// Generate empty assemblies for the filenames in ARGS if they don't exist
+	int GenEmptyAssemblies (String[] args) {
+		foreach (var fname in args) {
+			if (File.Exists (fname))
+				continue;
+			var basename = Path.GetFileName (fname).Replace (".exe", "").Replace (".dll", "");
+			var assembly = AssemblyDefinition.CreateAssembly (new AssemblyNameDefinition (basename, new Version (0, 0, 0, 0)), basename, ModuleKind.Dll);
+			assembly.Write (fname);
+		}
+		return 0;
+	}
+
+	int GenInterpToNative (String[] args) {
+		if (args.Length < 2) {
+			Usage ();
+			return 1;
+		}
+		string outfileName = args [1];
+		args = args.Skip (2).ToArray ();
+
+		var assemblies = new List<AssemblyDefinition> ();
+		foreach (var fname in args)
+			assemblies.Add (AssemblyDefinition.ReadAssembly (fname));
+
+		List<Pinvoke> pinvokes;
+		List<PinvokeCallback> callbacks;
+
+		PInvokeTableGenerator.CollectPInvokes (assemblies, out pinvokes, out callbacks);
+
+		var gen = new InterpToNativeGenerator ();
+		foreach (var pinvoke in pinvokes)
+			gen.AddSignature (pinvoke.Method);
+		using (var w = File.CreateText (outfileName)) {
+			gen.Emit (w);
+		}
+		return 0;
 	}
 }

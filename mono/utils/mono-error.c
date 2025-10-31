@@ -120,7 +120,7 @@ void
 mono_error_init_flags (MonoError *oerror, guint16 flags)
 {
 	MonoErrorInternal *error = (MonoErrorInternal*)oerror;
-	g_assert (sizeof (MonoError) == sizeof (MonoErrorInternal));
+	g_static_assert (sizeof (MonoErrorExternal) >= sizeof (MonoErrorInternal));
 
 	error->error_code = MONO_ERROR_NONE;
 	error->flags = flags;
@@ -189,7 +189,7 @@ mono_error_cleanup (MonoError *oerror)
 gboolean
 mono_error_ok (MonoError *error)
 {
-	return error->error_code == MONO_ERROR_NONE;
+	return is_ok (error);
 }
 
 guint16
@@ -437,6 +437,21 @@ mono_error_set_not_supported (MonoError *oerror, const char *msg_format, ...)
 	va_end (args);
 }
 
+
+/**
+ * mono_error_set_ambiguous_implementation:
+ *
+ * System.Runtime.AmbiguousImplementationException
+ */
+void
+mono_error_set_ambiguous_implementation (MonoError *oerror, const char *msg_format, ...)
+{
+	va_list args;
+	va_start (args, msg_format);
+	mono_error_set_generic_errorv (oerror, "System.Runtime", "AmbiguousImplementationException", msg_format, args);
+	va_end (args);
+}
+
 /**
  * mono_error_set_invalid_operation:
  *
@@ -657,7 +672,7 @@ mono_error_prepare_exception (MonoError *oerror, MonoError *error_out)
 
 		if ((error->type_name && error->assembly_name) || error->exn.klass) {
 			type_name = get_type_name_as_mono_string (error, domain, error_out);
-			if (!mono_error_ok (error_out))
+			if (!is_ok (error_out))
 				break;
 
 			if (error->assembly_name) {
@@ -701,6 +716,10 @@ mono_error_prepare_exception (MonoError *oerror, MonoError *error_out)
 	case MONO_ERROR_ARGUMENT_NULL:
 		exception = mono_exception_new_argument_null (error->first_argument, error_out);
 		break;
+	
+	case MONO_ERROR_ARGUMENT_OUT_OF_RANGE: 
+		exception = mono_exception_new_argument_out_of_range(error->first_argument, error->full_message, error_out); 
+		break;
 
 	case MONO_ERROR_NOT_VERIFIABLE:
 		if (error->exn.klass) {
@@ -738,7 +757,7 @@ mono_error_prepare_exception (MonoError *oerror, MonoError *error_out)
 		mono_error_set_execution_engine (error_out, "Invalid error-code %d", error->error_code);
 	}
 
-	if (!mono_error_ok (error_out))
+	if (!is_ok (error_out))
 		goto return_null;
 
 	if (MONO_HANDLE_IS_NULL (exception))
@@ -768,17 +787,17 @@ mono_error_convert_to_exception (MonoError *target_error)
 	/* Mempool stored error shouldn't be cleaned up */
 	g_assert (!is_boxed ((MonoErrorInternal*)target_error));
 
-	if (mono_error_ok (target_error))
+	if (is_ok (target_error))
 		return NULL;
 
 	ex = mono_error_prepare_exception (target_error, error);
-	if (!mono_error_ok (error)) {
+	if (!is_ok (error)) {
 		ERROR_DECL (second_chance);
 		/*Try to produce the exception for the second error. FIXME maybe we should log about the original one*/
 		ex = mono_error_prepare_exception (error, second_chance);
 
 		// We cannot reasonably handle double faults, maybe later.
-		g_assert (mono_error_ok (second_chance));
+		g_assert (is_ok (second_chance));
 		mono_error_cleanup (error);
 	}
 	mono_error_cleanup (target_error);

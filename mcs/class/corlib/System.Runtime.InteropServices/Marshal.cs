@@ -30,6 +30,10 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 
+#if FULL_AOT_INTERP && DISABLE_COM
+#define FULL_AOT_RUNTIME
+#endif
+
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -41,7 +45,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 
 using System.Runtime.ConstrainedExecution;
-#if !FULL_AOT_RUNTIME && !NETCORE
+#if !FULL_AOT_RUNTIME && !DISABLE_REMOTING
 using Mono.Interop;
 #endif
 
@@ -53,16 +57,16 @@ namespace System.Runtime.InteropServices
 		public static readonly int SystemMaxDBCSCharSize = 2; // don't know what this is
 		public static readonly int SystemDefaultCharSize = Environment.IsRunningOnWindows ? 2 : 1;
 
-#if !MOBILE
+#if !MOBILE || WINAOT
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static int AddRefInternal (IntPtr pUnk);
 #endif
 
 		public static int AddRef (IntPtr pUnk)
 		{
-#if !MOBILE
+#if !MOBILE || WINAOT
 			if (pUnk == IntPtr.Zero)
-				throw new ArgumentException ("Value cannot be null.", "pUnk");
+				throw new ArgumentNullException ("pUnk");
 			return AddRefInternal (pUnk);
 #else
 			throw new NotImplementedException ();
@@ -294,7 +298,7 @@ namespace System.Runtime.InteropServices
 
 		public static object CreateWrapperOfType (object o, Type t)
 		{
-#if FULL_AOT_RUNTIME || NETCORE
+#if FULL_AOT_RUNTIME || DISABLE_REMOTING
 			throw new PlatformNotSupportedException ();
 #else
 			__ComObject co = o as __ComObject;
@@ -391,7 +395,7 @@ namespace System.Runtime.InteropServices
 			FreeHGlobal (s);
 		}
 
-#if !FULL_AOT_RUNTIME
+#if !FULL_AOT_RUNTIME && !MONOTOUCH
 		public static Guid GenerateGuidForType (Type type)
 		{
 			return type.GUID;
@@ -426,7 +430,7 @@ namespace System.Runtime.InteropServices
 			throw new NotImplementedException ();
 		}
 
-#if !MOBILE && !NETCORE
+#if !MOBILE
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static IntPtr GetCCW (object o, Type T);
 
@@ -438,11 +442,11 @@ namespace System.Runtime.InteropServices
 				return GetCCW (o, T);
 		}
 #endif
-#endif // !FULL_AOT_RUNTIME
+#endif // !FULL_AOT_RUNTIME && !MONOTOUCH
 
 		public static IntPtr GetComInterfaceForObject (object o, Type T)
 		{
-#if MOBILE || NETCORE
+#if MOBILE
 			throw new PlatformNotSupportedException ();
 #else
 			IntPtr pItf = GetComInterfaceForObjectInternal (o, T);
@@ -452,18 +456,16 @@ namespace System.Runtime.InteropServices
 		}
 
 
-#if !NETCORE
 		public static IntPtr GetComInterfaceForObject (object o, Type T, CustomQueryInterfaceMode mode)
 		{
 			throw new NotImplementedException ();
 		}
-#endif
 
 		public static IntPtr GetComInterfaceForObject<T, TInterface> (T o) {
 			return GetComInterfaceForObject ((object)o, typeof (T));
 		}
 
-#if !FULL_AOT_RUNTIME && !NETCORE
+#if !FULL_AOT_RUNTIME && !MONOTOUCH
 
 		public static IntPtr GetComInterfaceForObjectInContext (object o, Type t)
 		{
@@ -556,7 +558,7 @@ namespace System.Runtime.InteropServices
 #endif
 		}
 
-#if !FULL_AOT_RUNTIME
+#if !FULL_AOT_RUNTIME && !MONOTOUCH
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static IntPtr GetIDispatchForObjectInternal (object o);
 
@@ -606,7 +608,7 @@ namespace System.Runtime.InteropServices
 
 		public static IntPtr GetIUnknownForObject (object o)
 		{
-#if FULL_AOT_RUNTIME
+#if FULL_AOT_RUNTIME || MONOTOUCH
 			throw new PlatformNotSupportedException ();
 #else
 			IntPtr pUnk = GetIUnknownForObjectInternal (o);
@@ -618,7 +620,7 @@ namespace System.Runtime.InteropServices
 
 		public static void GetNativeVariantForObject (object obj, IntPtr pDstNativeVariant)
 		{
-#if FULL_AOT_RUNTIME || NETCORE
+#if FULL_AOT_RUNTIME
 			throw new PlatformNotSupportedException ();
 #else
 			Variant vt = new Variant();
@@ -638,7 +640,7 @@ namespace System.Runtime.InteropServices
 
 		public static object GetObjectForIUnknown (IntPtr pUnk)
 		{
-#if MOBILE || FULL_AOT_RUNTIME || NETCORE
+#if MOBILE || FULL_AOT_RUNTIME
 			throw new PlatformNotSupportedException ();
 #else
 			object obj = GetObjectForCCW (pUnk);
@@ -653,7 +655,7 @@ namespace System.Runtime.InteropServices
 
 		public static object GetObjectForNativeVariant (IntPtr pSrcNativeVariant)
 		{
-#if FULL_AOT_RUNTIME || NETCORE
+#if FULL_AOT_RUNTIME
 			throw new PlatformNotSupportedException ();
 #else
 			Variant vt = (Variant)Marshal.PtrToStructure(pSrcNativeVariant, typeof(Variant));
@@ -663,7 +665,7 @@ namespace System.Runtime.InteropServices
 
 		public static T GetObjectForNativeVariant<T> (IntPtr pSrcNativeVariant)
 		{
-#if FULL_AOT_RUNTIME || NETCORE
+#if FULL_AOT_RUNTIME
 			throw new PlatformNotSupportedException ();
 #else
 			Variant vt = (Variant)Marshal.PtrToStructure(pSrcNativeVariant, typeof(Variant));
@@ -673,7 +675,7 @@ namespace System.Runtime.InteropServices
 
 		public static object[] GetObjectsForNativeVariants (IntPtr aSrcNativeVariant, int cVars)
 		{
-#if FULL_AOT_RUNTIME || NETCORE
+#if FULL_AOT_RUNTIME
 			throw new PlatformNotSupportedException ();
 #else
 			if (cVars < 0)
@@ -688,7 +690,7 @@ namespace System.Runtime.InteropServices
 
 		public static T[] GetObjectsForNativeVariants<T> (IntPtr aSrcNativeVariant, int cVars)
 		{
-#if FULL_AOT_RUNTIME || NETCORE
+#if FULL_AOT_RUNTIME
 			throw new PlatformNotSupportedException ();
 #else
 			if (cVars < 0)
@@ -711,20 +713,17 @@ namespace System.Runtime.InteropServices
 #endif
 		}
 
-#if !FULL_AOT_RUNTIME
-
-#if !NETCORE
+#if !FULL_AOT_RUNTIME && !MONOTOUCH
 
 		[Obsolete ("This method has been deprecated")]
 		public static Thread GetThreadFromFiberCookie (int cookie)
 		{
 			throw new NotImplementedException ();
 		}
-#endif
 
 		public static object GetTypedObjectForIUnknown (IntPtr pUnk, Type t)
 		{
-#if NETCORE
+#if DISABLE_REMOTING
 			throw new NotImplementedException ();
 #else
 			ComInteropProxy proxy = new ComInteropProxy (pUnk, t);
@@ -745,7 +744,6 @@ namespace System.Runtime.InteropServices
 			throw new NotImplementedException ();
 		}
 
-#if !NETCORE
 		[Obsolete]
 
 		public static string GetTypeInfoName (UCOMITypeInfo pTI)
@@ -759,7 +757,6 @@ namespace System.Runtime.InteropServices
 		{
 			throw new NotImplementedException ();
 		}
-#endif
 
 
 		public static Guid GetTypeLibGuid (ITypeLib typelib)
@@ -773,14 +770,12 @@ namespace System.Runtime.InteropServices
 			throw new NotImplementedException ();
 		}
 
-#if !NETCORE
 		[Obsolete]
 
 		public static int GetTypeLibLcid (UCOMITypeLib pTLB)
 		{
 			throw new NotImplementedException ();
 		}
-#endif
 
 
 		public static int GetTypeLibLcid (ITypeLib typelib)
@@ -788,14 +783,12 @@ namespace System.Runtime.InteropServices
 			throw new NotImplementedException ();
 		}
 
-#if !NETCORE
 		[Obsolete]
 
 		public static string GetTypeLibName (UCOMITypeLib pTLB)
 		{
 			throw new NotImplementedException ();
 		}
-#endif
 
 
 		public static string GetTypeLibName (ITypeLib typelib)
@@ -834,12 +827,10 @@ namespace System.Runtime.InteropServices
 			throw new PlatformNotSupportedException ();
 		}
 
-#if !NETCORE
 		public static string GetTypeInfoName (ITypeInfo typeInfo)
 		{
 			throw new PlatformNotSupportedException ();
 		}
-#endif
 
 		public static object GetUniqueObjectForIUnknown (IntPtr unknown)
 		{
@@ -926,16 +917,16 @@ namespace System.Runtime.InteropServices
 			return (T) PtrToStructure (ptr, typeof (T));
 		}
 
-#if !MOBILE
+#if !MOBILE || WINAOT
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static int QueryInterfaceInternal (IntPtr pUnk, ref Guid iid, out IntPtr ppv);
 #endif
 
 		public static int QueryInterface (IntPtr pUnk, ref Guid iid, out IntPtr ppv)
 		{
-#if !MOBILE
+#if !MOBILE || WINAOT
 			if (pUnk == IntPtr.Zero)
-				throw new ArgumentException ("Value cannot be null.", "pUnk");
+				throw new ArgumentNullException ("pUnk");
 			return QueryInterfaceInternal (pUnk, ref iid, out ppv);
 #else
 			throw new NotImplementedException ();
@@ -1097,7 +1088,7 @@ namespace System.Runtime.InteropServices
 		[MethodImplAttribute(MethodImplOptions.InternalCall)]
 		public extern static IntPtr ReAllocHGlobal (IntPtr pv, IntPtr cb);
 
-#if !MOBILE
+#if !MOBILE || WINAOT
 		[ReliabilityContractAttribute (Consistency.WillNotCorruptState, Cer.Success)]
 		[MethodImplAttribute (MethodImplOptions.InternalCall)]
 		private extern static int ReleaseInternal (IntPtr pUnk);
@@ -1106,9 +1097,9 @@ namespace System.Runtime.InteropServices
 		[ReliabilityContract (Consistency.WillNotCorruptState, Cer.Success)]
 		public static int Release (IntPtr pUnk)
 		{
-#if !MOBILE
+#if !MOBILE || WINAOT
 			if (pUnk == IntPtr.Zero)
-				throw new ArgumentException ("Value cannot be null.", "pUnk");
+				throw new ArgumentNullException ("pUnk");
 
 			return ReleaseInternal (pUnk);
 #else
@@ -1134,7 +1125,7 @@ namespace System.Runtime.InteropServices
 #endif
 		}
 
-#if !FULL_AOT_RUNTIME
+#if !FULL_AOT_RUNTIME && !MONOTOUCH
 		[Obsolete]
 
 		public static void ReleaseThreadCache()
@@ -1268,9 +1259,6 @@ namespace System.Runtime.InteropServices
 			if (s == null)
 				throw new ArgumentNullException ("s");
 
-#if NETCORE
-			return s.MarshalToBSTR ();
-#else
 			byte[] buffer = s.GetBuffer ();
 			int len = s.Length;
 			
@@ -1285,7 +1273,6 @@ namespace System.Runtime.InteropServices
 			}
 			fixed (byte* fixed_buffer = buffer)
 				return BufferToBSTR ((char*)fixed_buffer, len);
-#endif
 		}
 
 		internal delegate IntPtr SecureStringAllocator(int len);
@@ -1305,9 +1292,6 @@ namespace System.Runtime.InteropServices
 			if (s == null)
 				throw new ArgumentNullException ("s");
 
-#if NETCORE
-			return s.MarshalToString (false, false);
-#else
 			int len = s.Length;
 			IntPtr ctm = allocator (len + 1);
 			byte [] copy = new byte [len+1];
@@ -1330,16 +1314,12 @@ namespace System.Runtime.InteropServices
 				}
 			}
 			return ctm;
-#endif
 		}
 
 		internal static IntPtr SecureStringToUnicode (SecureString s, SecureStringAllocator allocator)
 		{
 			if (s == null)
 				throw new ArgumentNullException ("s");
-#if NETCORE
-			return s.MarshalToString (false, true);
-#else
 			int len = s.Length;
 			IntPtr ctm = allocator (len * 2 + 2);
 			byte [] buffer = null;
@@ -1356,8 +1336,6 @@ namespace System.Runtime.InteropServices
 					}
 			}
 			return ctm;
-#endif
-
 		}
 
 		public static IntPtr SecureStringToCoTaskMemAnsi (SecureString s)
@@ -1374,22 +1352,14 @@ namespace System.Runtime.InteropServices
 		{
 			if (s == null)
 				throw new ArgumentNullException ("s");
-#if NETCORE
-			return s.MarshalToString (true, false);
-#else
 			return SecureStringToAnsi (s, SecureStringGlobalAllocator);
-#endif
 		}
 
 		public static IntPtr SecureStringToGlobalAllocUnicode (SecureString s)
 		{
 			if (s == null)
 				throw new ArgumentNullException ("s");
-#if NETCORE
-			return s.MarshalToString (true, true);
-#else
 			return SecureStringToUnicode (s, SecureStringGlobalAllocator);
-#endif
 		}
 
 		[ReliabilityContractAttribute (Consistency.WillNotCorruptState, Cer.MayFail)]
@@ -1620,7 +1590,9 @@ namespace System.Runtime.InteropServices
 			const int ERROR_FILENAME_EXCED_RANGE = unchecked ((int)0xCE);
 			const int COR_E_RANK = unchecked ((int)0x80131517L);
 			const int COR_E_REFLECTIONTYPELOAD = unchecked ((int)0x80131602L);
+#if !DISABLE_REMOTING
 			const int COR_E_REMOTING = unchecked ((int)0x8013150BL);
+#endif
 			const int COR_E_SAFEARRAYTYPEMISMATCH = unchecked ((int)0x80131533L);
 			const int COR_E_SECURITY = unchecked ((int)0x8013150AL);
 			const int COR_E_SERIALIZATION = unchecked ((int)0x8013150CL);
@@ -1640,9 +1612,6 @@ namespace System.Runtime.InteropServices
 			//const int COR_E_WEAKREFERENCE = unchecked ((int)?);
 			//const int COR_E_VTABLECALLSNOTSUPPORTED = unchecked ((int));
 
-#if NETCORE
-			return new COMException ("", errorCode);
-#else
 			switch (errorCode) {
 				case MSEE_E_APPDOMAINUNLOADED:
 					return new AppDomainUnloadedException ();
@@ -1737,8 +1706,10 @@ namespace System.Runtime.InteropServices
 					return new RankException ();
 				case COR_E_REFLECTIONTYPELOAD:
 					return new System.Reflection.ReflectionTypeLoadException (new Type[] { }, new Exception[] { });
+#if !DISABLE_REMOTING
 				case COR_E_REMOTING:
 					return new System.Runtime.Remoting.RemotingException ();
+#endif
 				case COR_E_SAFEARRAYTYPEMISMATCH:
 					return new SafeArrayTypeMismatchException ();
 				case COR_E_SECURITY:
@@ -1784,7 +1755,6 @@ namespace System.Runtime.InteropServices
 			if (errorCode < 0)
 				return new COMException ("", errorCode);
 			return null;
-#endif
 		}
 
 #if FEATURE_COMINTEROP
@@ -1928,21 +1898,8 @@ namespace System.Runtime.InteropServices
 			return GetFunctionPointerForDelegateInternal ((Delegate)(object)d);
 		}
 
-		internal static void SetLastWin32Error (int error)
-		{
-		}
-
-#if NETCORE
-		internal static IntPtr AllocBSTR (int length)
-		{
-			throw new NotImplementedException ();
-		}
-
-		internal static bool IsPinnable (object obj)
-		{
-			throw new NotImplementedException ();
-		}
-#endif
+		[MethodImplAttribute(MethodImplOptions.InternalCall)]
+		internal static extern void SetLastWin32Error (int error);
 
 #if FEATURE_COMINTEROP || MONO_COM
 		// Copied from referencesource/mscorlib/system/runtime/interopservices/marshal.cs

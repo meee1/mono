@@ -149,7 +149,11 @@ namespace System
 			return true;
 		}
 
-#if !MONODROID && !MONOTOUCH && !XAMMAC && !WASM
+#if (!MONODROID && !MONOTOUCH && !XAMMAC) || MOBILE_DESKTOP_HOST
+#if WASM
+		[MethodImplAttribute(MethodImplOptions.InternalCall)]
+		extern static void mono_timezone_get_local_name (ref string name);
+#endif
 		static TimeZoneInfo CreateLocal ()
 		{
 #if WIN_PLATFORM
@@ -164,7 +168,15 @@ namespace System
 				return GetLocalTimeZoneInfoWinRTFallback ();
 			}
 #endif
-
+#if WASM
+			string localName = null;
+			mono_timezone_get_local_name (ref localName);
+			try {
+				return FindSystemTimeZoneByFileName (localName, Path.Combine (TimeZoneDirectory, localName));
+			} catch {
+				return Utc;
+			}
+#else		
 			var tz = Environment.GetEnvironmentVariable ("TZ");
 			if (tz != null) {
 				if (tz == String.Empty)
@@ -192,6 +204,7 @@ namespace System
 			}
 
 			return Utc;
+#endif			
 		}
 
 		static TimeZoneInfo FindSystemTimeZoneByIdCore (string id)
@@ -266,7 +279,11 @@ namespace System
 			}
 		}
 #if LIBC
+#if WASM
+		const string DefaultTimeZoneDirectory = "/zoneinfo";
+#else		
 		const string DefaultTimeZoneDirectory = "/usr/share/zoneinfo";
+#endif
 		static string timeZoneDirectory;
 		static string TimeZoneDirectory {
 			get {
@@ -919,8 +936,9 @@ namespace System
 			DateTime DST_end = TransitionPoint (rule.DaylightTransitionEnd, year + ((rule.DaylightTransitionStart.Month < rule.DaylightTransitionEnd.Month) ? 0 : 1));
 			if (dateTime.Kind == DateTimeKind.Utc) {
 				DST_start -= BaseUtcOffset;
-				DST_end -= (BaseUtcOffset + rule.DaylightDelta);
+				DST_end -= BaseUtcOffset;
 			}
+			DST_end -= rule.DaylightDelta;
 			return (dateTime >= DST_start && dateTime < DST_end);
 		}
 		
@@ -1215,10 +1233,13 @@ namespace System
 					return false;
 			}
 
+			var isUtc = false;
 			if (dateTime.Kind != DateTimeKind.Utc) {
 				if (!TryAddTicks (date, -BaseUtcOffset.Ticks, out date, DateTimeKind.Utc))
 					return false;
-			}
+			} else
+				isUtc = true;
+
 
 			AdjustmentRule current = GetApplicableRule (date);
 			if (current != null) {
@@ -1230,10 +1251,16 @@ namespace System
 					if (forOffset)
 						isDst = true;
 					offset = baseUtcOffset; 
-					if (date >= new DateTime (tStart.Ticks + current.DaylightDelta.Ticks, DateTimeKind.Utc))
+					if (isUtc || (date >= new DateTime (tStart.Ticks + current.DaylightDelta.Ticks, DateTimeKind.Utc)))
 					{
 						offset += current.DaylightDelta;
 						isDst = true;
+					}
+
+					if (date >= new DateTime (tEnd.Ticks - current.DaylightDelta.Ticks, DateTimeKind.Utc))
+					{
+						offset = baseUtcOffset;
+						isDst = false;
 					}
 
 					return true;
@@ -1244,8 +1271,11 @@ namespace System
 
 		private static DateTime TransitionPoint (TransitionTime transition, int year)
 		{
-			if (transition.IsFixedDateRule)
-				return new DateTime (year, transition.Month, transition.Day) + transition.TimeOfDay.TimeOfDay;
+			if (transition.IsFixedDateRule) {
+				var daysInMonth = DateTime.DaysInMonth (year, transition.Month);
+				var transitionDay = transition.Day <= daysInMonth ? transition.Day : daysInMonth;
+				return new DateTime (year, transition.Month, transitionDay) + transition.TimeOfDay.TimeOfDay;
+			}
 
 			DayOfWeek first = (new DateTime (year, transition.Month, 1)).DayOfWeek;
 			int day = 1 + (transition.Week - 1) * 7 + (transition.DayOfWeek - first + 7) % 7;
@@ -1324,6 +1354,20 @@ namespace System
 			return SwapInt32 (i);
 		}
 
+		static long ReadBigEndianInt64(byte[] buffer, int start)
+		{
+			byte[] longBytes = new byte[8];
+			for (int i = 0; i < 8; i++) {
+				longBytes[i] = buffer[start + i];
+			}
+
+			if (BitConverter.IsLittleEndian) {
+				Array.Reverse(longBytes);
+			}
+
+			return BitConverter.ToInt64(longBytes, 0);
+		}
+
 		private static TimeZoneInfo ParseTZBuffer (string id, byte [] buffer, int length)
 		{
 			//Reading the header. 4 bytes for magic, 16 are reserved
@@ -1334,12 +1378,29 @@ namespace System
 			int typecnt = ReadBigEndianInt32 (buffer, 36);
 			int charcnt = ReadBigEndianInt32 (buffer, 40);
 
+			byte version = buffer[4];
+			int index = 0;
+			int timeValuesLength = 4;
+			if (version == '2' || version == '3') {
+				index += 44 + (int)((timeValuesLength * timecnt) + timecnt + (6 * typecnt) + ((timeValuesLength + 4) * leapcnt) + ttisstdcnt + ttisgmtcnt + charcnt);
+				// move index past the V1 information to read the V2 information
+
+				ttisgmtcnt = ReadBigEndianInt32 (buffer, 20 + index);
+				ttisstdcnt = ReadBigEndianInt32 (buffer, 24 + index);
+				leapcnt = ReadBigEndianInt32 (buffer, 28 + index);
+				timecnt = ReadBigEndianInt32 (buffer, 32 + index);
+				typecnt = ReadBigEndianInt32 (buffer, 36 + index);
+				charcnt = ReadBigEndianInt32 (buffer, 40 + index);
+
+				timeValuesLength = 8;
+			}
+
 			if (length < 44 + timecnt * 5 + typecnt * 6 + charcnt + leapcnt * 8 + ttisstdcnt + ttisgmtcnt)
 				throw new InvalidTimeZoneException ();
 
-			Dictionary<int, string> abbreviations = ParseAbbreviations (buffer, 44 + 4 * timecnt + timecnt + 6 * typecnt, charcnt);
-			Dictionary<int, TimeType> time_types = ParseTimesTypes (buffer, 44 + 4 * timecnt + timecnt, typecnt, abbreviations);
-			List<KeyValuePair<DateTime, TimeType>> transitions = ParseTransitions (buffer, 44, timecnt, time_types);
+			Dictionary<int, string> abbreviations = ParseAbbreviations (buffer, index + 44 + timeValuesLength * timecnt + timecnt + 6 * typecnt, charcnt);
+			Dictionary<int, TimeType> time_types = ParseTimesTypes (buffer, index + 44 + timeValuesLength * timecnt + timecnt, typecnt, abbreviations);
+			List<KeyValuePair<DateTime, TimeType>> transitions = ParseTransitions (buffer, index + 44, timecnt, timeValuesLength, time_types);
 
 			if (time_types.Count == 0)
 				throw new InvalidTimeZoneException ();
@@ -1491,23 +1552,28 @@ namespace System
 			return types;
 		}
 
-		static List<KeyValuePair<DateTime, TimeType>> ParseTransitions (byte [] buffer, int index, int count, Dictionary<int, TimeType> time_types)
+		static List<KeyValuePair<DateTime, TimeType>> ParseTransitions (byte [] buffer, int index, int count, int timeValuesLength, Dictionary<int, TimeType> time_types)
 		{
 			var list = new List<KeyValuePair<DateTime, TimeType>> (count);
 			for (int i = 0; i < count; i++) {
-				int unixtime = ReadBigEndianInt32 (buffer, index + 4 * i);
+				long unixtime = 0;
+				if (timeValuesLength == 8) {
+					unixtime = ReadBigEndianInt64 (buffer, index + timeValuesLength * i);
+				} else {
+					unixtime = ReadBigEndianInt32 (buffer, index + timeValuesLength * i);
+				}
+
 				DateTime ttime = DateTimeFromUnixTime (unixtime);
-				byte ttype = buffer [index + 4 * count + i];
+				byte ttype = buffer [index + timeValuesLength * count + i];
 				list.Add (new KeyValuePair<DateTime, TimeType> (ttime, time_types [(int)ttype]));
 			}
 			return list;
 		}
 
-		static DateTime DateTimeFromUnixTime (long unix_time)
-		{
-			DateTime date_time = new DateTime (1970, 1, 1);
-			return date_time.AddSeconds (unix_time);
-		}
+		static DateTime DateTimeFromUnixTime (long unix_time) =>
+			unix_time < DateTimeOffset.UnixMinSeconds ? DateTime.MinValue :
+			unix_time > DateTimeOffset.UnixMaxSeconds ? DateTime.MaxValue :
+			DateTimeOffset.FromUnixTimeSeconds(unix_time).UtcDateTime;
 
 #region reference sources
 		// Shortcut for TimeZoneInfo.Local.GetUtcOffset

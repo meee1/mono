@@ -151,7 +151,8 @@ namespace Mono.Debugger.Soft
 	enum ValueTypeId {
 		VALUE_TYPE_ID_NULL = 0xf0,
 		VALUE_TYPE_ID_TYPE = 0xf1,
-		VALUE_TYPE_ID_PARENT_VTYPE = 0xf2
+		VALUE_TYPE_ID_PARENT_VTYPE = 0xf2,
+		VALUE_TYPE_ID_FIXED_ARRAY = 0xf3
 	}
 
 	[Flags]
@@ -215,6 +216,7 @@ namespace Mono.Debugger.Soft
 		public bool IsEnum; // For ElementType.ValueType
 		public long Id; /* For VALUE_TYPE_ID_TYPE */
 		public int Index; /* For VALUE_TYPE_PARENT_VTYPE */
+		public int FixedSize;
 	}
 
 	class ModuleInfo {
@@ -303,6 +305,12 @@ namespace Mono.Debugger.Soft
 			get; set;
 		}
 		public bool Subclasses {
+			get; set;
+		}
+		public bool NotFilteredFeature {
+			get; set;
+		}
+		public bool EverythingElse {
 			get; set;
 		}
 	}
@@ -400,6 +408,10 @@ namespace Mono.Debugger.Soft
 		public ErrorCode ErrorCode {
 			get; set;
 		}
+
+		public string ErrorMessage {
+			get; set;
+		}
 	}
 
 	/*
@@ -427,7 +439,7 @@ namespace Mono.Debugger.Soft
 		 * with newer runtimes, and vice versa.
 		 */
 		internal const int MAJOR_VERSION = 2;
-		internal const int MINOR_VERSION = 51;
+		internal const int MINOR_VERSION = 58;
 
 		enum WPSuspendPolicy {
 			NONE = 0,
@@ -533,7 +545,8 @@ namespace Mono.Debugger.Soft
 			GET_ENTRY_ASSEMBLY = 4,
 			CREATE_STRING = 5,
 			GET_CORLIB = 6,
-			CREATE_BOXED_VALUE = 7
+			CREATE_BOXED_VALUE = 7,
+			CREATE_BYTE_ARRAY = 8,
 		}
 
 		enum CmdAssembly {
@@ -550,10 +563,12 @@ namespace Mono.Debugger.Soft
 			GET_TYPE_FROM_TOKEN = 11,
 			GET_METHOD_FROM_TOKEN = 12,
 			HAS_DEBUG_INFO = 13,
+			GET_CATTRS = 14,
 		}
 
 		enum CmdModule {
 			GET_INFO = 1,
+			APPLY_CHANGES = 2,
 		}
 
 		enum CmdMethod {
@@ -782,14 +797,20 @@ namespace Mono.Debugger.Soft
 
 				// For reply packets
 				offset = 0;
-				ReadInt (); // length
+				var len = ReadInt (); // length
 				ReadInt (); // id
 				ReadByte (); // flags
 				ErrorCode = ReadShort ();
+				if (ErrorCode == (int)Mono.Debugger.Soft.ErrorCode.INVALID_ARGUMENT && connection.Version.AtLeast (2, 56) && len > offset)
+					ErrorMsg = ReadString ();
 			}
 
 			public CommandSet CommandSet {
 				get; set;
+			}
+
+			public string ErrorMsg {
+				get; internal set;
 			}
 
 			public int Command {
@@ -887,6 +908,7 @@ namespace Mono.Debugger.Soft
 					// FIXME: The client and the debuggee might have different word sizes
 					return new ValueImpl { Type = etype, Value = ReadLong () };
 				case ElementType.Ptr:
+				case ElementType.FnPtr:
 					long value = ReadLong ();
 					if (connection.Version.AtLeast (2, 46)) {
 						long pointerClass = ReadId ();
@@ -915,9 +937,92 @@ namespace Mono.Debugger.Soft
 					return new ValueImpl () { Type = etype, Id = ReadId () };
 				case (ElementType)ValueTypeId.VALUE_TYPE_ID_PARENT_VTYPE:
 					return new ValueImpl () { Type = etype, Index = ReadInt () };
+				case (ElementType)ValueTypeId.VALUE_TYPE_ID_FIXED_ARRAY:
+					return ReadValueFixedSize ();
 				default:
 					throw new NotImplementedException ("Unable to handle type " + etype);
 				}
+			}
+
+			ValueImpl ReadValueFixedSize () {
+				var lenFixedSize = 1;
+				ElementType etype = (ElementType)ReadByte ();
+				lenFixedSize = ReadInt ();
+				switch (etype) {
+					case ElementType.I1: {
+						var val = new sbyte[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (sbyte)ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.U1: {
+						var val = new byte[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (byte)ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.Boolean: {
+						var val = new bool[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (ReadInt () != 0);
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.I2: {
+						var val = new short[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (short)ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.U2: {
+						var val = new ushort[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (ushort)ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.Char: {
+						var val = new char[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (char)ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.I4: {
+						var val = new int[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.U4: {
+						var val = new uint[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (uint)ReadInt ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.I8: {
+						var val = new long[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = ReadLong ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.U8: {
+						var val = new ulong[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = (ulong) ReadLong ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.R4: {
+						var val = new float[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = ReadFloat ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+					case ElementType.R8: {
+						var val = new double[lenFixedSize];
+						for (int i = 0; i < lenFixedSize; i++)
+							val[i] = ReadDouble ();
+						return new ValueImpl { Type = etype, Value = val };
+					}
+				}
+				throw new NotImplementedException ("Unable to handle type " + etype);
 			}
 
 			public long[] ReadIds (int n) {
@@ -1025,6 +1130,16 @@ namespace Mono.Debugger.Soft
 				offset += b.Length;
 				return this;
 			}
+			public PacketWriter WriteBytes (byte[] b) {
+				if (b == null)
+					return WriteInt (-1);
+				MakeRoom (4);
+				encode_int (data, b.Length, ref offset);
+				MakeRoom (b.Length);
+				Buffer.BlockCopy (b, 0, data, offset, b.Length);
+				offset += b.Length;
+				return this;
+			}
 
 			public PacketWriter WriteBool (bool val) {
 				WriteByte (val ? (byte)1 : (byte)0);
@@ -1035,9 +1150,13 @@ namespace Mono.Debugger.Soft
 				ElementType t;
 
 				if (v.Value != null)
-					t = TypeCodeToElementType (Type.GetTypeCode (v.Value.GetType ()));
+					t = TypeCodeToElementType (Type.GetTypeCode (v.Value.GetType ()), v.Value.GetType ());
 				else
 					t = v.Type;
+				if (v.FixedSize > 1 && t != ElementType.ValueType) {
+					WriteFixedSizeValue (v);
+					return this;
+				}
 				WriteByte ((byte)t);
 				switch (t) {
 				case ElementType.Boolean:
@@ -1102,6 +1221,61 @@ namespace Mono.Debugger.Soft
 				return this;
 			}
 
+			PacketWriter WriteFixedSizeValue (ValueImpl v) {
+				ElementType t;
+
+				if (v.Value != null)
+					t = TypeCodeToElementType (Type.GetTypeCode (v.Value.GetType ()), v.Value.GetType ());
+				else
+					t = v.Type;
+				WriteByte ((byte) ValueTypeId.VALUE_TYPE_ID_FIXED_ARRAY);
+				WriteByte ((byte)t);
+				WriteInt (v.FixedSize);
+				for (int j = 0 ; j < v.FixedSize; j++) {
+					switch (t) {
+						case ElementType.Boolean:
+							WriteInt (((bool[])v.Value)[j]? 1 : 0);
+							break;
+						case ElementType.Char:
+							WriteInt ((int)((char[])v.Value)[j]);
+							break;
+						case ElementType.I1:
+							WriteInt ((int)((sbyte[])v.Value)[j]);
+							break;
+						case ElementType.U1:
+							WriteInt ((int)((byte[])v.Value)[j]);
+							break;
+						case ElementType.I2:
+							WriteInt ((int)((short[])v.Value)[j]);
+							break;
+						case ElementType.U2:
+							WriteInt ((int)((ushort[])v.Value)[j]);
+							break;
+						case ElementType.I4:
+							WriteInt ((int)((int[])v.Value)[j]);
+							break;
+						case ElementType.U4:
+							WriteInt ((int)((uint[])v.Value)[j]);
+							break;
+						case ElementType.I8:
+							WriteLong ((long)((long[])v.Value)[j]);
+							break;
+						case ElementType.U8:
+							WriteLong ((long)((ulong[])v.Value)[j]);
+							break;
+						case ElementType.R4:
+							WriteFloat (((float[])v.Value)[j]);
+							break;
+						case ElementType.R8:
+							WriteDouble (((double[])v.Value)[j]);
+							break;
+						default:
+							throw new NotImplementedException ();
+					}
+				}
+				return this;
+			}
+
 			public PacketWriter WriteValues (ValueImpl[] values) {
 				for (int i = 0; i < values.Length; ++i)
 					WriteValue (values [i]);
@@ -1152,11 +1326,13 @@ namespace Mono.Debugger.Soft
 				}
 			}
 		}
-		
+
 		protected abstract int TransportReceive (byte[] buf, int buf_offset, int len);
 		protected abstract int TransportSend (byte[] buf, int buf_offset, int len);
 		protected abstract void TransportSetTimeouts (int send_timeout, int receive_timeout);
 		protected abstract void TransportClose ();
+		// Shutdown breaks all communication, resuming blocking waits
+		protected abstract void TransportShutdown ();
 
 		internal VersionInfo Version;
 		
@@ -1273,6 +1449,7 @@ namespace Mono.Debugger.Soft
 
 		internal void Close () {
 			closed = true;
+			TransportShutdown ();
 		}
 
 		internal bool IsClosed {
@@ -1628,7 +1805,7 @@ namespace Mono.Debugger.Soft
 							LogPacket (packetId, encoded_packet, reply, command_set, command, watch);
 						if (r.ErrorCode != 0) {
 							if (ErrorHandler != null)
-								ErrorHandler (this, new ErrorHandlerEventArgs () { ErrorCode = (ErrorCode)r.ErrorCode });
+								ErrorHandler (this, new ErrorHandlerEventArgs () { ErrorCode = (ErrorCode)r.ErrorCode, ErrorMessage = r.ErrorMsg});
 							throw new NotImplementedException ("No error handler set.");
 						} else {
 							return r;
@@ -1684,7 +1861,7 @@ namespace Mono.Debugger.Soft
 			return res;
 		}
 
-		static ElementType TypeCodeToElementType (TypeCode c) {
+		static ElementType TypeCodeToElementType (TypeCode c, Type t) {
 			switch (c) {
 			case TypeCode.Boolean:
 				return ElementType.Boolean;
@@ -1710,6 +1887,8 @@ namespace Mono.Debugger.Soft
 				return ElementType.R4;
 			case TypeCode.Double:
 				return ElementType.R8;
+			case TypeCode.Object:
+				return TypeCodeToElementType(Type.GetTypeCode (t.GetElementType()), t.GetElementType());
 			default:
 				throw new NotImplementedException ();
 			}
@@ -1901,6 +2080,12 @@ namespace Mono.Debugger.Soft
 
 		internal long Domain_CreateString (long id, string s) {
 			return SendReceive (CommandSet.APPDOMAIN, (int)CmdAppDomain.CREATE_STRING, new PacketWriter ().WriteId (id).WriteString (s)).ReadId ();
+		}
+
+		internal long Domain_CreateByteArray (long id, byte [] bytes) {
+			var w = new PacketWriter ().WriteId (id);
+			w.WriteBytes (bytes);
+			return SendReceive (CommandSet.APPDOMAIN, (int)CmdAppDomain.CREATE_BYTE_ARRAY, w).ReadId ();
 		}
 
 		internal long Domain_CreateBoxedValue (long id, long type_id, ValueImpl v) {
@@ -2175,6 +2360,11 @@ namespace Mono.Debugger.Soft
 			return info;
 		}
 
+
+		internal void Module_ApplyChanges (long id, long dmeta_id, long dil_id, long dpdb_id) {
+			SendReceive (CommandSet.MODULE, (int)CmdModule.APPLY_CHANGES, new PacketWriter().WriteId (id).WriteId (dmeta_id).WriteId (dil_id).WriteId (dpdb_id));
+		}
+
 		/*
 		 * ASSEMBLY
 		 */
@@ -2229,6 +2419,11 @@ namespace Mono.Debugger.Soft
 
 		internal bool Assembly_HasDebugInfo (long id) {
 			return SendReceive (CommandSet.ASSEMBLY, (int)CmdAssembly.HAS_DEBUG_INFO, new PacketWriter ().WriteId (id)).ReadBool ();
+		}
+
+		internal CattrInfo[] Assembly_GetCustomAttributes (long id, long attr_type_id) {
+			PacketReader r = SendReceive (CommandSet.ASSEMBLY, (int)CmdAssembly.GET_CATTRS, new PacketWriter ().WriteId (id).WriteId (attr_type_id));
+			return ReadCattrs (r);
 		}
 
 		/*
@@ -2470,6 +2665,10 @@ namespace Mono.Debugger.Soft
 						} else if (!em.Subclasses) {
 							throw new NotSupportedException ("This request is not supported by the protocol version implemented by the debuggee.");
 						}
+						if (Version.MajorVersion > 2 || Version.MinorVersion >= 54) {
+							w.WriteBool (em.NotFilteredFeature);
+							w.WriteBool (em.EverythingElse);
+						}
 					} else if (mod is AssemblyModifier) {
 						w.WriteByte ((byte)ModifierKind.ASSEMBLY_ONLY);
 						var amod = (mod as AssemblyModifier);
@@ -2566,6 +2765,21 @@ namespace Mono.Debugger.Soft
 
 		internal void Array_SetValues (long id, int index, ValueImpl[] values) {
 			SendReceive (CommandSet.ARRAY_REF, (int)CmdArrayRef.SET_VALUES, new PacketWriter ().WriteId (id).WriteInt (index).WriteInt (values.Length).WriteValues (values));
+		}
+
+		// This is a special case when setting values of an array that
+		// consists of a large number of bytes. This saves much time and
+		// cost than we create ValueImpl object for each byte.
+		internal void ByteArray_SetValues (long id, byte [] bytes)
+		{
+			int index = 0;
+			var typ = (byte)ElementType.U1;
+			var w = new PacketWriter ().WriteId (id).WriteInt (index).WriteInt (bytes.Length);
+			for (int i = 0; i < bytes.Length; i++) {
+				w.WriteByte (typ);
+				w.WriteInt (bytes [i]);
+			}
+			SendReceive (CommandSet.ARRAY_REF, (int)CmdArrayRef.SET_VALUES, w);
 		}
 
 		/*
@@ -2691,6 +2905,11 @@ namespace Mono.Debugger.Soft
 		protected override void TransportClose ()
 		{
 			socket.Close ();
+		}
+
+		protected override void TransportShutdown ()
+		{
+			socket.Shutdown (SocketShutdown.Both);
 		}
 	}
 

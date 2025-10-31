@@ -223,22 +223,14 @@ namespace System.Windows.Forms.PropertyGridInternal
 			get {
 				if (PropertyDescriptor == null || PropertyOwner == null)
 					return null;
-
 				return PropertyDescriptor.GetValue (PropertyOwner);
 			}
 		}
 
 		public string ValueText {
-			get { 
-				string text = null;
-				try {
-					text = ConvertToString (this.Value);
-					if (text == null)
-						text = String.Empty;
-				} catch {
-					text = String.Empty;
-				}
-				return text;
+			get {
+				var text = ConvertToString (this.Value);
+				return text ?? String.Empty;
 			}
 		}
 
@@ -285,6 +277,8 @@ namespace System.Windows.Forms.PropertyGridInternal
 			IComponent selectedComponent = property_grid.SelectedObject as IComponent;
 			if (selectedComponent != null && selectedComponent.Site != null)
 				return selectedComponent.Site.GetService (serviceType);
+			if (property_grid.Site != null)
+				return property_grid.Site.GetService (serviceType);
 			return null;
 		}
 
@@ -331,21 +325,20 @@ namespace System.Windows.Forms.PropertyGridInternal
 
 		private string ConvertToString (object value)
 		{
-			if (value is string)
-				return (string)value;
+			var converter = GetConverter();
+			var convertContext = (ITypeDescriptorContext)this;
 
-			if (PropertyDescriptor != null && PropertyDescriptor.Converter != null &&
-			    PropertyDescriptor.Converter.CanConvertTo ((ITypeDescriptorContext)this, typeof (string))) {
+			var convertedValue = (string)null;
+			if (converter != null && converter.CanConvertTo (convertContext, typeof (string))) {
 				try {
-					return PropertyDescriptor.Converter.ConvertToString ((ITypeDescriptorContext)this, value);
+					convertedValue = converter.ConvertToString (convertContext, value);
 				} catch {
 					// XXX: Happens too often...
 					// property_grid.ShowError ("Property value of '" + property_descriptor.Name + "' is not convertible to string.");
-					return null;
 				}
 			}
 
-			return null;
+			return (convertedValue != null) ? convertedValue : (value as string);
 		}
 
 		public bool HasCustomEditor {
@@ -467,9 +460,11 @@ namespace System.Windows.Forms.PropertyGridInternal
 			if (this.IsReadOnly)
 				return false;
 
+			object oldValue = Value;
+
 			if (SetValueCore (value, out error)) {
 				InvalidateChildGridItemsCache ();
-				property_grid.OnPropertyValueChangedInternal (this, this.Value);
+				property_grid.OnPropertyValueChangedInternal (this, oldValue);
 				return true;
 			}
 			return false;
@@ -490,8 +485,6 @@ namespace System.Windows.Forms.PropertyGridInternal
 					    converter.CanConvertFrom ((ITypeDescriptorContext)this, valueType))
 						value = converter.ConvertFrom ((ITypeDescriptorContext)this, 
 									       CultureInfo.CurrentCulture, value);
-					else
-						conversionError = true;
 				} catch (Exception e) {
 					error = e.Message;
 					conversionError = true;
@@ -552,7 +545,7 @@ namespace System.Windows.Forms.PropertyGridInternal
 						if (IsValueType (this.ParentEntry)) 
 							current_changed = ParentEntry.SetValueCore (propertyOwners[i], out error);
 						else
-							current_changed = Object.Equals (properties[i].GetValue (propertyOwners[i]), value);
+							current_changed = true;
 					}
 				}
 				if (current_changed)
@@ -703,7 +696,7 @@ namespace System.Windows.Forms.PropertyGridInternal
 			UITypeEditor editor = GetEditor ();
 			if (editor != null) {
 				try {
-					editor.PaintValue (this.Value, gfx, rect);
+					editor.PaintValue (this.ValueText, gfx, rect);
 				} catch {
 					// Some of our Editors throw NotImplementedException
 				}

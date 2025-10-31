@@ -20,6 +20,7 @@
 #include <mono/utils/mono-mmap.h>
 #include <mono/utils/mono-hwcap.h>
 #include <mono/utils/unlocked.h>
+#include "mono/utils/mono-tls-inline.h"
 
 #include "mini-ppc.h"
 #ifdef TARGET_POWERPC64
@@ -423,7 +424,7 @@ mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_targe
 			return cached;
 
 		if (mono_ee_features.use_aot_trampolines) {
-			start = mono_aot_get_trampoline ("delegate_invoke_impl_has_target");
+			start = (guint8*)mono_aot_get_trampoline ("delegate_invoke_impl_has_target");
 		} else {
 			MonoTrampInfo *info;
 			start = get_delegate_invoke_impl (&info, TRUE, 0, FALSE);
@@ -449,7 +450,7 @@ mono_arch_get_delegate_invoke_impl (MonoMethodSignature *sig, gboolean has_targe
 
 		if (mono_ee_features.use_aot_trampolines) {
 			char *name = g_strdup_printf ("delegate_invoke_impl_target_%d", sig->param_count);
-			start = mono_aot_get_trampoline (name);
+			start = (guint8*)mono_aot_get_trampoline (name);
 			g_free (name);
 		} else {
 			MonoTrampInfo *info;
@@ -580,11 +581,9 @@ mono_arch_init (void)
 
 	mono_os_mutex_init_recursive (&mini_arch_mutex);
 
-	ss_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ|MONO_MMAP_32BIT, MONO_MEM_ACCOUNT_OTHER);
-	bp_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ|MONO_MMAP_32BIT, MONO_MEM_ACCOUNT_OTHER);
+	ss_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ, MONO_MEM_ACCOUNT_OTHER);
+	bp_trigger_page = mono_valloc (NULL, mono_pagesize (), MONO_MMAP_READ, MONO_MEM_ACCOUNT_OTHER);
 	mono_mprotect (bp_trigger_page, mono_pagesize (), 0);
-
-	mono_aot_register_jit_icall ("mono_ppc_throw_exception", mono_ppc_throw_exception);
 
 	// FIXME: Fix partial sharing for power and remove this
 	mono_set_partial_sharing_supported (FALSE);
@@ -616,19 +615,6 @@ mono_arch_cpu_optimizations (guint32 *exclude_mask)
 	/* no ppc-specific optimizations yet */
 	*exclude_mask = 0;
 	return opts;
-}
-
-/*
- * This function test for all SIMD functions supported.
- *
- * Returns a bitmask corresponding to all supported versions.
- *
- */
-guint32
-mono_arch_cpu_enumerate_simd_versions (void)
-{
-	/* SIMD is currently unimplemented */
-	return 0;
 }
 
 #ifdef __mono_ppc64__
@@ -1737,7 +1723,7 @@ void
 mono_arch_emit_outarg_vt (MonoCompile *cfg, MonoInst *ins, MonoInst *src)
 {
 	MonoCallInst *call = (MonoCallInst*)ins->inst_p0;
-	ArgInfo *ainfo = ins->inst_p1;
+	ArgInfo *ainfo = (ArgInfo*)ins->inst_p1;
 	int ovf_size = ainfo->vtsize;
 	int doffset = ainfo->offset;
 	int i, soffset, dreg;
@@ -2917,7 +2903,7 @@ ppc_patch_full (MonoCompile *cfg, MonoDomain *domain, guchar *code, const guchar
 			}
 		} else {
 			if (is_fd)
-				target = mono_get_addr_from_ftnptr ((gpointer)target);
+				target = (const guchar*)mono_get_addr_from_ftnptr ((gpointer)target);
 		}
 
 		/* FIXME: make this thread safe */
@@ -3336,8 +3322,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			 */
 			//ppc_break (code);
 			ppc_mr (code, ppc_r3, ins->sreg1);
-			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL, 
-					     (gpointer)"mono_break");
+			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL_ID, GUINT_TO_POINTER (MONO_JIT_ICALL_mono_break));
 			if ((FORCE_INDIR_CALL || cfg->method->dynamic) && !cfg->compile_aot) {
 				ppc_load_func (code, PPC_CALL_REG, 0);
 				ppc_mtlr (code, PPC_CALL_REG);
@@ -3652,13 +3637,14 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			break;
 		case OP_GOT_ENTRY:
 			// FIXME: Fix max instruction length
-			mono_add_patch_info (cfg, offset, (MonoJumpInfoType)ins->inst_right->inst_i1, ins->inst_right->inst_p0);
+			/* XXX: This is hairy; we're casting a pointer from a union to an enum... */
+			mono_add_patch_info (cfg, offset, (MonoJumpInfoType)(intptr_t)ins->inst_right->inst_i1, ins->inst_right->inst_p0);
 			/* arch_emit_got_access () patches this */
 			ppc_load32 (code, ppc_r0, 0);
 			ppc_ldptr_indexed (code, ins->dreg, ins->inst_basereg, ppc_r0);
 			break;
 		case OP_AOTCONST:
-			mono_add_patch_info (cfg, offset, (MonoJumpInfoType)ins->inst_i1, ins->inst_p0);
+			mono_add_patch_info (cfg, offset, (MonoJumpInfoType)(intptr_t)ins->inst_i1, ins->inst_p0);
 			ppc_load_sequence (code, ins->dreg, 0);
 			break;
 		CASE_PPC32 (OP_ICONV_TO_I4)
@@ -3810,10 +3796,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_VOIDCALL:
 		case OP_CALL:
 			call = (MonoCallInst*)ins;
-			if (ins->flags & MONO_INST_HAS_METHOD)
-				mono_add_patch_info (cfg, offset, MONO_PATCH_INFO_METHOD, call->method);
-			else
-				mono_add_patch_info (cfg, offset, MONO_PATCH_INFO_ABS, call->fptr);
+			mono_call_add_patch_info (cfg, call, offset);
 			if ((FORCE_INDIR_CALL || cfg->method->dynamic) && !cfg->compile_aot) {
 				ppc_load_func (code, PPC_CALL_REG, 0);
 				ppc_mtlr (code, PPC_CALL_REG);
@@ -3916,8 +3899,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_THROW: {
 			//ppc_break (code);
 			ppc_mr (code, ppc_r3, ins->sreg1);
-			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL, 
-					     (gpointer)"mono_arch_throw_exception");
+			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL_ID, GUINT_TO_POINTER (MONO_JIT_ICALL_mono_arch_throw_exception));
 			if ((FORCE_INDIR_CALL || cfg->method->dynamic) && !cfg->compile_aot) {
 				ppc_load_func (code, PPC_CALL_REG, 0);
 				ppc_mtlr (code, PPC_CALL_REG);
@@ -3930,8 +3912,8 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_RETHROW: {
 			//ppc_break (code);
 			ppc_mr (code, ppc_r3, ins->sreg1);
-			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL, 
-					     (gpointer)"mono_arch_rethrow_exception");
+			mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL_ID,
+					     GUINT_TO_POINTER (MONO_JIT_ICALL_mono_arch_rethrow_exception));
 			if ((FORCE_INDIR_CALL || cfg->method->dynamic) && !cfg->compile_aot) {
 				ppc_load_func (code, PPC_CALL_REG, 0);
 				ppc_mtlr (code, PPC_CALL_REG);
@@ -4055,7 +4037,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_COND_EXC_GE_UN:
 		case OP_COND_EXC_LE:
 		case OP_COND_EXC_LE_UN:
-			EMIT_COND_SYSTEM_EXCEPTION (ins->opcode - OP_COND_EXC_EQ, ins->inst_p1);
+			EMIT_COND_SYSTEM_EXCEPTION (ins->opcode - OP_COND_EXC_EQ, (const char*)ins->inst_p1);
 			break;
 		case OP_COND_EXC_IEQ:
 		case OP_COND_EXC_INE_UN:
@@ -4067,7 +4049,7 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 		case OP_COND_EXC_IGE_UN:
 		case OP_COND_EXC_ILE:
 		case OP_COND_EXC_ILE_UN:
-			EMIT_COND_SYSTEM_EXCEPTION (ins->opcode - OP_COND_EXC_IEQ, ins->inst_p1);
+			EMIT_COND_SYSTEM_EXCEPTION (ins->opcode - OP_COND_EXC_IEQ, (const char*)ins->inst_p1);
 			break;
 		case OP_IBEQ:
 		case OP_IBNE_UN:
@@ -4428,12 +4410,12 @@ mono_arch_output_basic_block (MonoCompile *cfg, MonoBasicBlock *bb)
 			 */
 			ppc_mfspr (code, ppc_r0, ppc_xer);
 			ppc_andisd (code, ppc_r0, ppc_r0, (1 << 13)); /* CA */
-			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (PPC_BR_FALSE, PPC_BR_EQ, ins->inst_p1);
+			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (PPC_BR_FALSE, PPC_BR_EQ, (const char*)ins->inst_p1);
 			break;
 		case OP_COND_EXC_OV:
 			ppc_mfspr (code, ppc_r0, ppc_xer);
 			ppc_andisd (code, ppc_r0, ppc_r0, (1 << 14)); /* OV */
-			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (PPC_BR_FALSE, PPC_BR_EQ, ins->inst_p1);
+			EMIT_COND_SYSTEM_EXCEPTION_FLAGS (PPC_BR_FALSE, PPC_BR_EQ, (const char*)ins->inst_p1);
 			break;
 		case OP_LBEQ:
 		case OP_LBNE_UN:
@@ -4597,7 +4579,7 @@ void
 mono_arch_register_lowlevel_calls (void)
 {
 	/* The signature doesn't matter */
-	mono_register_jit_icall (mono_ppc_throw_exception, "mono_ppc_throw_exception", mono_icall_sig_void, TRUE);
+	mono_register_jit_icall (mono_ppc_throw_exception, mono_icall_sig_void, TRUE);
 }
 
 #ifdef __mono_ppc64__
@@ -4641,10 +4623,6 @@ mono_arch_patch_code_new (MonoCompile *cfg, MonoDomain *domain, guint8 *code, Mo
 	case MONO_PATCH_INFO_IP:
 		patch_load_sequence (ip, ip);
 		break;
-	case MONO_PATCH_INFO_METHOD_REL:
-		g_assert_not_reached ();
-		*((gpointer *)(ip)) = code + ji->data.offset;
-		break;
 	case MONO_PATCH_INFO_SWITCH: {
 		gpointer *table = (gpointer *)ji->data.table->table;
 		int i;
@@ -4685,15 +4663,16 @@ mono_arch_patch_code_new (MonoCompile *cfg, MonoDomain *domain, guint8 *code, Mo
 		/* everything is dealt with at epilog output time */
 		break;
 #ifdef PPC_USES_FUNCTION_DESCRIPTOR
-	case MONO_PATCH_INFO_JIT_ICALL:
+	case MONO_PATCH_INFO_JIT_ICALL_ID:
 	case MONO_PATCH_INFO_ABS:
 	case MONO_PATCH_INFO_RGCTX_FETCH:
 	case MONO_PATCH_INFO_JIT_ICALL_ADDR:
+	case MONO_PATCH_INFO_SPECIFIC_TRAMPOLINE_LAZY_FETCH_ADDR:
 		is_fd = TRUE;
 		/* fall through */
 #endif
 	default:
-		ppc_patch_full (cfg, domain, ip, target, is_fd);
+		ppc_patch_full (cfg, domain, ip, (const guchar*)target, is_fd);
 		break;
 	}
 }
@@ -5165,8 +5144,8 @@ mono_arch_emit_prolog (MonoCompile *cfg)
 			/* Compute the got address which is needed by the PLT entry */
 			code = mono_arch_emit_load_got_addr (cfg->native_code, code, cfg, NULL);
 		}
-		mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL, 
-			     (gpointer)"mono_tls_get_lmf_addr");
+		mono_add_patch_info (cfg, code - cfg->native_code, MONO_PATCH_INFO_JIT_ICALL_ID,
+			     GUINT_TO_POINTER (MONO_JIT_ICALL_mono_tls_get_lmf_addr_extern));
 		if ((FORCE_INDIR_CALL || cfg->method->dynamic) && !cfg->compile_aot) {
 			ppc_load_func (code, PPC_CALL_REG, 0);
 			ppc_mtlr (code, PPC_CALL_REG);
@@ -5362,7 +5341,7 @@ mono_arch_emit_exceptions (MonoCompile *cfg)
 	 */
 	for (patch_info = cfg->patch_info; patch_info; patch_info = patch_info->next) {
 		if (patch_info->type == MONO_PATCH_INFO_EXC) {
-			i = exception_id_by_name (patch_info->data.target);
+			i = exception_id_by_name ((const char*)patch_info->data.target);
 			if (!exc_throw_found [i]) {
 				max_epilog_size += (2 * PPC_LOAD_SEQUENCE_LENGTH) + 5 * 4;
 				exc_throw_found [i] = TRUE;
@@ -5425,7 +5404,7 @@ mono_arch_emit_exceptions (MonoCompile *cfg)
 			MonoClass *exc_class;
 
 			unsigned char *ip = patch_info->ip.i + cfg->native_code;
-			i = exception_id_by_name (patch_info->data.target);
+			i = exception_id_by_name ((const char*)patch_info->data.target);
 			if (exc_throw_pos [i] && !(ip > exc_throw_pos [i] && ip - exc_throw_pos [i] > 50000)) {
 				ppc_patch (ip, exc_throw_pos [i]);
 				patch_info->type = MONO_PATCH_INFO_NONE;
@@ -5441,8 +5420,8 @@ mono_arch_emit_exceptions (MonoCompile *cfg)
 			ppc_load (code, ppc_r3, m_class_get_type_token (exc_class));
 			/* we got here from a conditional call, so the calling ip is set in lr */
 			ppc_mflr (code, ppc_r4);
-			patch_info->type = MONO_PATCH_INFO_JIT_ICALL;
-			patch_info->data.name = "mono_arch_throw_corlib_exception";
+			patch_info->type = MONO_PATCH_INFO_JIT_ICALL_ID;
+			patch_info->data.jit_icall_id = MONO_JIT_ICALL_mono_arch_throw_corlib_exception;
 			patch_info->ip.i = code - cfg->native_code;
 			if (FORCE_INDIR_CALL || cfg->method->dynamic) {
 				ppc_load_func (code, PPC_CALL_REG, 0);
@@ -5481,11 +5460,6 @@ try_offset_access (void *value, guint32 idx)
 
 void
 mono_arch_finish_init (void)
-{
-}
-
-void
-mono_arch_free_jit_tls_data (MonoJitTlsData *tls)
 {
 }
 
@@ -5538,9 +5512,10 @@ mono_arch_build_imt_trampoline (MonoVTable *vtable, MonoDomain *domain, MonoIMTC
 	/* the initial load of the vtable address */
 	size += PPC_LOAD_SEQUENCE_LENGTH + LOADSTORE_SIZE;
 	if (fail_tramp) {
-		code = mono_method_alloc_generic_virtual_trampoline (domain, size);
+		code = mono_method_alloc_generic_virtual_trampoline (mono_domain_ambient_memory_manager (domain), size);
 	} else {
-		code = mono_domain_code_reserve (domain, size);
+		MonoMemoryManager *mem_manager = m_class_get_mem_manager (domain, vtable->klass);
+		code = mono_mem_manager_code_reserve (mem_manager, size);
 	}
 	start = code;
 
@@ -5994,3 +5969,14 @@ mono_arch_opcode_supported (int opcode)
 	}
 }
 
+gpointer
+mono_arch_load_function (MonoJitICallId jit_icall_id)
+{
+	gpointer target = NULL;
+	switch (jit_icall_id) {
+#undef MONO_AOT_ICALL
+#define MONO_AOT_ICALL(x) case MONO_JIT_ICALL_ ## x: target = (gpointer)x; break;
+	MONO_AOT_ICALL (mono_ppc_throw_exception)
+	}
+	return target;
+}

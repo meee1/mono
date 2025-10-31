@@ -109,85 +109,91 @@ mono_dwarf_writer_get_il_file_line_index (MonoDwarfWriter *w)
 
 /* Wrappers around the image writer functions */
 
-static inline void
+static void
 emit_section_change (MonoDwarfWriter *w, const char *section_name, int subsection_index)
 {
 	mono_img_writer_emit_section_change (w->w, section_name, subsection_index);
 }
 
-static inline void
+static void
 emit_push_section (MonoDwarfWriter *w, const char *section_name, int subsection)
 {
 	mono_img_writer_emit_push_section (w->w, section_name, subsection);
 }
 
-static inline void
+static void
 emit_pop_section (MonoDwarfWriter *w)
 {
 	mono_img_writer_emit_pop_section (w->w);
 }
 
-static inline void
+static void
 emit_label (MonoDwarfWriter *w, const char *name) 
 { 
 	mono_img_writer_emit_label (w->w, name); 
 }
 
-static inline void
+static void
 emit_bytes (MonoDwarfWriter *w, const guint8* buf, int size) 
 { 
 	mono_img_writer_emit_bytes (w->w, buf, size); 
 }
 
-static inline void
+static void
 emit_string (MonoDwarfWriter *w, const char *value) 
 { 
 	mono_img_writer_emit_string (w->w, value); 
 }
 
-static inline void
+static void
 emit_line (MonoDwarfWriter *w) 
 { 
 	mono_img_writer_emit_line (w->w); 
 }
 
-static inline void
+static void
 emit_alignment (MonoDwarfWriter *w, int size) 
 { 
 	mono_img_writer_emit_alignment (w->w, size); 
 }
 
-static inline void
+static void
 emit_pointer_unaligned (MonoDwarfWriter *w, const char *target) 
 { 
 	mono_img_writer_emit_pointer_unaligned (w->w, target); 
 }
 
-static inline void
+static void
 emit_pointer (MonoDwarfWriter *w, const char *target) 
 { 
 	mono_img_writer_emit_pointer (w->w, target); 
 }
 
-static inline void
+static void
 emit_int16 (MonoDwarfWriter *w, int value) 
 { 
 	mono_img_writer_emit_int16 (w->w, value); 
 }
 
-static inline void
+static void
 emit_int32 (MonoDwarfWriter *w, int value) 
 { 
 	mono_img_writer_emit_int32 (w->w, value); 
 }
 
-static inline void
+static void
+emit_symbol (MonoDwarfWriter *w, const char *symbol)
+{
+	mono_img_writer_emit_symbol (w->w, symbol);
+}
+
+static void
 emit_symbol_diff (MonoDwarfWriter *w, const char *end, const char* start, int offset) 
 { 
 	mono_img_writer_emit_symbol_diff (w->w, end, start, offset); 
 }
 
-static inline void
+static void
 emit_byte (MonoDwarfWriter *w, guint8 val) 
 { 
 	mono_img_writer_emit_byte (w->w, val); 
@@ -799,6 +805,7 @@ mono_dwarf_writer_emit_base_info (MonoDwarfWriter *w, const char *cu_name, GSLis
 	w->cie_program = base_unwind_program;
 
 	emit_section_change (w, ".debug_abbrev", 0);
+	emit_label (w, ".Ldebug_abbrev_start");
 	emit_dwarf_abbrev (w, ABBREV_COMPILE_UNIT, DW_TAG_compile_unit, TRUE, 
 					   compile_unit_attr, G_N_ELEMENTS (compile_unit_attr));
 	emit_dwarf_abbrev (w, ABBREV_SUBPROGRAM, DW_TAG_subprogram, TRUE, 
@@ -842,7 +849,11 @@ mono_dwarf_writer_emit_base_info (MonoDwarfWriter *w, const char *cu_name, GSLis
 	emit_symbol_diff (w, ".Ldebug_info_end", ".Ldebug_info_begin", 0); /* length */
 	emit_label (w, ".Ldebug_info_begin");
 	emit_int16 (w, 0x2); /* DWARF version 2 */
+#if !defined(TARGET_MACH)
+	emit_symbol (w, ".Ldebug_abbrev_start"); /* .debug_abbrev offset */
+#else
 	emit_int32 (w, 0); /* .debug_abbrev offset */
+#endif
 	emit_byte (w, sizeof (target_mgreg_t)); /* address size */
 
 	/* Compilation unit */
@@ -1318,7 +1329,7 @@ token_handler (MonoDisHelper *dh, MonoMethod *method, guint32 token)
 			klass = (MonoClass *)data;
 		} else {
 			klass = mono_class_get_checked (m_class_get_image (method->klass), token, error);
-			g_assert (mono_error_ok (error)); /* FIXME error handling */
+			g_assert (is_ok (error)); /* FIXME error handling */
 		}
 		res = g_strdup_printf ("<%s>", m_class_get_name (klass));
 		break;
@@ -1354,7 +1365,7 @@ token_handler (MonoDisHelper *dh, MonoMethod *method, guint32 token)
 			field = (MonoClassField *)data;
 		} else {
 			field = mono_field_from_token_checked (m_class_get_image (method->klass), token, &klass, NULL,  error);
-			g_assert (mono_error_ok (error)); /* FIXME error handling */
+			g_assert (is_ok (error)); /* FIXME error handling */
 		}
 		desc = mono_field_full_name (field);
 		res = g_strdup_printf ("<%s>", desc);
@@ -1397,13 +1408,7 @@ disasm_ins (MonoMethod *method, const guchar *ip, const guint8 **endip)
 
 		switch (ip [1]) {
 		case CEE_MONO_ICALL: {
-			MonoJitICallInfo *info;
-
-			token = read32 (ip + 2);
-			data = mono_method_get_wrapper_data (method, token);
-			info = mono_find_jit_icall_by_addr (data);
-			g_assert (info);
-
+			MonoJitICallInfo const * const info = mono_find_jit_icall_info ((MonoJitICallId)read32 (ip + 2));
 			dis = g_strdup_printf ("IL_%04x: mono_icall <%s>", (int)(ip - header->code), info->name);
 			ip += 6;
 			break;
@@ -1450,7 +1455,7 @@ il_offset_from_address (MonoMethod *method, MonoDebugMethodJitInfo *jit,
 
 static int max_special_addr_diff = 0;
 
-static inline void
+static void
 emit_advance_op (MonoDwarfWriter *w, int line_diff, int addr_diff)
 {
 	gint64 opcode = 0;
@@ -1525,7 +1530,7 @@ emit_line_number_info (MonoDwarfWriter *w, MonoMethod *method,
 	ln_array = g_new0 (MonoDebugLineNumberEntry, debug_info->num_line_numbers);
 	memcpy (ln_array, debug_info->line_numbers, debug_info->num_line_numbers * sizeof (MonoDebugLineNumberEntry));
 
-	qsort (ln_array, debug_info->num_line_numbers, sizeof (MonoDebugLineNumberEntry), (int (*)(const void *, const void *))compare_lne);
+	mono_qsort (ln_array, debug_info->num_line_numbers, sizeof (MonoDebugLineNumberEntry), (int (*)(const void *, const void *))compare_lne);
 
 	native_to_il_offset = g_new0 (int, code_size + 1);
 

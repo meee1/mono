@@ -32,7 +32,6 @@
 #include <mono/utils/mono-error-internals.h>
 #include <mono/utils/bsearch.h>
 #include <string.h>
-//#include <signal.h>
 #include <ctype.h>
 
 #ifndef DISABLE_VERIFIER
@@ -310,7 +309,7 @@ dword_align (const char *ptr)
 static void
 add_from_mono_error (VerifyContext *ctx, MonoError *error)
 {
-	if (mono_error_ok (error))
+	if (is_ok (error))
 		return;
 
 	ADD_ERROR (ctx, g_strdup (mono_error_get_message (error)));
@@ -449,7 +448,7 @@ static void
 verify_pe_optional_header (VerifyContext *ctx)
 {
 	guint32 offset = pe_header_offset (ctx);
-	guint32 header_size, file_alignment;
+	guint32 header_size, section_alignment, file_alignment;
 	const char *pe_header = ctx->data + offset;
 	const char *pe_optional_header = pe_header + 20;
 
@@ -485,12 +484,18 @@ verify_pe_optional_header (VerifyContext *ctx)
 	/* LAMESPEC MS plays around this value and ignore it during validation
 	if (read32 (pe_optional_header + 28) != 0x400000)
 	ADD_ERROR (ctx, g_strdup_printf ("Invalid Image base %x", read32 (pe_optional_header + 28)));*/
-	if (read32 (pe_optional_header + 32) != 0x2000)
-		ADD_ERROR (ctx, g_strdup_printf ("Invalid Section Aligmnent %x", read32 (pe_optional_header + 32)));
+	section_alignment = read32(pe_optional_header + 32);
 	file_alignment = read32 (pe_optional_header + 36);
-	if (file_alignment != 0x200 && file_alignment != 0x1000)
-		ADD_ERROR (ctx, g_strdup_printf ("Invalid file Aligmnent %x", file_alignment));
+	
+	// a power of 2 between 512 and 64 K, inclusive
+	if (file_alignment != 0x200 && file_alignment != 0x400 && file_alignment != 0x800 && file_alignment != 0x1000 &&
+	    file_alignment != 0x2000 && file_alignment != 0x4000 && file_alignment != 0x8000 && file_alignment != 0x10000)
+		ADD_ERROR (ctx, g_strdup_printf ("Invalid file Alignment %x", file_alignment));
 	/* All the junk in the middle is irrelevant, specially for mono. */
+
+	// must be greater than or equal to FileAlignment
+	if (section_alignment < file_alignment)
+		ADD_ERROR(ctx, g_strdup_printf("Invalid Section Alignment %x", read32(pe_optional_header + 32)));
 
 	if (header_size != 224 + ctx->pe64)
 		ADD_ERROR (ctx, g_strdup_printf ("Invalid optional header size %d", header_size));
@@ -623,6 +628,7 @@ verify_import_table (VerifyContext *ctx)
 	guint32 offset = it.translated_offset;
 	const char *ptr = ctx->data + offset;
 	guint32 name_rva, ilt_rva, iat_rva;
+	char mscoreeBuff[SIZE_OF_MSCOREE + 1];
 
 	g_assert (offset != INVALID_OFFSET);
 
@@ -651,8 +657,12 @@ verify_import_table (VerifyContext *ctx)
 		g_assert (name_rva != INVALID_OFFSET);
 		ptr = ctx->data + name_rva;
 	
-		if (memcmp ("mscoree.dll", ptr, SIZE_OF_MSCOREE))
-			ADD_ERROR (ctx, g_strdup_printf ("Invalid Import Table Name: '%s'", ptr));
+		if (memcmp("mscoree.dll", ptr, SIZE_OF_MSCOREE)) {
+			memcpy(mscoreeBuff, ptr, SIZE_OF_MSCOREE);
+			mscoreeBuff[SIZE_OF_MSCOREE] = 0;
+			if (g_strcasecmp ("mscoree.dll", mscoreeBuff))
+				ADD_ERROR(ctx, g_strdup_printf("Invalid Import Table Name: '%s'", ptr));
+		}
 	}
 	
 	if (ilt_rva) {
@@ -1799,6 +1809,7 @@ get_enum_by_encoded_name (VerifyContext *ctx, const char **_ptr, const char *end
 	const char *ptr = *_ptr;
 	char *enum_name;
 	guint32 str_len = 0;
+	MonoAssemblyLoadContext *alc = mono_domain_ambient_alc (mono_domain_get ());
 
 	if (!is_valid_ser_string_full (ctx, &str_start, &str_len, &ptr, end))
 		return NULL;
@@ -1811,7 +1822,7 @@ get_enum_by_encoded_name (VerifyContext *ctx, const char **_ptr, const char *end
 
 	enum_name = (char *)g_memdup (str_start, str_len + 1);
 	enum_name [str_len] = 0;
-	type = mono_reflection_type_from_name_checked (enum_name, ctx->image, error);
+	type = mono_reflection_type_from_name_checked (enum_name, alc, ctx->image, error);
 	if (!type || !is_ok (error)) {
 		ADD_ERROR_NO_RETURN (ctx, g_strdup_printf ("CustomAttribute: Invalid enum class %s, due to %s", enum_name, mono_error_get_message (error)));
 		g_free (enum_name);
@@ -1975,7 +1986,7 @@ is_valid_cattr_content (VerifyContext *ctx, MonoMethod *ctor, const char *ptr, g
 		FAIL (ctx, g_strdup ("CustomAttribute: Invalid constructor"));
 
 	sig = mono_method_signature_checked (ctor, error);
-	if (!mono_error_ok (error)) {
+	if (!is_ok (error)) {
 		ADD_ERROR_NO_RETURN (ctx, g_strdup_printf ("CustomAttribute: Invalid constructor signature %s", mono_error_get_message (error)));
 		mono_error_cleanup (error);
 		return FALSE;
@@ -3967,7 +3978,7 @@ mono_verifier_verify_pe_data (MonoImage *image, MonoError *error)
 
 	error_init (error);
 
-	if (!mono_verifier_is_enabled_for_image (image))
+	if (!mono_verifier_is_enabled_for_image (image) && !mono_verifier_is_enabled_for_pe_only())
 		return TRUE;
 
 	init_verify_context (&ctx, image);

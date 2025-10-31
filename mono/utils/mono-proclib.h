@@ -73,8 +73,11 @@ gint64    mono_process_get_data_with_error (gpointer pid, MonoProcessData data, 
 int       mono_process_current_pid (void);
 
 MONO_API int       mono_cpu_count    (void);
+MONO_API int       mono_cpu_limit    (void);
 gint64    mono_cpu_get_data (int cpu_id, MonoCpuData data, MonoProcessError *error);
 gint32    mono_cpu_usage (MonoCpuUsageState *prev);
+
+gboolean  mono_get_cpu_limit(int *limit);
 
 int       mono_atexit (void (*func)(void));
 
@@ -325,10 +328,10 @@ typedef struct {
 
 
 gboolean
-mono_pe_file_time_date_stamp (gunichar2 *filename, guint32 *out);
+mono_pe_file_time_date_stamp (const gunichar2 *filename, guint32 *out);
 
 gpointer
-mono_pe_file_map (gunichar2 *filename, gint32 *map_size, void **handle);
+mono_pe_file_map (const gunichar2 *filename, guint32 *map_size, void **handle);
 
 void
 mono_pe_file_unmap (gpointer file_map, void *handle);

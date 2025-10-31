@@ -49,7 +49,7 @@ mono_runtime_cleanup       (MonoDomain *domain);
 MONO_API void
 mono_install_runtime_cleanup (MonoDomainFunc func);
 
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_runtime_quit (void);
 
 MONO_API void
@@ -82,10 +82,10 @@ mono_domain_get_id         (MonoDomain *domain);
 MONO_API const char *
 mono_domain_get_friendly_name (MonoDomain *domain);
 
-MONO_API mono_bool
+MONO_API MONO_RT_EXTERNAL_ONLY mono_bool
 mono_domain_set            (MonoDomain *domain, mono_bool force);
 
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_domain_set_internal   (MonoDomain *domain);
 
 MONO_API MONO_RT_EXTERNAL_ONLY void
@@ -103,8 +103,11 @@ mono_domain_from_appdomain (MonoAppDomain *appdomain);
 MONO_API void
 mono_domain_foreach        (MonoDomainFunc func, void* user_data);
 
-MONO_API MonoAssembly *
+MONO_API MONO_RT_EXTERNAL_ONLY MonoAssembly *
 mono_domain_assembly_open  (MonoDomain *domain, const char *name);
+
+MONO_API void
+mono_domain_ensure_entry_assembly (MonoDomain *domain, MonoAssembly *assembly);
 
 MONO_API mono_bool
 mono_domain_finalize       (MonoDomain *domain, uint32_t timeout);

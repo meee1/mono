@@ -305,6 +305,14 @@ g_hash_table_size (GHashTable *hash)
 	return hash->in_use;
 }
 
+gboolean
+g_hash_table_contains (GHashTable *hash, gconstpointer key)
+{
+	g_return_val_if_fail (key != NULL, FALSE);
+
+	return g_hash_table_lookup_extended (hash, key, NULL, NULL);
+}
+
 gpointer
 g_hash_table_lookup (GHashTable *hash, gconstpointer key)
 {
@@ -658,14 +666,14 @@ g_int_hash (gconstpointer v1)
 gboolean
 g_str_equal (gconstpointer v1, gconstpointer v2)
 {
-	return strcmp ((const char*)v1, (const char*)v2) == 0;
+	return v1 == v2 || strcmp ((const char*)v1, (const char*)v2) == 0;
 }
 
 guint
 g_str_hash (gconstpointer v1)
 {
 	guint hash = 0;
-	char *p = (char *) v1;
+	unsigned char *p = (unsigned char *) v1;
 
 	while (*p++)
 		hash = (hash << 5) - (hash + *p);

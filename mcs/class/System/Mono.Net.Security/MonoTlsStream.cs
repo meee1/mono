@@ -53,7 +53,7 @@ namespace Mono.Net.Security
 	class MonoTlsStream : IDisposable
 	{
 #if SECURITY_DEP
-		readonly MonoTlsProvider provider;
+		readonly MobileTlsProvider provider;
 		readonly NetworkStream networkStream;		
 		readonly HttpWebRequest request;
 
@@ -63,9 +63,10 @@ namespace Mono.Net.Security
 			get { return request; }
 		}
 
-		IMonoSslStream sslStream;
+		SslStream sslStream;
+		readonly object sslStreamLock = new object ();
 
-		internal IMonoSslStream SslStream {
+		internal SslStream SslStream {
 			get { return sslStream; }
 		}
 #else
@@ -104,7 +105,7 @@ namespace Mono.Net.Security
 #if SECURITY_DEP
 			var socket = networkStream.InternalSocket;
 			WebConnection.Debug ($"MONO TLS STREAM CREATE STREAM: {socket.ID}");
-			sslStream = provider.CreateSslStream (networkStream, false, settings);
+			sslStream = new SslStream (networkStream, false, provider, settings);
 
 			try {
 				var host = request.Host;
@@ -120,25 +121,20 @@ namespace Mono.Net.Security
 					ServicePointManager.CheckCertificateRevocationList).ConfigureAwait (false);
 
 				status = WebExceptionStatus.Success;
+
+				request.ServicePoint.UpdateClientCertificate (sslStream.LocalCertificate);
 			} catch (Exception ex) {
 				WebConnection.Debug ($"MONO TLS STREAM ERROR: {socket.ID} {socket.CleanedUp} {ex.Message}");
 				if (socket.CleanedUp)
 					status = WebExceptionStatus.RequestCanceled;
+				else if (CertificateValidationFailed)
+					status = WebExceptionStatus.TrustFailure;
 				else
 					status = WebExceptionStatus.SecureChannelFailure;
-				throw;
-			} finally {
-				WebConnection.Debug ($"MONO TLS STREAM CREATE STREAM DONE: {socket.ID} {socket.CleanedUp}");
-				if (CertificateValidationFailed)
-					status = WebExceptionStatus.TrustFailure;
 
-				if (status == WebExceptionStatus.Success)
-					request.ServicePoint.UpdateClientCertificate (sslStream.InternalLocalCertificate);
-				else {
-					request.ServicePoint.UpdateClientCertificate (null);
-					sslStream.Dispose ();
-					sslStream = null;
-				}
+				request.ServicePoint.UpdateClientCertificate (null);
+				CloseSslStream ();				
+				throw;
 			}
 
 			try {
@@ -146,11 +142,11 @@ namespace Mono.Net.Security
 					await sslStream.WriteAsync (tunnel.Data, 0, tunnel.Data.Length, cancellationToken).ConfigureAwait (false);
 			} catch {
 				status = WebExceptionStatus.SendFailure;
-				sslStream = null;
+				CloseSslStream ();
 				throw;
 			}
 
-			return sslStream.AuthenticatedStream;
+			return sslStream;
 #else
 			throw new PlatformNotSupportedException (EXCEPTION_MESSAGE);
 #endif
@@ -158,9 +154,15 @@ namespace Mono.Net.Security
 
 		public void Dispose ()
 		{
-			if (sslStream != null) {
-				sslStream.Dispose ();
-				sslStream = null;
+			CloseSslStream ();
+		}
+
+		void CloseSslStream () {
+			lock (sslStreamLock) {
+				if (sslStream != null) {
+					sslStream.Dispose ();
+					sslStream = null;
+				}
 			}
 		}
 	}

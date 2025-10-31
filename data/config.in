@@ -6,7 +6,7 @@
 	<dllmap dll="libintl" name="bind_textdomain_codeset" target="@LIBC@" os="solaris"/>
 	<dllmap dll="libintl" target="@INTL@" os="!windows"/>
 	<dllmap dll="i:libxslt.dll" target="libxslt@libsuffix@" os="!windows"/>
-	<dllmap dll="i:odbc32.dll" target="libodbc@libsuffix@" os="!windows"/>
+	<dllmap dll="i:odbc32.dll" target="@ODBC@" os="!windows"/>
 	<dllmap dll="i:odbc32.dll" target="libiodbc.dylib" os="osx"/>
 	<dllmap dll="oci" target="libclntsh@libsuffix@" os="!windows"/>
 	<dllmap dll="db2cli" target="libdb2_36@libsuffix@" os="!windows"/>
@@ -30,7 +30,7 @@
 	<dllmap dll="libXinerama" target="@XINERAMA@" os="!windows" />
 	<dllmap dll="libasound" target="libasound.so.2" os="!windows" />
 	<dllmap dll="libcairo-2.dll" target="libcairo.so.2" os="!windows"/>
-	<dllmap dll="libcairo-2.dll" target="libcairo.2.dylib" os="osx"/>
+	<dllmap dll="libcairo-2.dll" target="$mono_libdir/libcairo.2.dylib" os="osx" />
 	<dllmap dll="libcups" target="libcups.so.2" os="!windows"/>
 	<dllmap dll="libcups" target="libcups.dylib" os="osx"/>
 	<dllmap dll="i:kernel32.dll">

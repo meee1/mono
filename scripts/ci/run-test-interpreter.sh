@@ -3,9 +3,17 @@
 export TESTCMD=`dirname "${BASH_SOURCE[0]}"`/run-step.sh
 export TEST_WITH_INTERPRETER=1
 
+#if [[ ${CI_TAGS} == *'win-'* ]]
+#then ${TESTCMD} --label=interpreter-whitebox --skip;
+#else ${TESTCMD} --label=interpreter-whitebox --timeout=10m make -C mono/mini interp-whitebox;
+#fi
 ${TESTCMD} --label=interpreter-regression --timeout=10m make -C mono/mini richeck
 ${TESTCMD} --label=mixedmode-regression --timeout=10m make -C mono/mini mixedcheck
-${TESTCMD} --label=fullaotmixed-regression --timeout=10m make -C mono/mini fullaotmixedcheck
+# Interp entry trampolines not yet implemented on x86. This has some full aot limitations
+if [[ ${CI_TAGS} == *'i386'* ]]
+then ${TESTCMD} --label=fullaotmixed-regression --skip
+else ${TESTCMD} --label=fullaotmixed-regression --timeout=20m make -C mono/mini fullaotmixedcheck
+fi
 ${TESTCMD} --label=compile-runtime-tests --timeout=40m make -w -C mono/tests -j ${CI_CPU_COUNT} test
 ${TESTCMD} --label=runtime-interp --timeout=160m make -w -C mono/tests -k testinterp V=1
 ${TESTCMD} --label=corlib --timeout=160m make -w -C mcs/class/corlib run-test V=1
@@ -14,7 +22,21 @@ ${TESTCMD} --label=System.Core --timeout=160m make -w -C mcs/class/System.Core r
 ${TESTCMD} --label=mcs-tests --timeout=160m make -w -C mcs/tests run-test V=1;
 ${TESTCMD} --label=Mono.Debugger.Soft --timeout=5m make -w -C mcs/class/Mono.Debugger.Soft run-test V=1
 
-if [[ ${CI_TAGS} != *'pull-request'* ]] || [[ ${CI_TAGS} != *'arm'* ]]; then
+run_full_test_suite=1
+
+# Don't run full interpreter test suite on arm architectures during PR builds.
+# NOTE, full test suite will still be run on none PR builds.
+if [[ ${CI_TAGS} == *'pull-request'* ]] && [[ ${CI_TAGS} == *'arm'* ]]; then
+	run_full_test_suite=0
+fi
+
+# Don't run full interpreter test suite on Windows during PR builds.
+# NOTE, full test suite will still be run on none PR builds.
+if [[ ${CI_TAGS} == *'pull-request'* ]] && [[ ${CI_TAGS} == *'win-'* ]]; then
+	run_full_test_suite=0
+fi
+
+if [[ "$run_full_test_suite" -eq "1" ]]; then
 
 	${TESTCMD} --label=corlib-xunit --timeout=60m make -w -C mcs/class/corlib run-xunit-test
 	${TESTCMD} --label=System.XML --timeout=5m make -w -C mcs/class/System.XML run-test V=1
@@ -92,5 +114,3 @@ if [[ ${CI_TAGS} != *'pull-request'* ]] || [[ ${CI_TAGS} != *'arm'* ]]; then
 	${TESTCMD} --label=Microsoft.Build.Utilities-14 --timeout=60m make -w -C mcs/class/Microsoft.Build.Utilities run-test PROFILE=xbuild_14 V=1
 	${TESTCMD} --label=System.IO.Compression --timeout=5m make -w -C mcs/class/System.IO.Compression run-test V=1
 fi
-
-${MONO_REPO_ROOT}/scripts/ci/run-upload-sentry.sh

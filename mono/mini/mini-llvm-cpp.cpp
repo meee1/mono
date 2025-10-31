@@ -37,24 +37,40 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/CallSite.h>
+#include <llvm/IR/MDBuilder.h>
 
 #include "mini-llvm-cpp.h"
 
 using namespace llvm;
 
-#if LLVM_API_VERSION > 100
-// These are c++11 scoped enums in recent llvm versions
 #define Acquire AtomicOrdering::Acquire
 #define Release AtomicOrdering::Release
 #define SequentiallyConsistent AtomicOrdering::SequentiallyConsistent
-#endif
 
 void
 mono_llvm_dump_value (LLVMValueRef value)
 {
 	/* Same as LLVMDumpValue (), but print to stdout */
 	fflush (stdout);
-	outs () << (*unwrap<Value> (value));
+	outs () << (*unwrap<Value> (value)) << "\n";
+	outs ().flush ();
+}
+
+void
+mono_llvm_dump_module (LLVMModuleRef module)
+{
+	/* Same as LLVMDumpModule (), but print to stdout */
+	fflush (stdout);
+	outs () << (*unwrap (module)) << "\n";
+	outs ().flush ();
+}
+
+void
+mono_llvm_dump_type (LLVMTypeRef type)
+{
+	fflush (stdout);
+	outs () << (*unwrap (type)) << "\n";
+	outs ().flush ();
 }
 
 /* Missing overload for building an alloca with an alignment */
@@ -63,11 +79,7 @@ mono_llvm_build_alloca (LLVMBuilderRef builder, LLVMTypeRef Ty,
 						LLVMValueRef ArraySize,
 						int alignment, const char *Name)
 {
-#if LLVM_API_VERSION >= 500
 	return wrap (unwrap (builder)->Insert (new AllocaInst (unwrap (Ty), 0, unwrap (ArraySize), alignment), Name));
-#else
-	return wrap (unwrap (builder)->Insert (new AllocaInst (unwrap (Ty), unwrap (ArraySize), alignment), Name));
-#endif
 }
 
 LLVMValueRef 
@@ -172,6 +184,12 @@ mono_llvm_build_atomic_rmw (LLVMBuilderRef builder, AtomicRMWOp op, LLVMValueRef
 	case LLVM_ATOMICRMW_OP_ADD:
 		aop = AtomicRMWInst::Add;
 		break;
+	case LLVM_ATOMICRMW_OP_AND:
+		aop = AtomicRMWInst::And;
+		break;
+	case LLVM_ATOMICRMW_OP_OR:
+		aop = AtomicRMWInst::Or;
+		break;
 	default:
 		g_assert_not_reached ();
 		break;
@@ -208,6 +226,41 @@ mono_llvm_build_fence (LLVMBuilderRef builder, BarrierKind kind)
 	return wrap (ins);
 }
 
+LLVMValueRef
+mono_llvm_build_weighted_branch (LLVMBuilderRef builder, LLVMValueRef cond, LLVMBasicBlockRef t, LLVMBasicBlockRef f, uint32_t t_weight, uint32_t f_weight)
+{
+	auto b = unwrap (builder);
+	auto &ctx = b->getContext ();
+	MDBuilder mdb{ctx};
+	auto weights = mdb.createBranchWeights (t_weight, f_weight);
+	auto ins = b->CreateCondBr (unwrap (cond), unwrap (t), unwrap (f), weights);
+	return wrap (ins);
+}
+
+LLVMValueRef
+mono_llvm_build_exact_ashr (LLVMBuilderRef builder, LLVMValueRef lhs, LLVMValueRef rhs) {
+	auto b = unwrap (builder);
+	auto ins = b->CreateAShr (unwrap (lhs), unwrap (rhs), "", true);
+	return wrap (ins);
+}
+
+void
+mono_llvm_add_string_metadata (LLVMValueRef insref, const char* label, const char* text)
+{
+	auto ins = unwrap<Instruction> (insref);
+	auto &ctx = ins->getContext ();
+	ins->setMetadata (label, MDNode::get (ctx, MDString::get (ctx, text)));
+}
+
+void
+mono_llvm_set_implicit_branch (LLVMBuilderRef builder, LLVMValueRef branch)
+{
+	auto b = unwrap (builder);
+	auto &ctx = b->getContext ();
+	auto ins = unwrap<Instruction> (branch);
+	ins->setMetadata (LLVMContext::MD_make_implicit, MDNode::get (ctx, {}));
+}
+
 void
 mono_llvm_set_must_tailcall (LLVMValueRef call_ins)
 {
@@ -235,27 +288,145 @@ mono_llvm_set_is_constant (LLVMValueRef global_var)
 	unwrap<GlobalVariable>(global_var)->setConstant (true);
 }
 
+// Note that in future versions of LLVM, CallInst and InvokeInst
+// share a CallBase parent class that would make the below methods
+// look much better
+
 void
-mono_llvm_set_preserveall_cc (LLVMValueRef func)
+mono_llvm_set_call_nonnull_arg (LLVMValueRef wrapped_calli, int argNo)
 {
-	unwrap<Function>(func)->setCallingConv (CallingConv::PreserveAll);
+	Instruction *calli = unwrap<Instruction> (wrapped_calli);
+
+	if (isa<CallInst> (calli))
+		dyn_cast<CallInst>(calli)->addParamAttr (argNo, Attribute::NonNull);
+	else
+		dyn_cast<InvokeInst>(calli)->addParamAttr (argNo, Attribute::NonNull);
 }
 
 void
-mono_llvm_set_call_preserveall_cc (LLVMValueRef func)
+mono_llvm_set_call_nonnull_ret (LLVMValueRef wrapped_calli)
 {
-	unwrap<CallInst>(func)->setCallingConv (CallingConv::PreserveAll);
+	Instruction *calli = unwrap<Instruction> (wrapped_calli);
+
+	if (isa<CallInst> (calli))
+		dyn_cast<CallInst>(calli)->addAttribute (AttributeList::ReturnIndex, Attribute::NonNull);
+	else
+		dyn_cast<InvokeInst>(calli)->addAttribute (AttributeList::ReturnIndex, Attribute::NonNull);
+}
+
+void
+mono_llvm_set_func_nonnull_arg (LLVMValueRef func, int argNo)
+{
+	unwrap<Function>(func)->addParamAttr (argNo, Attribute::NonNull);
+}
+
+gboolean
+mono_llvm_can_be_gep (LLVMValueRef base, LLVMValueRef* gep_base, LLVMValueRef* gep_offset)
+{
+	return FALSE;
+}
+
+gboolean
+mono_llvm_is_nonnull (LLVMValueRef wrapped)
+{
+	// Argument to function
+	Value *val = unwrap (wrapped);
+
+	while (val) {
+		if (Argument *arg = dyn_cast<Argument> (val)) {
+			return arg->hasNonNullAttr ();
+		} else if (CallInst *calli = dyn_cast<CallInst> (val)) {
+			return calli->hasRetAttr (Attribute::NonNull);
+		} else if (InvokeInst *calli = dyn_cast<InvokeInst> (val)) {
+			return calli->hasRetAttr (Attribute::NonNull);
+		} else if (LoadInst *loadi = dyn_cast<LoadInst> (val)) {
+			return loadi->getMetadata("nonnull") != nullptr; // nonnull <index>
+		} else if (Instruction *inst = dyn_cast<Instruction> (val)) {
+			// If not a load or a function argument, the only case for us to
+			// consider is that it's a bitcast. If so, recurse on what was casted.
+			if (inst->getOpcode () == LLVMBitCast) {
+				val = inst->getOperand (0);
+				continue;
+			}
+
+			return FALSE;
+		} else {
+			return FALSE;
+		}
+	}
+	return FALSE;
+}
+
+GSList *
+mono_llvm_calls_using (LLVMValueRef wrapped_local)
+{
+	GSList *usages = NULL;
+	Value *local = unwrap (wrapped_local);
+
+	for (User *user : local->users ()) {
+		if (isa<CallInst> (user) || isa<InvokeInst> (user)) {
+			usages = g_slist_prepend (usages, wrap (user));
+		}
+	}
+
+	return usages;
+}
+
+LLVMValueRef *
+mono_llvm_call_args (LLVMValueRef wrapped_calli)
+{
+	Value *calli = unwrap(wrapped_calli);
+	CallInst *call = dyn_cast <CallInst> (calli);
+	InvokeInst *invoke = dyn_cast <InvokeInst> (calli);
+	g_assert (call || invoke);
+
+	unsigned int numOperands;
+
+	if (call)
+		numOperands = call->getNumArgOperands ();
+	else
+		numOperands = invoke->getNumArgOperands ();
+
+	LLVMValueRef *ret = g_malloc (sizeof (LLVMValueRef) * numOperands);
+
+	for (unsigned int i = 0; i < numOperands; i++) {
+		if (call)
+			ret [i] = wrap (call->getArgOperand (i));
+		else
+			ret [i] = wrap (invoke->getArgOperand (i));
+	}
+
+	return ret;
 }
 
 void
 mono_llvm_set_call_notailcall (LLVMValueRef func)
 {
-#if LLVM_API_VERSION > 100
 	unwrap<CallInst>(func)->setTailCallKind (CallInst::TailCallKind::TCK_NoTail);
-#endif
 }
 
-#if LLVM_API_VERSION > 500
+void
+mono_llvm_set_call_noalias_ret (LLVMValueRef wrapped_calli)
+{
+	Instruction *calli = unwrap<Instruction> (wrapped_calli);
+
+	if (isa<CallInst> (calli))
+		dyn_cast<CallInst>(calli)->addAttribute (AttributeList::ReturnIndex, Attribute::NoAlias);
+	else
+		dyn_cast<InvokeInst>(calli)->addAttribute (AttributeList::ReturnIndex, Attribute::NoAlias);
+}
+
+void
+mono_llvm_set_alignment_ret (LLVMValueRef call, int alignment)
+{
+	Instruction *ins = unwrap<Instruction> (call);
+	auto &ctx = ins->getContext ();
+	if (isa<CallInst> (ins))
+		dyn_cast<CallInst>(ins)->addAttribute (AttributeList::ReturnIndex, Attribute::getWithAlignment(ctx, alignment));
+	else
+		dyn_cast<InvokeInst>(ins)->addAttribute (AttributeList::ReturnIndex, Attribute::getWithAlignment(ctx, alignment));
+}
+
 static Attribute::AttrKind
 convert_attr (AttrKind kind)
 {
@@ -266,6 +437,8 @@ convert_attr (AttrKind kind)
 		return Attribute::NoInline;
 	case LLVM_ATTR_OPTIMIZE_FOR_SIZE:
 		return Attribute::OptimizeForSize;
+	case LLVM_ATTR_OPTIMIZE_NONE:
+		return Attribute::OptimizeNone;
 	case LLVM_ATTR_IN_REG:
 		return Attribute::InReg;
 	case LLVM_ATTR_STRUCT_RET:
@@ -281,81 +454,34 @@ convert_attr (AttrKind kind)
 		return Attribute::NoUnwind;
 	}
 }
-#else
-static LLVMAttribute
-convert_attr (AttrKind kind)
-{
-	switch (kind) {
-	case LLVM_ATTR_NO_UNWIND:
-		return LLVMNoUnwindAttribute;
-	case LLVM_ATTR_NO_INLINE:
-		return LLVMNoInlineAttribute;
-	case LLVM_ATTR_OPTIMIZE_FOR_SIZE:
-		return LLVMOptimizeForSizeAttribute;
-	case LLVM_ATTR_IN_REG:
-		return LLVMInRegAttribute;
-	case LLVM_ATTR_STRUCT_RET:
-		return LLVMStructRetAttribute;
-	case LLVM_ATTR_NO_ALIAS:
-		return LLVMNoAliasAttribute;
-	case LLVM_ATTR_BY_VAL:
-		return LLVMByValAttribute;
-	case LLVM_ATTR_UW_TABLE:
-		return LLVMUWTable;
-	default:
-		assert (0);
-		return LLVMNoUnwindAttribute;
-	}
-}
-#endif
 
 void
 mono_llvm_add_func_attr (LLVMValueRef func, AttrKind kind)
 {
-#if LLVM_API_VERSION > 391
 	unwrap<Function> (func)->addAttribute (AttributeList::FunctionIndex, convert_attr (kind));
-#else
-	Function *Func = unwrap<Function>(func);
-	const AttributeSet PAL = Func->getAttributes();
-	AttrBuilder B(convert_attr (kind));
-	const AttributeSet PALnew =
-		PAL.addAttributes(Func->getContext(), AttributeSet::FunctionIndex,
-						  AttributeSet::get(Func->getContext(),
-											AttributeSet::FunctionIndex, B));
-	Func->setAttributes(PALnew);
-#endif
+}
+
+void
+mono_llvm_add_func_attr_nv (LLVMValueRef func, const char *attr_name, const char *attr_value)
+{
+	AttrBuilder NewAttrs;
+	NewAttrs.addAttribute (attr_name, attr_value);
+	unwrap<Function> (func)->addAttributes (AttributeList::FunctionIndex, NewAttrs);
 }
 
 void
 mono_llvm_add_param_attr (LLVMValueRef param, AttrKind kind)
 {
-#if LLVM_API_VERSION > 391
 	Function *func = unwrap<Argument> (param)->getParent ();
 	int n = unwrap<Argument> (param)->getArgNo ();
 	func->addParamAttr (n, convert_attr (kind));
-#else
-	Argument *A = unwrap<Argument>(param);
-	AttrBuilder B(convert_attr (kind));
-	A->addAttr(AttributeSet::get(A->getContext(), A->getArgNo() + 1,  B));
-#endif
 }
 
 void
 mono_llvm_add_instr_attr (LLVMValueRef val, int index, AttrKind kind)
 {
-#if LLVM_API_VERSION > 391
 	CallSite (unwrap<Instruction> (val)).addAttribute (index, convert_attr (kind));
-#else
-  CallSite Call = CallSite(unwrap<Instruction>(val));
-  AttrBuilder B(convert_attr (kind));
-  Call.setAttributes(
-    Call.getAttributes().addAttributes(Call->getContext(), index,
-                                       AttributeSet::get(Call->getContext(),
-                                                         index, B)));
-#endif
 }
-
-#if LLVM_API_VERSION > 100
 
 void*
 mono_llvm_create_di_builder (LLVMModuleRef module)
@@ -368,14 +494,10 @@ mono_llvm_di_create_compile_unit (void *di_builder, const char *cu_name, const c
 {
 	DIBuilder *builder = (DIBuilder*)di_builder;
 
-#if LLVM_API_VERSION >= 500
 	DIFile *di_file;
 
 	di_file = builder->createFile (cu_name, dir);
 	return builder->createCompileUnit (dwarf::DW_LANG_C99, di_file, producer, true, "", 0);
-#else
-	return builder->createCompileUnit (dwarf::DW_LANG_C99, cu_name, dir, producer, true, "", 0);
-#endif
 }
 
 void*
@@ -389,7 +511,13 @@ mono_llvm_di_create_function (void *di_builder, void *cu, LLVMValueRef func, con
 	// FIXME: Share DIFile
 	di_file = builder->createFile (file, dir);
 	type = builder->createSubroutineType (builder->getOrCreateTypeArray (ArrayRef<Metadata*> ()));
+#if LLVM_API_VERSION >= 900
+	di_func = builder->createFunction (
+		di_file, name, mangled_name, di_file, line, type, 0,
+		DINode::FlagZero, DISubprogram::SPFlagDefinition | DISubprogram::SPFlagLocalToUnit);
+#else
 	di_func = builder->createFunction (di_file, name, mangled_name, di_file, line, type, true, true, 0);
+#endif
 
 	unwrap<Function>(func)->setMetadata ("dbg", di_func);
 
@@ -411,6 +539,14 @@ mono_llvm_di_create_location (void *di_builder, void *scope, int row, int column
 }
 
 void
+mono_llvm_set_fast_math (LLVMBuilderRef builder)
+{
+	FastMathFlags flags;
+	flags.setFast ();
+	unwrap(builder)->setFastMathFlags (flags);
+}
+
+void
 mono_llvm_di_set_location (LLVMBuilderRef builder, void *loc_md)
 {
 	unwrap(builder)->SetCurrentDebugLocation ((DILocation*)loc_md);
@@ -424,13 +560,16 @@ mono_llvm_di_builder_finalize (void *di_builder)
 	builder->finalize ();
 }
 
-#endif /* #if LLVM_API_VERSION > 100 */
-
 LLVMValueRef
 mono_llvm_get_or_insert_gc_safepoint_poll (LLVMModuleRef module)
 {
-	llvm::Constant *SafepointPollConstant;
+#if LLVM_API_VERSION >= 900
+
+	llvm::FunctionCallee callee = unwrap(module)->getOrInsertFunction("gc.safepoint_poll", FunctionType::get(unwrap(LLVMVoidType()), false));
+	return wrap (dyn_cast<llvm::Function> (callee.getCallee ()));
+#else
 	llvm::Function *SafepointPoll;
+	llvm::Constant *SafepointPollConstant;
 
 	SafepointPollConstant = unwrap(module)->getOrInsertFunction("gc.safepoint_poll", FunctionType::get(unwrap(LLVMVoidType()), false));
 	g_assert (SafepointPollConstant);
@@ -440,4 +579,106 @@ mono_llvm_get_or_insert_gc_safepoint_poll (LLVMModuleRef module)
 	g_assert (SafepointPoll->empty());
 
 	return wrap(SafepointPoll);
+#endif
+}
+
+gboolean
+mono_llvm_remove_gc_safepoint_poll (LLVMModuleRef module)
+{
+	llvm::Function *func = unwrap (module)->getFunction ("gc.safepoint_poll");
+	if (func == nullptr)
+		return FALSE;
+	func->eraseFromParent ();
+	return TRUE;
+}
+
+int
+mono_llvm_check_cpu_features (const CpuFeatureAliasFlag *features, int length)
+{
+	int flags = 0;
+	llvm::StringMap<bool> HostFeatures;
+	if (llvm::sys::getHostCPUFeatures (HostFeatures)) {
+		for (int i=0; i<length; i++) {
+			CpuFeatureAliasFlag feature = features [i];
+			if (HostFeatures [feature.alias])
+				flags |= feature.flag;
+		}
+		/*
+		for (auto &F : HostFeatures)
+			if (F.second)
+				outs () << "X: " << F.first () << "\n";
+		*/
+	}
+	return flags;
+}
+
+/* Map our intrinsic ID to the LLVM intrinsic id */
+static Intrinsic::ID
+get_intrins_id (IntrinsicId id)
+{
+	Intrinsic::ID intrins_id = Intrinsic::ID::not_intrinsic;
+	switch (id) {
+#define INTRINS(id, llvm_id) case INTRINS_ ## id: intrins_id = Intrinsic::ID::llvm_id; break;
+#define INTRINS_OVR(id, llvm_id) case INTRINS_ ## id: intrins_id = Intrinsic::ID::llvm_id; break;
+#include "llvm-intrinsics.h"
+	default:
+		break;
+	}
+	return intrins_id;
+}
+
+static bool
+is_overloaded_intrins (IntrinsicId id)
+{
+	switch (id) {
+#define INTRINS(id, llvm_id)
+#define INTRINS_OVR(id, llvm_id) case INTRINS_ ## id: return true;
+#include "llvm-intrinsics.h"
+	default:
+		break;
+	}
+	return false;
+}
+
+/*
+ * mono_llvm_register_intrinsic:
+ *
+ *   Register an LLVM intrinsic identified by ID.
+ */
+LLVMValueRef
+mono_llvm_register_intrinsic (LLVMModuleRef module, IntrinsicId id)
+{
+	if (is_overloaded_intrins (id))
+		return NULL;
+
+	auto intrins_id = get_intrins_id (id);
+	if (intrins_id != Intrinsic::ID::not_intrinsic) {
+		Function *f = Intrinsic::getDeclaration (unwrap (module), intrins_id);
+		if (!f) {
+			outs () << id << "\n";
+			g_assert_not_reached ();
+		}
+		return wrap (f);
+	} else {
+		return NULL;
+	}
+}
+
+/*
+ * mono_llvm_register_intrinsic:
+ *
+ *   Register an overloaded LLVM intrinsic identified by ID using the supplied types.
+ */
+LLVMValueRef
+mono_llvm_register_overloaded_intrinsic (LLVMModuleRef module, IntrinsicId id, LLVMTypeRef *types, int ntypes)
+{
+	auto intrins_id = get_intrins_id (id);
+
+	const int max_types = 5;
+	g_assert (ntypes <= max_types);
+    Type *arr [max_types];
+    for (int i = 0; i < ntypes; ++i)
+		arr [i] = unwrap (types [i]);
+    auto f = Intrinsic::getDeclaration (unwrap (module), intrins_id, { arr, (size_t)ntypes });
+    return wrap (f);
 }

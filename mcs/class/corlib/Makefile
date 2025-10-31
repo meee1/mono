@@ -6,7 +6,7 @@ export __SECURITY_BOOTSTRAP_DB=$(topdir)/class/corlib
 LIBRARY = corlib.dll
 LIBRARY_NAME = mscorlib.dll
 
-LIB_MCS_FLAGS = $(REFERENCE_SOURCES_FLAGS) $(RESOURCE_FILES:%=-resource:%)
+LIB_MCS_FLAGS = $(REFERENCE_SOURCES_FLAGS) $(RESOURCE_FILES:%=-resource:%) $(UNICODECHARINFO:%=-resource:%)
 
 USE_XTEST_REMOTE_EXECUTOR = YES
 LIBRARY_WARN_AS_ERROR = yes
@@ -37,11 +37,13 @@ RESX_RESOURCE_STRING = \
 	../../../external/corefx/src/System.Collections.NonGeneric/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.ComponentModel.TypeConverter/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.Buffers/src/Resources/Strings.resx \
+	../../../external/corefx/src/System.IO.FileSystem/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.IO.FileSystem.Watcher/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.IO.Ports/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.Memory/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.Net.HttpListener/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.Net.Requests/src/Resources/Strings.resx	\
+	../../../external/corefx/src/System.Net.Sockets/src/Resources/Strings.resx	\
 	../../../external/corefx/src/System.Net.Http/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.Numerics.Vectors/src/Resources/Strings.resx \
 	../../../external/corefx/src/System.Reflection.TypeExtensions/src/Resources/Strings.resx \
@@ -72,10 +74,6 @@ RESOURCE_STRINGS_FILES = --mscorlib-debug
 RESOURCE_STRINGS = ../referencesource/mscorlib/mscorlib.txt
 MODULE_DEPS = $(IL_REPLACE) LinkerDescriptor/mscorlib.xml
 
-
-ifdef WASM
-MANAGED_COLLATOR_RESOURCES_FILES =
-else
 MANAGED_COLLATOR_RESOURCES_FILES = \
 	resources/collation.core.bin \
 	resources/collation.tailoring.bin \
@@ -84,18 +82,20 @@ MANAGED_COLLATOR_RESOURCES_FILES = \
 	resources/collation.cjkJA.bin \
 	resources/collation.cjkKO.bin \
 	resources/collation.cjkKOlv2.bin
+
+ifdef MCS_MODE
+	UNICODECHARINFO = resources/charinfo.nlp
+else
+	UNICODECHARINFO =
 endif
 
 RESOURCE_FILES = \
-	resources/charinfo.nlp \
 	$(MANAGED_COLLATOR_RESOURCES_FILES) \
 	LinkerDescriptor/mscorlib.xml
 
 REFERENCE_SOURCES_FLAGS = -d:FEATURE_PAL,GENERICS_WORK,FEATURE_LIST_PREDICATES,FEATURE_SERIALIZATION,FEATURE_ENCODINGNLS,FEATURE_ASCII,FEATURE_LATIN1,FEATURE_UTF7,FEATURE_UTF32,MONO_HYBRID_ENCODING_SUPPORT,FEATURE_ASYNC_IO,NEW_EXPERIMENTAL_ASYNC_IO,FEATURE_UTF32,FEATURE_EXCEPTIONDISPATCHINFO,FEATURE_CORRUPTING_EXCEPTIONS,FEATURE_EXCEPTION_NOTIFICATIONS,FEATURE_STRONGNAME_MIGRATION,FEATURE_USE_LCID,FEATURE_FUSION,FEATURE_CRYPTO,FEATURE_X509_SECURESTRINGS,FEATURE_SYNCHRONIZATIONCONTEXT,FEATURE_SYNCHRONIZATIONCONTEXT_WAIT,FEATURE_DEFAULT_INTERFACES,HAS_CORLIB_CONTRACTS
 
-ifdef NO_SRE
-PROFILE_TEST_HARNESS_EXCLUDES := $(PROFILE_TEST_HARNESS_EXCLUDES)SRE,
-else
+ifndef NO_SRE
 LIB_MCS_FLAGS += -d:MONO_FEATURE_SRE
 endif
 
@@ -104,7 +104,11 @@ REFERENCE_SOURCES_FLAGS += -d:FEATURE_MACL
 endif
 
 ifndef AOT_FRIENDLY_PROFILE
+ifndef DISABLE_REMOTING
 REFERENCE_SOURCES_FLAGS += -d:FEATURE_REMOTING,MONO_COM,FEATURE_COMINTEROP,FEATURE_ROLE_BASED_SECURITY
+else
+REFERENCE_SOURCES_FLAGS += -d:FEATURE_ROLE_BASED_SECURITY
+endif
 endif
 
 ifndef NO_THREAD_ABORT
@@ -161,7 +165,7 @@ endif
 endif
 
 # System.IO/DirectoryInfoTest.cs needs Mono.Posix
-TEST_MCS_FLAGS += -debug -nowarn:168,219,618,672 -unsafe \
+TEST_MCS_FLAGS += -debug -nowarn:168,219,618,672 -unsafe -nowarn:67,114,162,169,649,659 \
 				 -define:MONO_DATACONVERTER_STATIC_METHODS $(TEST_RESX_RESOURCES:%=-resource:%) -resource:LinkerDescriptor/mscorlib_test.xml,$(test_lib:.dll=.xml)
 
 ifeq ($(PROFILE),net_4_x)
@@ -169,6 +173,7 @@ LIB_MCS_FLAGS += -d:FEATURE_CRYPTO_CONFIGURABLE
 TEST_MCS_FLAGS += -d:FEATURE_CRYPTO_CONFIGURABLE
 endif
 
+XTEST_SPLIT_ASSEMBLIES := $(filter monotouch%, $(PROFILE))
 
 CC_PROFILE := $(filter monotouch% xammac, $(PROFILE))
 ifdef CC_PROFILE
@@ -196,6 +201,7 @@ EXTRA_DISTFILES = \
 	$(RESOURCE_FILES) \
 	$(TEST_RESOURCE_FILES) \
 	$(TEST_RESOURCES:.resources=.resx) \
+	resources/charinfo.nlp \
 	LinkerDescriptor/mscorlib_test.xml
 
 TEST_RESOURCE_FILES = \
@@ -230,7 +236,7 @@ TEST_RESOURCES = $(TEST_RESX_RESOURCES) $(TEST_RESX_RESOURCES_SATELITE)
 satellite_assembly1 = $(test_lib_dir)/es-ES/$(patsubst %.dll,%.resources.dll,$(test_lib))
 satellite_assembly2 = $(test_lib_dir)/nn-NO/$(patsubst %.dll,%.resources.dll,$(test_lib))
 
-$(test_lib_output): $(TEST_RESOURCES) $(satellite_assembly1) $(satellite_assembly2) $(test_lib_dir)
+$(test_lib_output): $(TEST_RESOURCES) $(satellite_assembly1) $(satellite_assembly2) | $(test_lib_dir)
 
 mscorlib_for_profile = $(topdir)/class/lib/$(PROFILE)/mscorlib.dll
 
@@ -291,12 +297,13 @@ ifdef NO_TEST
 NO_VTS_TEST = yes
 endif
 
+ifdef DISABLE_REMOTING
+NO_VTS_TEST = yes
+endif
+
 ifndef NO_VTS_TEST
-test: test-vts
-run-test: run-test-vts
-else
-test:
-run-test:
+test-local: test-vts
+run-test-local: run-test-vts
 endif
 
 EXTRA_DISTFILES += \

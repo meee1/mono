@@ -3,10 +3,9 @@ PATCH_INFO(ABS, "abs")
 PATCH_INFO(LABEL, "label")
 PATCH_INFO(METHOD, "method")
 PATCH_INFO(METHOD_JUMP, "method_jump")
-PATCH_INFO(METHOD_REL, "method_rel")
 PATCH_INFO(METHODCONST, "methodconst")
-/* Either the address of a C function implementing a JIT icall, or a wrapper around it */
-PATCH_INFO(JIT_ICALL, "jit_icall")
+// Either the address of a C function implementing a JIT icall, or a wrapper around it
+PATCH_INFO(JIT_ICALL_ID, "jit_icall_id") // replaced MONO_PATCH_INFO_JIT_ICALL, using enum instead of string
 PATCH_INFO(SWITCH, "switch")
 PATCH_INFO(EXC, "exc")
 PATCH_INFO(EXC_NAME, "exc_name")
@@ -55,8 +54,6 @@ PATCH_INFO(AOT_JIT_INFO, "aot_jit_info")
 PATCH_INFO(GC_NURSERY_BITS, "gc_nursery_bits")
 PATCH_INFO(GSHAREDVT_IN_WRAPPER, "gsharedvt_in_wrapper")
 PATCH_INFO(ICALL_ADDR_CALL, "icall_addr_call")
-PATCH_INFO(GET_TLS_TRAMP, "get_tls_tramp")
-PATCH_INFO(SET_TLS_TRAMP, "set_tls_tramp")
 /*
  * The address of a C function implementing a JIT icall.
  * Same as JIT_ICALL_ADDR, but not treated as a call.
@@ -70,3 +67,21 @@ PATCH_INFO(PROFILER_CLAUSE_COUNT, "profiler_clause_count")
  * function.
  */
 PATCH_INFO(METHOD_FTNDESC, "method_ftndesc")
+
+PATCH_INFO(SPECIFIC_TRAMPOLINE_LAZY_FETCH_ADDR, "specific_trampoline_lazy_fetch_addr")
+
+/* mscorlib_amodule->info.specific_trampolines */
+PATCH_INFO(SPECIFIC_TRAMPOLINES, "specific_trampolines")
+/* Address of got slot block in mscorlib_amodule->got belonging to specific trampolines */
+PATCH_INFO(SPECIFIC_TRAMPOLINES_GOT_SLOTS_BASE, "specific_trampolines_got_slots_base")
+
+/*
+ * PATCH_INFO_R4/R8 is handled by mono_arch_emit_exceptions () by emitting the data
+ * into the text segment after the method body. These patches emit the data
+ * elsewhere.
+ */
+PATCH_INFO(R8_GOT, "r8_got")
+PATCH_INFO(R4_GOT, "r4_got")
+
+/* MonoMethod* -> the address of a memory slot which is used to cache the pinvoke address */
+PATCH_INFO(METHOD_PINVOKE_ADDR_CACHE, "pinvoke_addr_cache")

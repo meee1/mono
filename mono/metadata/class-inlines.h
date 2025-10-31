@@ -174,4 +174,77 @@ m_class_is_runtime_type (MonoClass *klass)
 	return klass == mono_defaults.runtimetype_class;
 }
 
+static inline gboolean
+m_class_is_auto_layout (MonoClass *klass)
+{
+	guint32 layout = (mono_class_get_flags (klass) & TYPE_ATTRIBUTE_LAYOUT_MASK);
+
+	return layout == TYPE_ATTRIBUTE_AUTO_LAYOUT;
+}
+
+static inline gboolean
+m_class_is_sealed (MonoClass *klass)
+{
+	return mono_class_get_flags (klass) & TYPE_ATTRIBUTE_SEALED;
+}
+
+static inline gboolean
+m_class_is_ginst (MonoClass *klass)
+{
+	return mono_class_is_ginst (klass);
+}
+
+static inline gboolean
+m_class_is_private (MonoClass *klass)
+{
+	return (mono_class_get_flags (klass) & TYPE_ATTRIBUTE_VISIBILITY_MASK) == TYPE_ATTRIBUTE_NOT_PUBLIC;
+}
+
+static inline gboolean
+m_method_is_static (MonoMethod *method)
+{
+	return (method->flags & METHOD_ATTRIBUTE_STATIC) != 0;
+}
+static inline gboolean
+m_method_is_virtual (MonoMethod *method)
+{
+	return (method->flags & METHOD_ATTRIBUTE_VIRTUAL) != 0;
+}
+
+static inline gboolean
+m_method_is_abstract (MonoMethod *method)
+{
+        return (method->flags & METHOD_ATTRIBUTE_ABSTRACT) != 0;
+}
+
+static inline gboolean
+m_method_is_final (MonoMethod *method)
+{
+        return (method->flags & METHOD_ATTRIBUTE_FINAL) != 0;
+}
+
+static inline gboolean
+m_method_is_icall (MonoMethod *method)
+{
+	return (method->iflags & METHOD_IMPL_ATTRIBUTE_INTERNAL_CALL) != 0;
+}
+
+static inline gboolean
+m_method_is_synchronized (MonoMethod *method)
+{
+	return (method->iflags & METHOD_IMPL_ATTRIBUTE_SYNCHRONIZED) != 0;
+}
+
+static inline gboolean
+m_method_is_pinvoke (MonoMethod *method)
+{
+	return (method->flags & METHOD_ATTRIBUTE_PINVOKE_IMPL) != 0;
+}
+
+static inline gboolean
+m_method_is_wrapper (MonoMethod *method)
+{
+	return method->wrapper_type != 0;
+}
+
 #endif

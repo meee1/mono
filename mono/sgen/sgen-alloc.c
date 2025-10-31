@@ -36,6 +36,7 @@
 #include "mono/sgen/sgen-memory-governor.h"
 #include "mono/sgen/sgen-client.h"
 #include "mono/utils/mono-memory-model.h"
+#include "mono/utils/mono-tls-inline.h"
 
 #define ALIGN_UP		SGEN_ALIGN_UP
 #define ALLOC_ALIGN		SGEN_ALLOC_ALIGN
@@ -45,13 +46,19 @@
 static guint64 stat_objects_alloced = 0;
 static guint64 stat_bytes_alloced = 0;
 static guint64 stat_bytes_alloced_los = 0;
-
 #endif
+
+/* The total number of bytes allocated so far in program execution by all attached threads.
+ * This is not constantly syncrhonized, but only updated on each GC. */
+static guint64 bytes_allocated_attached = 0;
+
+/* Total bytes allocated so far in program execution by detached threads */ 
+static guint64 bytes_allocated_detached = 0;
 
 /*
  * Allocation is done from a Thread Local Allocation Buffer (TLAB). TLABs are allocated
  * from nursery fragments.
- * tlab_next is the pointer to the space inside the TLAB where the next object will 
+ * tlab_next is the pointer to the space inside the TLAB where the next object will
  * be allocated.
  * tlab_temp_end is the pointer to the end of the temporary space reserved for
  * the allocation: it allows us to set the scan starts at reasonable intervals.
@@ -63,10 +70,17 @@ static guint64 stat_bytes_alloced_los = 0;
 #define TLAB_TEMP_END	(__thread_info__->tlab_temp_end)
 #define TLAB_REAL_END	(__thread_info__->tlab_real_end)
 
+static void
+increment_thread_allocation_counter (size_t byte_size)
+{
+	mono_thread_info_current ()->total_bytes_allocated += byte_size;
+}
+
 static GCObject*
 alloc_degraded (GCVTable vtable, size_t size, gboolean for_mature)
 {
 	GCObject *p;
+	increment_thread_allocation_counter (size);
 
 	if (!for_mature) {
 		sgen_client_degraded_allocation ();
@@ -124,7 +138,7 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 	char *new_next;
 	size_t real_size = size;
 	TLAB_ACCESS_INIT;
-	
+
 	CANARIFY_SIZE(size);
 
 	HEAVY_STAT (++stat_objects_alloced);
@@ -168,6 +182,9 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 
 	if (real_size > SGEN_MAX_SMALL_OBJ_SIZE) {
 		p = (void **)sgen_los_alloc_large_inner (vtable, ALIGN_UP (real_size));
+		if (p) {
+			increment_thread_allocation_counter (size);
+		}
 	} else {
 		/* tlab_next and tlab_temp_end are TLS vars so accessing them might be expensive */
 
@@ -180,7 +197,7 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 			/* Fast path */
 
 			CANARIFY_ALLOC(p,real_size);
-			SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %zd", p, vtable, sgen_client_vtable_get_name (vtable), size);
+			SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %" G_GSIZE_FORMAT "d", p, vtable, sgen_client_vtable_get_name (vtable), size);
 			sgen_binary_protocol_alloc (p , vtable, size, sgen_client_get_provenance ());
 			g_assert (*p == NULL);
 			mono_atomic_store_seq (p, vtable);
@@ -191,7 +208,7 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 		/* Slow path */
 
 		/* there are two cases: the object is too big or we run out of space in the TLAB */
-		/* we also reach here when the thread does its first allocation after a minor 
+		/* we also reach here when the thread does its first allocation after a minor
 		 * collection, since the tlab_ variables are initialized to NULL.
 		 * there can be another case (from ORP), if we cooperate with the runtime a bit:
 		 * objects that need finalizers can have the high bit set in their size
@@ -201,12 +218,13 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 		 */
 		if (TLAB_NEXT >= TLAB_REAL_END) {
 			int available_in_tlab;
-			/* 
+			/*
 			 * Run out of space in the TLAB. When this happens, some amount of space
 			 * remains in the TLAB, but not enough to satisfy the current allocation
-			 * request. Currently, we retire the TLAB in all cases, later we could
-			 * keep it if the remaining space is above a treshold, and satisfy the
-			 * allocation directly from the nursery.
+			 * request. We keep the TLAB for future allocations if the remaining
+			 * space is above a treshold, and satisfy the allocation directly
+			 * from the nursery. Otherwise, we attempt to get a new TLAB from the
+			 * nursery and allocate into it.
 			 */
 			TLAB_NEXT -= size;
 			/* when running in degraded mode, we continue allocing that way
@@ -240,6 +258,10 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 					sgen_ensure_free_space (real_size, GENERATION_NURSERY);
 					if (!sgen_degraded_mode)
 						p = (void **)sgen_nursery_alloc (size);
+
+					if (p)
+						increment_thread_allocation_counter (size);
+
 				}
 				if (!p)
 					return alloc_degraded (vtable, size, TRUE);
@@ -260,6 +282,8 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 				}
 				if (!p)
 					return alloc_degraded (vtable, size, TRUE);
+
+				increment_thread_allocation_counter (TLAB_NEXT - TLAB_START);
 
 				/* Allocate a new TLAB from the current nursery fragment */
 				TLAB_START = (char*)p;
@@ -287,7 +311,7 @@ sgen_alloc_obj_nolock (GCVTable vtable, size_t size)
 	}
 
 	if (G_LIKELY (p)) {
-		SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %zd", p, vtable, sgen_client_vtable_get_name (vtable), size);
+		SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %" G_GSIZE_FORMAT "d", p, vtable, sgen_client_vtable_get_name (vtable), size);
 		sgen_binary_protocol_alloc (p, vtable, size, sgen_client_get_provenance ());
 		mono_atomic_store_seq (p, vtable);
 	}
@@ -315,9 +339,12 @@ sgen_try_alloc_obj_nolock (GCVTable vtable, size_t size)
 
 	if (G_UNLIKELY (size > sgen_tlab_size)) {
 		/* Allocate directly from the nursery */
+
 		p = (void **)sgen_nursery_alloc (size);
 		if (!p)
 			return NULL;
+
+		increment_thread_allocation_counter (size);
 		sgen_set_nursery_scan_start ((char*)p);
 
 		/*FIXME we should use weak memory ops here. Should help specially on x86. */
@@ -350,6 +377,7 @@ sgen_try_alloc_obj_nolock (GCVTable vtable, size_t size)
 			if (!p)
 				return NULL;
 
+			increment_thread_allocation_counter (size);
 			zero_tlab_if_necessary (p, size);
 		} else {
 			size_t alloc_size = 0;
@@ -359,6 +387,8 @@ sgen_try_alloc_obj_nolock (GCVTable vtable, size_t size)
 			p = (void**)new_next;
 			if (!p)
 				return NULL;
+
+			increment_thread_allocation_counter (TLAB_NEXT - TLAB_START);
 
 			TLAB_START = (char*)new_next;
 			TLAB_NEXT = new_next + size;
@@ -374,7 +404,7 @@ sgen_try_alloc_obj_nolock (GCVTable vtable, size_t size)
 	HEAVY_STAT (stat_bytes_alloced += size);
 
 	CANARIFY_ALLOC(p,real_size);
-	SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %zd", p, vtable, sgen_client_vtable_get_name (vtable), size);
+	SGEN_LOG (6, "Allocated object %p, vtable: %p (%s), size: %" G_GSIZE_FORMAT "d", p, vtable, sgen_client_vtable_get_name (vtable), size);
 	sgen_binary_protocol_alloc (p, vtable, size, sgen_client_get_provenance ());
 	g_assert (*p == NULL); /* FIXME disable this in non debug builds */
 
@@ -423,6 +453,7 @@ sgen_alloc_obj (GCVTable vtable, size_t size)
 	LOCK_GC;
 	res = sgen_alloc_obj_nolock (vtable, size);
 	UNLOCK_GC;
+
 	return res;
 }
 
@@ -434,6 +465,7 @@ GCObject*
 sgen_alloc_obj_pinned (GCVTable vtable, size_t size)
 {
 	GCObject *p;
+
 
 	if (!SGEN_CAN_ALIGN_UP (size))
 		return NULL;
@@ -449,13 +481,18 @@ sgen_alloc_obj_pinned (GCVTable vtable, size_t size)
 		p = sgen_major_collector.alloc_small_pinned_obj (vtable, size, SGEN_VTABLE_HAS_REFERENCES (vtable));
 	}
 	if (G_LIKELY (p)) {
-		SGEN_LOG (6, "Allocated pinned object %p, vtable: %p (%s), size: %zd", p, vtable, sgen_client_vtable_get_name (vtable), size);
+		SGEN_LOG (6, "Allocated pinned object %p, vtable: %p (%s), size: %" G_GSIZE_FORMAT "d", p, vtable, sgen_client_vtable_get_name (vtable), size);
+		increment_thread_allocation_counter (size);
 		sgen_binary_protocol_alloc_pinned (p, vtable, size, sgen_client_get_provenance ());
 	}
 	UNLOCK_GC;
 	return p;
 }
 
+/*
+ * Used to allocate thread objects during attach. Doesn't trigger collections since
+ * the thread is not yet attached.
+ */
 GCObject*
 sgen_alloc_obj_mature (GCVTable vtable, size_t size)
 {
@@ -466,8 +503,12 @@ sgen_alloc_obj_mature (GCVTable vtable, size_t size)
 	size = ALIGN_UP (size);
 
 	LOCK_GC;
-	res = alloc_degraded (vtable, size, TRUE);
+	res = sgen_major_collector.alloc_degraded (vtable, size);
 	UNLOCK_GC;
+
+	if (res) {
+		increment_thread_allocation_counter (size);
+	}
 
 	return res;
 }
@@ -478,14 +519,61 @@ sgen_alloc_obj_mature (GCVTable vtable, size_t size)
 void
 sgen_clear_tlabs (void)
 {
+	guint64 total_bytes_allocated_globally = 0;
+
 	FOREACH_THREAD_ALL (info) {
 		/* A new TLAB will be allocated when the thread does its first allocation */
+		info->total_bytes_allocated += info->tlab_next - info->tlab_start;
+		total_bytes_allocated_globally += info->total_bytes_allocated;
 		info->tlab_start = NULL;
 		info->tlab_next = NULL;
 		info->tlab_temp_end = NULL;
 		info->tlab_real_end = NULL;
 	} FOREACH_THREAD_END
+
+	sgen_set_bytes_allocated_attached (total_bytes_allocated_globally);
+} 
+
+void sgen_update_allocation_count (void)
+{
+	guint64 total_bytes_allocated_globally = 0;
+
+	FOREACH_THREAD_ALL (info) {
+		total_bytes_allocated_globally += info->tlab_next - info->tlab_start;
+		total_bytes_allocated_globally += info->total_bytes_allocated;
+	} FOREACH_THREAD_END
+
+	sgen_set_bytes_allocated_attached (total_bytes_allocated_globally);
 }
+
+void
+sgen_set_bytes_allocated_attached (guint64 bytes)
+{
+	bytes_allocated_attached = bytes;
+}
+
+void
+sgen_increment_bytes_allocated_detached (guint64 bytes) 
+{
+	bytes_allocated_detached += bytes;
+}
+
+guint64
+sgen_get_total_allocated_bytes (MonoBoolean precise)
+{
+	if (precise) {	
+		LOCK_GC;
+		sgen_stop_world (0, FALSE);
+
+		sgen_update_allocation_count ();
+		
+		sgen_restart_world (0, FALSE);
+		UNLOCK_GC;
+	}
+	
+	return bytes_allocated_attached + bytes_allocated_detached;
+}
+
 
 void
 sgen_init_allocator (void)

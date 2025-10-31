@@ -145,7 +145,7 @@ namespace System
             public T[] ToArray()
             {
                 if (_count == 0)
-                    return EmptyArray<T>.Value;
+                    return Array.Empty<T> ();
                 if (_count == 1)
                     return new T[1] { _item };
 
@@ -2858,17 +2858,24 @@ namespace System
             return candidates;
         }
 
+        // Note the following assumptions on name:
+        // 1. Callers assume that null == "*"
+        // 2. FilterHelper chops off "*" 
+        //
         private ListBuilder<ConstructorInfo> GetConstructorCandidates(
             string name, BindingFlags bindingAttr, CallingConventions callConv, 
             Type[] types, bool allowPrefixLookup)
         {
             bool prefixLookup, ignoreCase;
             MemberListType listType;
+
             RuntimeType.FilterHelper(bindingAttr, ref name, allowPrefixLookup, out prefixLookup, out ignoreCase, out listType);
 
-#if MONO
-            if (!string.IsNullOrEmpty (name) && name != ConstructorInfo.ConstructorName && name != ConstructorInfo.TypeConstructorName)
+#if MONO            
+            if ((!prefixLookup && name?.Length == 0) ||
+                (!string.IsNullOrEmpty (name) && name != ConstructorInfo.ConstructorName && name != ConstructorInfo.TypeConstructorName)) {
                 return new ListBuilder<ConstructorInfo> (0);
+            }
             RuntimeConstructorInfo[] cache = GetConstructors_internal (bindingAttr, this);
 #else
             RuntimeConstructorInfo[] cache = Cache.GetConstructorList(listType, name);
@@ -3226,14 +3233,14 @@ namespace System
         #endregion
 
 #if NETCORE
-        protected override MethodInfo GetMethodImpl(string name, BindingFlags bindingAttr, Binder binder, CallingConventions callConvention, Type[] types, ParameterModifier[] modifiers)
+        protected override MethodInfo GetMethodImpl(string name, BindingFlags bindingAttr, Binder? binder, CallingConventions callConvention, Type[]? types, ParameterModifier[]? modifiers)
 		{
 			return GetMethodImpl (name, -1, bindingAttr, binder, callConvention, types, modifiers);
 		}
 
         protected override MethodInfo GetMethodImpl(String name, int genericParamCount,
-            BindingFlags bindingAttr, Binder binder, CallingConventions callConv, 
-            Type[] types, ParameterModifier[] modifiers) 
+            BindingFlags bindingAttr, Binder? binder, CallingConventions callConv, 
+            Type[]? types, ParameterModifier[]? modifiers) 
         {       
             ListBuilder<MethodInfo> candidates = GetMethodCandidates(name, bindingAttr, callConv, types, genericParamCount, false);
             if (candidates.Count == 0) 
@@ -3269,8 +3276,13 @@ namespace System
 #endif
 
         protected override ConstructorInfo GetConstructorImpl(
+#if NETCORE
+            BindingFlags bindingAttr, Binder? binder, CallingConventions callConvention, 
+            Type[] types, ParameterModifier[]? modifiers)
+#else
             BindingFlags bindingAttr, Binder binder, CallingConventions callConvention, 
-            Type[] types, ParameterModifier[] modifiers) 
+            Type[] types, ParameterModifier[] modifiers)
+#endif
         {
             ListBuilder<ConstructorInfo> candidates = GetConstructorCandidates(null, bindingAttr, CallingConventions.Any, types, false);
 
@@ -3299,7 +3311,11 @@ namespace System
 
 
         protected override PropertyInfo GetPropertyImpl(
-            String name, BindingFlags bindingAttr, Binder binder, Type returnType, Type[] types, ParameterModifier[] modifiers) 
+#if NETCORE
+            String name, BindingFlags bindingAttr, Binder? binder, Type? returnType, Type[]? types, ParameterModifier[]? modifiers) 
+#else
+            String name, BindingFlags bindingAttr, Binder binder, Type returnType, Type[] types, ParameterModifier[] modifiers)
+#endif
         {
             if (name == null) throw new ArgumentNullException();
             Contract.EndContractBlock();
@@ -3722,7 +3738,11 @@ namespace System
 
         #region Hierarchy
         [System.Security.SecuritySafeCritical]  // auto-generated
+#if NETCORE
+        public override bool IsInstanceOfType(Object? o)
+#else
         public override bool IsInstanceOfType(Object o)
+#endif
         {
             return RuntimeTypeHandle.IsInstanceOfType(this, o);
         }
@@ -3759,12 +3779,20 @@ namespace System
         }
 #endif
 
+#if NETCORE
+        public override bool IsAssignableFrom(System.Reflection.TypeInfo? typeInfo){
+#else
         public override bool IsAssignableFrom(System.Reflection.TypeInfo typeInfo){
+#endif
             if(typeInfo==null) return false;
             return IsAssignableFrom(typeInfo.AsType());
         }
 
+#if NETCORE
+        public override bool IsAssignableFrom(Type? c)
+#else
         public override bool IsAssignableFrom(Type c)
+#endif
         {
             if ((object)c == null)
                 return false;
@@ -3782,7 +3810,7 @@ namespace System
             }
 #if !FULL_AOT_RUNTIME
             // Special case for TypeBuilder to be backward-compatible.
-            if (c is System.Reflection.Emit.TypeBuilder)
+            if (RuntimeFeature.IsDynamicCodeSupported && c is System.Reflection.Emit.TypeBuilder)
             {
                 // If c is a subclass of this class, then c can be cast to this type.
                 if (c.IsSubclassOf(this))
@@ -3809,7 +3837,11 @@ namespace System
 
 #if !FEATURE_CORECLR
         // Reflexive, symmetric, transitive.
+#if NETCORE
+        public override bool IsEquivalentTo(Type? other)
+#else
         public override bool IsEquivalentTo(Type other)
+#endif
         {
             RuntimeType otherRtType = other as RuntimeType;
             if ((object)otherRtType == null)
@@ -4261,10 +4293,14 @@ namespace System
 #endif
 
             if (types == null)
-                types = EmptyArray<Type>.Value;
+                types = Array.Empty<Type> ();
 
             return types;
         }
+
+        // Points to System.Reflection.Emit.TypeBuilderInstantiation.MakeGenericType
+        // Initialized when a TypeBuilder is created to avoid link-time SRE dependencies in this file
+        internal static Func<Type, Type[], Type> MakeTypeBuilderInstantiation;
 
         [System.Security.SecuritySafeCritical]  // auto-generated
         public override Type MakeGenericType(Type[] instantiation)
@@ -4303,7 +4339,11 @@ namespace System
 #if NETCORE
                     throw new NotImplementedException ();
 #else
-                    return System.Reflection.Emit.TypeBuilderInstantiation.MakeGenericType(this, instantiation);
+#pragma warning disable 162
+                    if (!RuntimeFeature.IsDynamicCodeSupported)
+                        throw new PlatformNotSupportedException();
+                    return MakeTypeBuilderInstantiation(this, instantiation);
+#pragma warning restore 162
 #endif
                 }
 
@@ -4585,7 +4625,7 @@ namespace System
             }
 
             if (members == null)
-                members = EmptyArray<MemberInfo>.Value;
+                members = Array.Empty<MemberInfo> ();
 
             return members;
         }
@@ -4596,8 +4636,13 @@ namespace System
         [DebuggerStepThroughAttribute]
         [Diagnostics.DebuggerHidden]
         public override Object InvokeMember(
+#if NETCORE
+            String name, BindingFlags bindingFlags, Binder? binder, Object? target, 
+            Object?[]? providedArgs, ParameterModifier[]? modifiers, CultureInfo? culture, String[]? namedParams) 
+#else
             String name, BindingFlags bindingFlags, Binder binder, Object target, 
             Object[] providedArgs, ParameterModifier[] modifiers, CultureInfo culture, String[] namedParams) 
+#endif
         {
             if (IsGenericParameter)
                 throw new InvalidOperationException(Environment.GetResourceString("Arg_GenericParameter"));
@@ -5037,7 +5082,7 @@ namespace System
                     finalists = new MethodInfo[] { finalist };
 
                 if (providedArgs == null)
-                        providedArgs = EmptyArray<Object>.Value;
+                        providedArgs = Array.Empty<Object>();
 
                 Object state = null;
 
@@ -5068,7 +5113,11 @@ namespace System
 
         #region Object Overrides
         [Pure]
+#if NETCORE
+        public override bool Equals(object? obj)
+#else
         public override bool Equals(object obj)
+#endif
         {
             // ComObjects are identified by the instance of the Type object and not the TypeHandle.
             return obj == (object)this;
@@ -5312,7 +5361,7 @@ namespace System
 #endif                    
                     
                     if (args == null)
-                        args = EmptyArray<Object>.Value;
+                        args = Array.Empty<Object> ();
 
                     int argCnt = args.Length;
 

@@ -49,6 +49,7 @@ public class DebuggerTests
 	public static string agent_args = Environment.GetEnvironmentVariable ("DBG_AGENT_ARGS");
 
 	public static string dtest_app_path = "dtest-app.exe";
+	public static string dtest_app_opt_path = "dtest-app-opt.exe";
 	public static string dtest_excfilter_path = "dtest-excfilter.exe";
 
 	// Not currently used, but can be useful when debugging individual tests.
@@ -470,7 +471,6 @@ public class DebuggerTests
 			
 			var pdbFromMemory = assemblyMirror.GetPdbBlob ();
 			if (!File.Exists (pdbPath)) {
-				Assert.IsFalse (assemblyMirror.HasPdb);
 				Assert.IsTrue (assemblyMirror.HasFetchedPdb);
 				continue;
 			}
@@ -1354,6 +1354,21 @@ public class DebuggerTests
 		val = frame.GetArgument (0);
 		AssertValue ("BLA", val);
 	}
+	[Test]
+	public void CreateByteArrays () {
+		byte[] bt = new byte[5];
+		bt[0] = 1;
+		bt[1] = 0;
+		bt[2] = 255;
+		bt[3] = 10;
+		bt[4] = 50;
+		var val =  vm.RootDomain.CreateByteArray (bt);
+		AssertValue (1, val [0]);
+		AssertValue (0, val [1]);
+		AssertValue (255, val [2]);
+		AssertValue (10, val [3]);
+		AssertValue (50, val [4]);
+	}
 
 	[Test]
 	public void Arrays () {
@@ -1752,7 +1767,7 @@ public class DebuggerTests
 		t = frame.Method.GetParameters ()[7].ParameterType;
 		Assert.AreEqual ("Tests", t.Name);
 		var nested = (from nt in t.GetNestedTypes () where nt.IsNestedPublic select nt).ToArray ();
-		Assert.AreEqual (1, nested.Length);
+		Assert.AreEqual (2, nested.Length);
 		Assert.AreEqual ("NestedClass", nested [0].Name);
 		Assert.IsTrue (t.BaseType.IsAssignableFrom (t));
 		Assert.IsTrue (!t.IsAssignableFrom (t.BaseType));
@@ -1792,7 +1807,7 @@ public class DebuggerTests
 		t = frame.Method.GetParameters ()[7].ParameterType;
 
 		var props = t.GetProperties ();
-		Assert.AreEqual (3, props.Length);
+		Assert.AreEqual (4, props.Length);
 		foreach (PropertyInfoMirror prop in props) {
 			ParameterInfoMirror[] indexes = prop.GetIndexParameters ();
 
@@ -2164,6 +2179,17 @@ public class DebuggerTests
 
 		TypeMirror t = vm.RootDomain.Corlib.GetType ("System.Diagnostics.DebuggerDisplayAttribute");
 		Assert.AreEqual ("DebuggerDisplayAttribute", t.Name);
+
+		TypeMirror ba = m.Assembly.GetType ("BAttribute");
+		Assert.IsNotNull (ba);
+
+		var bs = m.Assembly.GetCustomAttributes (ba);
+		Assert.AreEqual (1, bs.Length);
+
+		var attrs = m.Assembly.GetCustomAttributes ();
+		Assert.IsTrue (attrs.Length >= 2); // compiler generated attributes
+		Assert.IsNotNull (attrs.Single (ca => ca.Constructor.DeclaringType.Name == "AAttribute"));
+		Assert.IsNotNull (attrs.Single (ca => ca.Constructor.DeclaringType.Name == "BAttribute"));
 	}
 
 	[Test]
@@ -2461,6 +2487,7 @@ public class DebuggerTests
 	[Test]
 	[Category("NotOnWindows")]
 	[Category ("AndroidSdksNotWorking")]
+	[Ignore("https://github.com/mono/mono/issues/20905")] // fails on Linux i386 on CI
 	public void Crash () {
 		string [] existingCrashFileEntries = Directory.GetFiles (".", "mono_crash*.json");
 
@@ -4247,6 +4274,41 @@ public class DebuggerTests
 	}
 
 	[Test]
+	public void UnhandledException3 () {
+		vm.Exit (0);
+
+		Start (dtest_app_path, "unhandled-exception-wrapper");
+
+		var req = vm.CreateExceptionRequest (null, false, true);
+		req.Enable ();
+
+		var e = run_until ("unhandled_exception_wrapper");
+		vm.Resume ();
+
+		var e2 = GetNextEvent ();
+		Assert.IsTrue (e2 is ExceptionEvent);
+		vm.Exit (0);
+		vm = null;
+	}
+
+	[Test]
+	public void UnhandledException4 () {
+		vm.Exit (0);
+
+		Start (dtest_app_path, "unhandled-exception-perform-wait-callback");
+
+		var req = vm.CreateExceptionRequest (null, false, true);
+		req.Enable ();
+
+		var e = run_until ("unhandled_exception_perform_wait_callback");
+		vm.Resume ();
+
+		var e2 = GetNextEvent ();
+		Assert.IsTrue (e2 is VMDeathEvent);
+		vm = null;
+	}
+
+	[Test]
 	public void GCWhileSuspended () {
 		// Check that objects are kept alive during suspensions
 		Event e = run_until ("gc_suspend_1");
@@ -4399,6 +4461,39 @@ public class DebuggerTests
 
 		e.Thread.SetIP (next_loc);
 
+		/* Check that i ++; j = 5; was skipped */
+		bevent = run_until ("set_ip_2");
+		var f = bevent.Thread.GetFrames ()[1];
+		AssertValue (2, f.GetValue (f.Method.GetLocal ("i")));
+		AssertValue (0, f.GetValue (f.Method.GetLocal ("j")));
+
+		// Error handling
+		AssertThrows<ArgumentNullException> (delegate {
+				e.Thread.SetIP (null);
+			});
+
+		AssertThrows<ArgumentException> (delegate {
+				e.Thread.SetIP (invalid_loc);
+			});
+	}
+
+	[Test]
+	public void SetIP2 () {
+		var bevent = run_until ("set_ip_1");
+
+		var invalid_loc = bevent.Thread.GetFrames ()[0].Location;
+
+		var req = create_step (bevent);
+		var e = step_out ();
+		req.Disable ();
+		var frames = e.Thread.GetFrames ();
+		var locs = frames [0].Method.Locations;
+
+		var next_loc = locs.First (l => (l.LineNumber == frames [0].Location.LineNumber + 3));
+
+		e.Thread.SetIP (next_loc);
+
+		Assert.AreEqual(next_loc.ILOffset, e.Thread.GetFrames ()[0].Location.ILOffset);
 		/* Check that i ++; j = 5; was skipped */
 		bevent = run_until ("set_ip_2");
 		var f = bevent.Thread.GetFrames ()[1];
@@ -4779,7 +4874,6 @@ public class DebuggerTests
 
 		AssertValue(2, pointerValue2.Value);
 
-
 		param = frame.Method.GetParameters()[1];
 		Assert.AreEqual("BlittableStruct*", param.ParameterType.Name);
 
@@ -4794,6 +4888,15 @@ public class DebuggerTests
 		f = structValue.Fields[1];
 		AssertValue (3.0, f);
 
+#if !__MonoCS__
+		// function pointers
+		param = frame.Method.GetParameters()[2];
+		pointerValue = frame.GetValue(param) as PointerValue;
+		Assert.AreEqual (0, pointerValue.Address);
+		frame.SetValue (param, new PointerValue (vm, param.ParameterType, 1));
+		pointerValue = frame.GetValue(param) as PointerValue;
+		Assert.AreEqual (1, pointerValue.Address);
+#endif
 	}
 
 	[Test]
@@ -4869,6 +4972,23 @@ public class DebuggerTests
 		e = step_into ();
 		e = step_into ();
 		Assert.IsTrue ((e as StepEvent).Method.Name == "op_Equality" || (e as StepEvent).Method.Name == "if_property_stepping");
+	}
+
+	[Test]
+	public void DebuggerBreakInFieldDoesNotHang () {
+		vm.EnableEvents (EventType.UserBreak);
+		Event e = run_until ("o1");
+
+		StackFrame frame = e.Thread.GetFrames () [0];
+		object val = frame.GetThis ();
+		Assert.IsTrue (val is ObjectMirror);
+		Assert.AreEqual ("Tests", (val as ObjectMirror).Type.Name);
+		ObjectMirror o = (val as ObjectMirror);
+		TypeMirror t = o.Type;
+
+		MethodMirror m = t.GetProperty ("BreakInField").GetGetMethod();
+		Value v = o.InvokeMethod (e.Thread, m, null, InvokeOptions.DisableBreakpoints);
+		AssertValue ("Foo", v);
 	}
 
 #if !MONODROID_TOOLS
@@ -4975,6 +5095,292 @@ public class DebuggerTests
 
 		ShouldNotSendUnexpectedTypeLoadEventsAndInvalidSuspendPolicyAfterAttach (port);
 	}
+
+	[Test]
+	public void InvokeMethodFixedArray () {
+		Event e = run_until ("fixed_size_array");
+		var req = create_step (e);
+		req.Enable ();
+		step_once ();
+		step_over ();
+		step_over ();
+		var bp = step_over ();
+		var thread = bp.Thread;
+		var frame = thread.GetFrames()[0];
+
+		var local =  frame.GetVisibleVariableByName("n");
+		var n = (StructMirror)frame.GetValue(local);
+		var get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer0");
+		var min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("1", min.Value);
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer1");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("2", min.Value);
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer2");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("3", min.Value);
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer3");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("4", min.Value);
+
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer2_0");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("a", min.Value);
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer2_1");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("b", min.Value);
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer2_2");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("c", min.Value);
+		get_Min = n.Type.GetMethods().First(m => m.Name == "getBuffer2_3");
+		min = (StringMirror) n.InvokeMethod(thread, get_Min, Array.Empty<Value>());
+		Assert.AreEqual("d", min.Value);
+	}
+
+	[Test]
+	public void TestExceptionFilterWin () {
+		Event e = run_until ("test_new_exception_filter1");
+		var req2 = vm.CreateExceptionRequest (vm.RootDomain.Corlib.GetType ("System.Exception"), true, true, false);
+		req2.Enable ();
+		vm.Resume ();
+		Event ev = GetNextEvent ();
+		var l = ev.Thread.GetFrames ()[0].Location;
+				
+		Assert.IsInstanceOfType (typeof (ExceptionEvent), ev);
+		req2.Disable ();
+		run_until ("test_new_exception_filter2");
+		req2 = vm.CreateExceptionRequest (null, true, true, false);
+		req2.Enable ();
+		vm.Resume ();
+		ev = GetNextEvent ();
+
+		Assert.IsInstanceOfType (typeof (ExceptionEvent), ev);
+		req2.Disable ();
+		run_until ("test_new_exception_filter3");
+		var req3 = vm.CreateExceptionRequest (vm.RootDomain.Corlib.GetType ("System.ArgumentException"), false, true, false);
+		req3.Enable ();
+		req2 = vm.CreateExceptionRequest (null, true, true, true);
+		req2.Enable ();
+		vm.Resume ();
+		ev = GetNextEvent ();
+
+		Assert.IsInstanceOfType (typeof (ExceptionEvent), ev);
+		req2.Disable ();
+		req3.Disable ();
+		run_until ("test_new_exception_filter4");
+		req2 = vm.CreateExceptionRequest (null, true, true, true);
+		req2.Enable ();
+		req2 = vm.CreateExceptionRequest (vm.RootDomain.Corlib.GetType ("System.ArgumentException"), false, true, false);
+		req2.Enable ();
+		vm.Resume ();
+		ev = GetNextEvent ();
+	}
+
+	[Test]
+	public void TestRuntimeInvokeHybridSuspendExceptions () {
+		TearDown ();
+		Start (dtest_app_path, "runtime_invoke_hybrid_exceptions", forceExit: true);
+		var req2 = vm.CreateExceptionRequest (null, false, true, false);
+		req2.Enable ();
+		vm.Resume ();
+		var ev = GetNextEvent ();
+		Assert.IsInstanceOfType (typeof (ExceptionEvent), ev);
+		vm.Exit (0);
+		vm = null;
+	}
+
+	[Test]
+	public void TestNewThreadHybridSuspendException () {
+		TearDown ();
+		Start (dtest_app_path, "new_thread_hybrid_exception", forceExit: true);
+		var req2 = vm.CreateExceptionRequest (null, false, true, false);
+		req2.Enable ();
+		vm.Resume ();
+		var ev = GetNextEvent ();
+		Assert.IsInstanceOfType (typeof (ExceptionEvent), ev);
+		vm.Exit (0);
+		vm = null;
+	}
+	
+	[Test]
+	public void TestAsyncDebugGenerics () {
+		Event e = run_until ("test_async_debug_generics");
+		e = step_in_await ("test_async_debug_generics", e);
+		e = step_in_await ("MoveNext", e);
+		e = step_in_await ("MoveNext", e);
+		e = step_in_await ("MoveNext", e);
+		e = step_in_await ("MoveNext", e);
+	}
+
+
+	[Test]
+	public void TestAsyncDebugGenericsValueType () {
+		vm.Detach();
+		Start(dtest_app_opt_path);
+		MethodMirror async_method = entry_point.DeclaringType.GetMethod("test_async_debug_generics");
+		Assert.IsNotNull(async_method);
+		vm.SetBreakpoint(async_method, 0);
+		vm.Resume();
+		var e = GetNextEvent();
+		Assert.AreEqual(EventType.Breakpoint, e.EventType);
+		e = step_in_await("MoveNext", e);
+		e = step_in_await("MoveNext", e);
+		e = step_in_await("MoveNext", e);
+		vm.Exit(0);
+		vm = null;
+	}
+
+
+	[Test]
+	public void InvalidPointer_GetValue () {
+		vm.Detach ();
+		Start (dtest_app_path, "pointer_arguments2");
+		Event e = run_until ("pointer_arguments2");
+		var frame = e.Thread.GetFrames () [0];
+
+		var param = frame.Method.GetParameters()[0];
+		Assert.AreEqual("Int32*", param.ParameterType.Name);
+
+		var pointerValue = frame.GetValue(param) as PointerValue;
+		Assert.AreEqual("Int32*", pointerValue.Type.Name);
+
+
+		var pointerValue2 = new PointerValue (pointerValue.VirtualMachine, pointerValue.Type, 200);
+
+		try {
+			var val = pointerValue2.Value;
+		}
+		catch (ArgumentException ex) {
+			Assert.IsInstanceOfType (typeof (ArgumentException), ex);
+		}
+	}
+  
+	[Test]
+	public void InvalidArgumentAssemblyGetType () {
+		Event e = run_until ("test_invalid_argument_assembly_get_type");
+		var assembly = entry_point.DeclaringType.Assembly;
+		try {
+			var type = assembly.GetType ("System.Collections.Generic.Dictionary<double, float>.Main");
+		}
+		catch (CommandException ex) {
+			Assert.AreEqual(ex.ErrorMessage, "Unexpected assembly-qualified type \"System.Collections.Generic.Dictionary<double, float>.Main\" was provided");
+		}
+	}
+  
+	[Test]
+	[Category("NotWorking")]
+	public void InvokeSingleStepMultiThread () {
+		vm.Detach ();
+		Start (dtest_app_path, "ss_multi_thread");
+		MethodMirror m = entry_point.DeclaringType.GetMethod ("mt_ss");
+		int firstLineFound = m.Locations [0].LineNumber + 1;
+		int line_first_counter = 5;
+		int line_second_counter = 5;
+		int line_third_counter = 3;
+		Event e = run_until ("ss_multi_thread");
+		EventRequest req = create_step (e);
+		req.Disable ();
+		ReusableBreakpoint breakpoint = new ReusableBreakpoint (this, "mt_ss");
+		breakpoint.Continue ();
+		e = breakpoint.lastEvent;
+		req = create_step (e);
+		while (line_first_counter > 0 || line_second_counter > 0 || line_third_counter > 0) {
+			var thread = e.Thread;
+			var l = thread.GetFrames ()[0].Location;
+			var frame = thread.GetFrames()[0];
+			
+			if (l.LineNumber == firstLineFound)
+				line_first_counter--;
+			if (l.LineNumber == firstLineFound + 1)
+				line_second_counter--;
+			if (l.LineNumber == firstLineFound + 2)
+				line_third_counter--;				
+
+			if (req.GetId() != breakpoint.req.GetId()) 
+				req.Disable ();
+			
+			req = create_step (e);
+			((StepEventRequest)req).Size = StepSize.Line;
+			try {
+				if ((e.Thread.GetFrames ()[0].Location.LineNumber == firstLineFound + 1 && (e.Thread.Name.Equals("Thread_0") || e.Thread.Name.Equals("Thread_1"))) || l.LineNumber == firstLineFound + 2) {
+					vm.Resume ();
+					e = GetNextEvent ();
+				}
+				else
+					e = step_over_or_breakpoint ();
+				req =  e.Request;		
+			}
+			catch (Exception z){
+				//expected vmdeath
+				break;
+			}
+		}
+		Assert.AreEqual(0, line_first_counter);
+		Assert.AreEqual(0, line_second_counter);
+		Assert.AreEqual(0, line_third_counter);
+		vm = null;
+	}
+	
+	[Test]
+	public void CheckSuspendPolicySentWhenLaunchSuspendYes () {
+		vm.Exit (0);
+		var port = GetFreePort ();
+
+		// Launch the app using server=y,suspend=y
+		var pi = CreateStartInfo (dtest_app_path, "attach", $"--debugger-agent=transport=dt_socket,address=127.0.0.1:{port},server=y,suspend=y");
+		pi.UseShellExecute = false;
+		var process = Diag.Process.Start (pi);
+
+		string failMessage = null;
+		try {
+			vm = ConnectToPort (port);
+
+			vm.EnableEvents (EventType.AssemblyLoad, EventType.ThreadStart);
+			var es =  vm.GetNextEventSet ();
+			Assert.AreEqual (es.SuspendPolicy, SuspendPolicy.All);
+			Assert.AreEqual (EventType.VMStart, es[0].EventType);
+		}
+		catch (Exception ex) {
+			failMessage = ex.Message;
+		}
+		finally {
+			vm.Exit (0);
+			vm = null;
+		}
+		if (failMessage != null)
+			Assert.Fail (failMessage);
+	}
+
+	[Test]
+	public void Frame_SetValue_WithList () {
+		Event e = run_until ("frame_setvalue_withlist");
+		var req = create_step (e);
+		req.Enable ();
+
+		e = step_once ();
+		e = step_over ();
+		e = step_over ();		
+		e = step_over ();				
+		e = step_over ();			
+		e = step_over ();				
+		e = step_over ();				
+			
+		StackFrame frame = e.Thread.GetFrames () [0];
+		var l = frame.Method.GetLocal ("someLocalString");
+		var l1 = frame.Method.GetLocal ("aList");
+		TypeMirror t = l1.Type;
+		var m = t.GetMethod ("get_Count");
+		var contentOrig1 =  frame.GetValue (l1);	
+		var v = (contentOrig1 as ObjectMirror).InvokeMethod (e.Thread, m, null);
+		var contentOrig =  frame.GetValue (l);					
+		var str = vm.RootDomain.CreateString ("test1");
+		frame.SetValue (l, str);
+		contentOrig =  frame.GetValue (l);		
+		e.Thread.GetFrames ();
+		contentOrig =  frame.GetValue (l);		
+		AssertValue ("test1", contentOrig);
+	}
+
 #endif
 } // class DebuggerTests
 } // namespace

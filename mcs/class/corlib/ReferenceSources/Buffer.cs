@@ -7,10 +7,6 @@ using nuint = System.UInt32;
 using System.Runtime.CompilerServices;
 using System.Runtime;
 
-#if NETCORE
-using Internal.Runtime.CompilerServices;
-#endif
-
 namespace System
 {
 	partial class Buffer
@@ -33,20 +29,20 @@ namespace System
 			return length;
 		}
 
-		public static byte GetByte (Array array, int index)
+		public static unsafe byte GetByte (Array array, int index)
 		{
 			if (index < 0 || index >= ByteLength (array))
 				throw new ArgumentOutOfRangeException ("index");
 
-			return _GetByte (array, index);
+			return *(byte*)(Unsafe.AsPointer<byte> (ref Unsafe.Add<byte> (ref array.GetRawSzArrayData (), index)));
 		}
 
-		public static void SetByte (Array array, int index, byte value)
+		public static unsafe void SetByte (Array array, int index, byte value)
 		{
 			if (index < 0 || index >= ByteLength (array))
 				throw new ArgumentOutOfRangeException ("index");
 
-			_SetByte (array, index, value);
+			*(byte*)(Unsafe.AsPointer<byte> (ref Unsafe.Add<byte> (ref array.GetRawSzArrayData (), index))) = value;
 		}
 
 		public static void BlockCopy (Array src, int srcOffset, Array dst, int dstOffset, int count)
@@ -86,14 +82,14 @@ namespace System
 
 			var src = (byte*)source;
 			var dst = (byte*)destination;
-			while (sourceBytesToCopy > int.MaxValue) {
-				Memcpy (dst, src, int.MaxValue);
-				sourceBytesToCopy -= int.MaxValue;
-				src += int.MaxValue;
-				dst += int.MaxValue;
+			while (sourceBytesToCopy > uint.MaxValue) {
+				Memmove (dst, src, uint.MaxValue);
+				sourceBytesToCopy -= uint.MaxValue;
+				src += uint.MaxValue;
+				dst += uint.MaxValue;
 			}
 
-			memcpy1 (dst, src, (int) sourceBytesToCopy);
+			Memmove (dst, src, (uint) sourceBytesToCopy);
 		}
 
 		[CLSCompliantAttribute (false)]
@@ -105,14 +101,14 @@ namespace System
 
 			var src = (byte*)source;
 			var dst = (byte*)destination;
-			while (sourceBytesToCopy > int.MaxValue) {
-				Memcpy (dst, src, int.MaxValue);
-				sourceBytesToCopy -= int.MaxValue;
-				src += int.MaxValue;
-				dst += int.MaxValue;
+			while (sourceBytesToCopy > uint.MaxValue) {
+				Memmove (dst, src, uint.MaxValue);
+				sourceBytesToCopy -= uint.MaxValue;
+				src += uint.MaxValue;
+				dst += uint.MaxValue;
 			}
 
-			Memcpy (dst, src, (int) sourceBytesToCopy);
+			Memmove (dst, src, (uint) sourceBytesToCopy);
 		}
 
 		internal static unsafe void memcpy4 (byte *dest, byte *src, int size) {

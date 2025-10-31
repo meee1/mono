@@ -13,6 +13,19 @@
 #define DEFAULT_GC_NAME "Included Boehm (with typed GC)"
 #endif
 
+/* Some VES is available at runtime */
+#define ENABLE_ILGEN 1
+
+/* Start configure ENABLE_DEFINES picked up from cygconfig.h or other external source, if available */
+/* @ENABLE_DEFINES@ */
+/* End configure ENABLE_DEFINES picked up from cygconfig.h or other external source, if available */
+
+/* Windows MSVC builds defaults to preemptive suspend. Disable ENABLE_HYBRID_SUSPEND defines. */
+#undef ENABLE_HYBRID_SUSPEND
+
+/* No ENABLE_DEFINES below this point */
+
+
 /* Disable runtime state dumping */
 #define DISABLE_CRASH_REPORTING 1
 
@@ -22,18 +35,11 @@
 /* Disables the IO portability layer */
 #define DISABLE_PORTABILITY 1
 
-/* DISABLE_DEFINES picked up from cygconfig.h, if available */
+/* Start configure DISABLE_DEFINES picked up from cygconfig.h or other external source, if available */
 /* @DISABLE_DEFINES@ */
+/* End configure DISABLE_DEFINES picked up from cygconfig.h or other external source, if available */
 
 /* No DISABLE_DEFINES below this point */
-
-/* Some VES is available at runtime */
-#define ENABLE_ILGEN 1
-
-/* Optional ENABLE_DEFINES */
-/* @ENABLE_DEFINES@ */
-
-/* No ENABLE_DEFINES below this point */
 
 /* Have access */
 #define HAVE_ACCESS 1
@@ -54,34 +60,6 @@
 /* Have /dev/random */
 #define HAVE_CRYPT_RNG 1
 
-/* Define to 1 if you have the declaration of `InterlockedAdd',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDADD 1
-
-/* Define to 1 if you have the declaration of `InterlockedAdd64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDADD64 1
-
-/* Define to 1 if you have the declaration of `InterlockedCompareExchange64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDCOMPAREEXCHANGE64 1
-
-/* Define to 1 if you have the declaration of `InterlockedDecrement64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDDECREMENT64 1
-
-/* Define to 1 if you have the declaration of `InterlockedExchange64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDEXCHANGE64 1
-
-/* Define to 1 if you have the declaration of `InterlockedIncrement64',
-   and to 0 if you don't. */
-#define HAVE_DECL_INTERLOCKEDINCREMENT64 1
-
-/* Define to 1 if you have the declaration of `__readfsdword',
-   and to 0 if you don't. */
-#define HAVE_DECL___READFSDWORD 1
-
 /* Define to 1 if you have the `getaddrinfo' function. */
 #define HAVE_GETADDRINFO 1
 
@@ -90,9 +68,6 @@
 
 /* Define to 1 if you have the `getprotobyname' function. */
 #define HAVE_GETPROTOBYNAME 1
-
-/* Define to 1 if you have the `GetProcessId' function. */
-#define HAVE_GETPROCESSID 1
 
 /* Have inet_ntop */
 #define HAVE_INET_NTOP 1
@@ -157,8 +132,9 @@
 #define HAVE_WRITE_BARRIERS
 #endif
 
-/* Optional HAVE_DEFINES */
+/* Start configure HAVE_DEFINES picked up from cygconfig.h or other external source, if available */
 /* @HAVE_DEFINES@ */
+/* End configure HAVE_DEFINES picked up from cygconfig.h or other external source, if available */
 
 /* No HAVE_DEFINES below this point */
 

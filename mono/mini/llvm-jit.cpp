@@ -6,9 +6,6 @@
 //
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 //
-// Mono's internal header files are not C++ clean, so avoid including them if 
-// possible
-//
 
 #include "config.h"
 
@@ -16,28 +13,32 @@
 #include <llvm-c/ExecutionEngine.h>
 
 #include "mini-llvm-cpp.h"
+#include "mini-runtime.h"
 #include "llvm-jit.h"
 
-#if defined(MONO_ARCH_LLVM_JIT_SUPPORTED) && !defined(MONO_CROSS_COMPILE) && LLVM_API_VERSION > 100
+#if defined(MONO_ARCH_LLVM_JIT_SUPPORTED) && !defined(MONO_CROSS_COMPILE) && LLVM_API_VERSION > 600
 
-/*
- * LLVM 3.9 uses the OrcJIT APIs
- */
-
+#include <llvm/ADT/SmallVector.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Host.h>
+#include <llvm/Support/Memory.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/IR/Mangler.h>
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/LegacyPassNameParser.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
-#if LLVM_API_VERSION >= 500
 #include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
+#include "llvm/Transforms/Scalar.h"
+
+#if LLVM_API_VERSION >= 800
+#include "llvm/CodeGen/BuiltinGCs.h"
 #else
-#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+#include "llvm/CodeGen/GCs.h"
 #endif
 
 #include <cstdlib>
@@ -55,6 +56,17 @@ mono_llvm_set_unhandled_exception_handler (void)
 {
 }
 
+// noop function that merely ensures that certain symbols are not eliminated
+// from the resulting binary.
+static void
+link_gc () {
+#if LLVM_API_VERSION >= 800
+	llvm::linkAllBuiltinGCs();
+#else
+	llvm::linkCoreCLRGC(); // Mono uses built-in "coreclr" GCStrategy
+#endif
+}
+
 template <typename T>
 static std::vector<T> singletonSet(T t) {
   std::vector<T> Vec;
@@ -70,7 +82,15 @@ void bzero (void *to, size_t count) { memset (to, 0, count); }
 
 #endif
 
-static AllocCodeMemoryCb *alloc_code_mem_cb;
+static MonoNativeTlsKey current_cfg_tls_id;
+
+static unsigned char *
+alloc_code (LLVMValueRef function, int size)
+{
+	auto cfg = (MonoCompile *)mono_native_tls_get_value (current_cfg_tls_id);
+	g_assert (cfg);
+	return (unsigned char *)mono_mem_manager_code_reserve (cfg->mem_manager, size);
+}
 
 class MonoJitMemoryManager : public RTDyldMemoryManager
 {
@@ -89,6 +109,8 @@ public:
 								 StringRef SectionName) override;
 
 	bool finalizeMemory(std::string *ErrMsg = nullptr) override;
+private:
+	SmallVector<sys::MemoryBlock, 16> PendingCodeMem;
 };
 
 MonoJitMemoryManager::~MonoJitMemoryManager()
@@ -100,9 +122,17 @@ MonoJitMemoryManager::allocateDataSection(uintptr_t Size,
 										  unsigned Alignment,
 										  unsigned SectionID,
 										  StringRef SectionName,
-										  bool IsReadOnly) {
-	uint8_t *res = (uint8_t*)malloc (Size);
+										  bool IsReadOnly)
+{
+	uint8_t *res;
+
+	// FIXME: Use a mempool
+	if (Alignment == 0)
+                Alignment = 16;
+	res = (uint8_t*)malloc (Size + Alignment);
+	res = (uint8_t*)ALIGN_PTR_TO(res, Alignment);
 	assert (res);
+	g_assert (GPOINTER_TO_UINT (res) % Alignment == 0);
 	memset (res, 0, Size);
 	return res;
 }
@@ -113,58 +143,210 @@ MonoJitMemoryManager::allocateCodeSection(uintptr_t Size,
 										  unsigned SectionID,
 										  StringRef SectionName)
 {
-	return alloc_code_mem_cb (NULL, Size);
+	uint8_t *mem = alloc_code (NULL, Size);
+	PendingCodeMem.push_back (sys::MemoryBlock ((void *)mem, Size));
+	return mem;
 }
 
 bool
 MonoJitMemoryManager::finalizeMemory(std::string *ErrMsg)
 {
+	for (sys::MemoryBlock &Block : PendingCodeMem) {
+#if LLVM_API_VERSION >= 900
+		sys::Memory::InvalidateInstructionCache (Block.base (), Block.allocatedSize ());
+#else
+		sys::Memory::InvalidateInstructionCache (Block.base (), Block.size ());
+#endif
+	}
+	PendingCodeMem.clear ();
 	return false;
 }
+
+#if defined(TARGET_AMD64) || defined(TARGET_X86)
+#define NO_CALL_FRAME_OPT " -no-x86-call-frame-opt"
+#else
+#define NO_CALL_FRAME_OPT ""
+#endif
+
+// The OptimizationList is automatically populated with registered Passes by the
+// PassNameParser.
+//
+static cl::list<const PassInfo*, bool, PassNameParser>
+PassList(cl::desc("Optimizations available:"));
+
+static void
+init_function_pass_manager (legacy::FunctionPassManager &fpm)
+{
+	auto reg = PassRegistry::getPassRegistry ();
+	for (size_t i = 0; i < PassList.size(); i++) {
+		Pass *pass = PassList[i]->getNormalCtor()();
+		if (pass->getPassKind () == llvm::PT_Function || pass->getPassKind () == llvm::PT_Loop) {
+			fpm.add (pass);
+		} else {
+			auto info = reg->getPassInfo (pass->getPassID());
+			auto name = info->getPassArgument ();
+			printf("Opt pass is ignored: %.*s\n", (int) name.size(), name.data());
+		}
+	}
+	// -place-safepoints pass is mandatory
+	fpm.add (createPlaceSafepointsPass ());
+
+	fpm.doInitialization();
+}
+
+#if LLVM_API_VERSION >= 900
+
+struct MonoLLVMJIT {
+	std::shared_ptr<MonoJitMemoryManager> mmgr;
+	ExecutionSession execution_session;
+	std::map<VModuleKey, std::shared_ptr<SymbolResolver>> resolvers;
+	TargetMachine *target_machine;
+	LegacyRTDyldObjectLinkingLayer object_layer;
+	LegacyIRCompileLayer<decltype(object_layer), SimpleCompiler> compile_layer;
+	DataLayout data_layout;
+	legacy::FunctionPassManager fpm;
+
+	MonoLLVMJIT (TargetMachine *tm, Module *pgo_module)
+		: mmgr (std::make_shared<MonoJitMemoryManager>())
+		, target_machine (tm)
+		, object_layer (
+			AcknowledgeORCv1Deprecation, execution_session,
+			[this] (VModuleKey k) {
+				return LegacyRTDyldObjectLinkingLayer::Resources{
+					mmgr, resolvers[k] };
+			})
+		, compile_layer (
+			AcknowledgeORCv1Deprecation, object_layer,
+			SimpleCompiler{*target_machine})
+		, data_layout (target_machine->createDataLayout())
+		, fpm (pgo_module)
+	{
+		compile_layer.setNotifyCompiled ([] (VModuleKey, std::unique_ptr<Module> module) {
+			module.release ();
+		});
+		init_function_pass_manager (fpm);
+	}
+
+	VModuleKey
+	add_module (std::unique_ptr<Module> m)
+	{
+		auto k = execution_session.allocateVModule();
+		auto lookup_name = [this] (const std::string &namestr) {
+			auto jit_sym = compile_layer.findSymbol(namestr, false);
+			if (jit_sym) {
+				return jit_sym;
+			}
+			auto namebuf = namestr.c_str();
+			JITSymbolFlags flags{};
+			if (!strcmp(namebuf, "___bzero")) {
+				return JITSymbol{(uint64_t)(gssize)(void*)bzero, flags};
+			}
+			auto current = mono_dl_open (NULL, 0, NULL);
+			g_assert (current);
+			auto name = namebuf[0] == '_' ? namebuf + 1 : namebuf;
+			void *sym = nullptr;
+			auto err = mono_dl_symbol (current, name, &sym);
+			if (!sym) {
+				outs () << "R: " << namestr << " " << err << "\n";
+			}
+			assert (sym);
+			return JITSymbol{(uint64_t)(gssize)sym, flags};
+		};
+		auto on_error = [] (Error err) {
+			outs () << "R2: " << err << "\n";
+			assert (0);
+		};
+		auto resolver = createLegacyLookupResolver (execution_session,
+			lookup_name, on_error);
+		resolvers[k] = std::move (resolver);
+		auto err = compile_layer.addModule (k, std::move(m));
+		if (err) {
+			outs () << "addModule error: " << err << "\n";
+			assert (0);
+		}
+		return k;
+	}
+
+	std::string
+	mangle (llvm::StringRef name)
+	{
+		std::string ret;
+		raw_string_ostream out{ret};
+		Mangler::getNameWithPrefix (out, name, data_layout);
+		return ret;
+	}
+
+	std::string
+	mangle (const GlobalValue *gv)
+	{
+		std::string ret;
+		raw_string_ostream out{ret};
+		Mangler{}.getNameWithPrefix (out, gv, false);
+		return ret;
+	}
+
+	gpointer
+	compile (
+		Function *func, int nvars, LLVMValueRef *callee_vars,
+		gpointer *callee_addrs, gpointer *eh_frame)
+	{
+		auto module = func->getParent ();
+		module->setDataLayout (data_layout);
+		fpm.run (*func);
+		// The lifetime of this module is managed by Mono, not LLVM, so
+		// the `unique_ptr` created here will be released in the
+		// NotifyCompiled callback.
+		auto k = add_module (std::unique_ptr<Module>(module));
+		auto bodysym = compile_layer.findSymbolIn (k, mangle (func), false);
+		auto bodyaddr = bodysym.getAddress ();
+		if (!bodyaddr)
+			g_assert_not_reached();
+		for (int i = 0; i < nvars; ++i) {
+			auto var = unwrap<GlobalVariable> (callee_vars[i]);
+			auto sym = compile_layer.findSymbolIn (k, mangle (var->getName ()), true);
+			auto addr = sym.getAddress ();
+			g_assert ((bool)addr);
+			callee_addrs[i] = (gpointer)addr.get ();
+		}
+		auto ehsym = compile_layer.findSymbolIn (k, "mono_eh_frame", false);
+		auto ehaddr = ehsym.getAddress ();
+		g_assert ((bool)ehaddr);
+		*eh_frame = (gpointer)ehaddr.get ();
+		return (gpointer)bodyaddr.get ();
+	}
+};
+
+static MonoLLVMJIT *
+make_mono_llvm_jit (TargetMachine *target_machine, llvm::Module *pgo_module)
+{
+	return new MonoLLVMJIT{target_machine, pgo_module};
+}
+
+#elif LLVM_API_VERSION > 600
 
 class MonoLLVMJIT {
 public:
 	/* We use our own trampoline infrastructure instead of the Orc one */
-#if LLVM_API_VERSION >= 500
 	typedef RTDyldObjectLinkingLayer ObjLayerT;
 	typedef IRCompileLayer<ObjLayerT, SimpleCompiler> CompileLayerT;
 	typedef CompileLayerT::ModuleHandleT ModuleHandleT;
-#else
-	typedef ObjectLinkingLayer<> ObjLayerT;
-	typedef IRCompileLayer<ObjLayerT> CompileLayerT;
-	typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
-#endif
 
 	MonoLLVMJIT (TargetMachine *TM, MonoJitMemoryManager *mm)
-#if LLVM_API_VERSION >= 500
 		: TM(TM), ObjectLayer([=] { return std::shared_ptr<RuntimeDyld::MemoryManager> (mm); }),
-#else
-		: TM(TM),
-#endif
 		  CompileLayer (ObjectLayer, SimpleCompiler (*TM)),
-		  modules() {
+		  modules(),
+		  fpm (nullptr)
+	{
+		init_function_pass_manager (fpm);
 	}
 
-#if LLVM_API_VERSION >= 500
 	ModuleHandleT addModule(Function *F, std::shared_ptr<Module> M) {
-#else
-	ModuleHandleT addModule(Function *F, Module *M) {
-#endif
 		auto Resolver = createLambdaResolver(
                       [&](const std::string &Name) {
 						  const char *name = Name.c_str ();
-#if LLVM_API_VERSION >= 500
 						  JITSymbolFlags flags = JITSymbolFlags ();
-#else
-						  JITSymbolFlags flags = (JITSymbolFlags)0;
-#endif
-						  if (!strcmp (name, "___bzero")) {
-#if LLVM_API_VERSION >= 500
+						  if (!strcmp (name, "___bzero"))
 							  return JITSymbol((uint64_t)(gssize)(void*)bzero, flags);
-#else
-							  return RuntimeDyld::SymbolInfo((uint64_t)(gssize)(void*)bzero, flags);
-#endif
-						  }
 
 						  MonoDl *current;
 						  char *err;
@@ -179,11 +361,7 @@ public:
 						  if (!symbol)
 							  outs () << "R: " << Name << "\n";
 						  assert (symbol);
-#if LLVM_API_VERSION >= 500
 						  return JITSymbol((uint64_t)(gssize)symbol, flags);
-#else
-						  return RuntimeDyld::SymbolInfo((uint64_t)(gssize)symbol, flags);
-#endif
                       },
                       [](const std::string &S) {
 						  outs () << "R2: " << S << "\n";
@@ -191,15 +369,9 @@ public:
 						  return nullptr;
 					  } );
 
-#if LLVM_API_VERSION >= 500
 		auto m = CompileLayer.addModule(M, std::move(Resolver));
 		g_assert (!!m);
 		return m.get ();
-#else
-		return CompileLayer.addModuleSet(singletonSet(M),
-										  make_unique<MonoJitMemoryManager>(),
-										  std::move(Resolver));
-#endif
 	}
 
 	std::string mangle(const std::string &Name) {
@@ -225,43 +397,31 @@ public:
 
 	gpointer compile (Function *F, int nvars, LLVMValueRef *callee_vars, gpointer *callee_addrs, gpointer *eh_frame) {
 		F->getParent ()->setDataLayout (TM->createDataLayout ());
-#if LLVM_API_VERSION >= 500
+		fpm.run(*F);
+		// TODO: run module wide optimizations, e.g. remove dead globals/functions
 		// Orc uses a shared_ptr to refer to modules so we have to save them ourselves to keep a ref
 		std::shared_ptr<Module> m (F->getParent ());
 		modules.push_back (m);
 		auto ModuleHandle = addModule (F, m);
-#else
-		auto ModuleHandle = addModule (F, F->getParent ());
-#endif
 		auto BodySym = CompileLayer.findSymbolIn(ModuleHandle, mangle (F), false);
 		auto BodyAddr = BodySym.getAddress();
-		assert (BodyAddr);
+		if (!BodyAddr)
+			g_assert_not_reached ();
 
 		for (int i = 0; i < nvars; ++i) {
 			GlobalVariable *var = unwrap<GlobalVariable>(callee_vars [i]);
 
 			auto sym = CompileLayer.findSymbolIn (ModuleHandle, mangle (var->getName ()), true);
 			auto addr = sym.getAddress ();
-#if LLVM_API_VERSION >= 500
 			g_assert ((bool)addr);
 			callee_addrs [i] = (gpointer)addr.get ();
-#else
-			g_assert (addr);
-			callee_addrs [i] = (gpointer)addr;
-#endif
 		}
 
 		auto ehsym = CompileLayer.findSymbolIn(ModuleHandle, "mono_eh_frame", false);
 		auto ehaddr = ehsym.getAddress ();
-#if LLVM_API_VERSION >= 500
 		g_assert ((bool)ehaddr);
 		*eh_frame = (gpointer)ehaddr.get ();
 		return (gpointer)BodyAddr.get ();
-#else
-		g_assert (ehaddr);
-		*eh_frame = (gpointer)ehaddr;
-		return (gpointer)BodyAddr;
-#endif
 	}
 
 private:
@@ -269,36 +429,118 @@ private:
 	ObjLayerT ObjectLayer;
 	CompileLayerT CompileLayer;
 	std::vector<std::shared_ptr<Module>> modules;
+	legacy::FunctionPassManager fpm;
 };
 
-static MonoLLVMJIT *jit;
 static MonoJitMemoryManager *mono_mm;
 
-MonoEERef
-mono_llvm_create_ee (LLVMModuleProviderRef MP, AllocCodeMemoryCb *alloc_cb, FunctionEmittedCb *emitted_cb, ExceptionTableCb *exception_cb, DlSymCb *dlsym_cb, LLVMExecutionEngineRef *ee)
+static MonoLLVMJIT *
+make_mono_llvm_jit (TargetMachine *target_machine, llvm::Module *)
 {
-	alloc_code_mem_cb = alloc_cb;
+	mono_mm = new MonoJitMemoryManager ();
+	return new MonoLLVMJIT(target_machine, mono_mm);
+}
+
+#endif
+
+static llvm::Module *dummy_pgo_module = nullptr;
+static MonoLLVMJIT *jit;
+
+static void
+init_passes_and_options ()
+{
+	PassRegistry &registry = *PassRegistry::getPassRegistry();
+	initializeCore(registry);
+	initializeScalarOpts(registry);
+	initializeInstCombine(registry);
+	initializeTarget(registry);
+	initializeLoopIdiomRecognizeLegacyPassPass(registry);
+
+	// FIXME: find optimal mono specific order of passes
+	// see https://llvm.org/docs/Frontend/PerformanceTips.html#pass-ordering
+	// the following order is based on a stripped version of "OPT -O2"
+	const char *default_opts = " -simplifycfg -sroa -lower-expect -instcombine -sroa -jump-threading -loop-rotate -licm -simplifycfg -lcssa -loop-idiom -indvars -loop-deletion -gvn -memcpyopt -sccp -bdce -instcombine -dse -simplifycfg -enable-implicit-null-checks -sroa -instcombine" NO_CALL_FRAME_OPT;
+	const char *opts = g_getenv ("MONO_LLVM_OPT");
+	if (opts == NULL)
+		opts = default_opts;
+	else if (opts[0] == '+') // Append passes to the default order if starts with '+', overwrite otherwise
+		opts = g_strdup_printf ("%s %s", default_opts, opts + 1);
+	else if (opts[0] != ' ') // pass order has to start with a leading whitespace
+		opts = g_strdup_printf (" %s", opts);
+
+	char **args = g_strsplit (opts, " ", -1);
+	llvm::cl::ParseCommandLineOptions (g_strv_length (args), args, "");
+	g_strfreev (args);
+}
+
+void
+mono_llvm_jit_init ()
+{
+	if (jit != nullptr) return;
+
+	link_gc ();
+
+	mono_native_tls_alloc (&current_cfg_tls_id, NULL);
 
 	InitializeNativeTarget ();
 	InitializeNativeTargetAsmPrinter();
 
 	EnableMonoEH = true;
 	MonoEHFrameSymbol = "mono_eh_frame";
-
 	EngineBuilder EB;
-#if defined(TARGET_AMD64) || defined(TARGET_X86)
-	std::vector<std::string> attrs;
-	// FIXME: Autodetect this
-	attrs.push_back("sse3");
-	attrs.push_back("sse4.1");
-	EB.setMAttrs (attrs);
+
+	if (mono_use_fast_math) {
+		TargetOptions opts;
+		opts.NoInfsFPMath = true;
+		opts.NoNaNsFPMath = true;
+		opts.NoSignedZerosFPMath = true;
+		opts.NoTrappingFPMath = true;
+		opts.UnsafeFPMath = true;
+		opts.AllowFPOpFusion = FPOpFusion::Fast;
+		EB.setTargetOptions (opts);
+	}
+
+	EB.setOptLevel (CodeGenOpt::Aggressive);
+	EB.setMCPU (sys::getHostCPUName ());
+
+#ifdef TARGET_AMD64
+	EB.setMArch ("x86-64");
+#elif TARGET_X86
+	EB.setMArch ("x86");
+#elif TARGET_ARM64
+	EB.setMArch ("aarch64");
+#elif TARGET_ARM
+	EB.setMArch ("arm");
+#else
+	g_assert_not_reached ();
 #endif
+
+	llvm::StringMap<bool> cpu_features;
+	// Why 76? LLVM 9 supports 76 different x86 feature strings. This
+	// requires around 1216 bytes of data in the local activation record.
+	// It'd be possible to stream entries to setMAttrs using
+	// llvm::map_range and llvm::make_filter_range, but llvm::map_range
+	// isn't available in LLVM 6, and it's not worth writing a small
+	// single-purpose one here.
+	llvm::SmallVector<llvm::StringRef, 76> supported_features;
+	if (llvm::sys::getHostCPUFeatures (cpu_features)) {
+		for (const auto &feature : cpu_features) {
+			if (feature.second)
+				supported_features.push_back (feature.first ());
+		}
+		EB.setMAttrs (supported_features);
+	}
+
 	auto TM = EB.selectTarget ();
 	assert (TM);
+	dummy_pgo_module = unwrap (LLVMModuleCreateWithName("dummy-pgo-module"));
+	init_passes_and_options ();
+	jit = make_mono_llvm_jit (TM, dummy_pgo_module);
+}
 
-	mono_mm = new MonoJitMemoryManager ();
-	jit = new MonoLLVMJIT (TM, mono_mm);
-
+MonoEERef
+mono_llvm_create_ee (LLVMExecutionEngineRef *ee)
+{
 	return NULL;
 }
 
@@ -309,9 +551,12 @@ mono_llvm_create_ee (LLVMModuleProviderRef MP, AllocCodeMemoryCb *alloc_cb, Func
  * CALLEE_ADDRS. Return the EH frame address in EH_FRAME.
  */
 gpointer
-mono_llvm_compile_method (MonoEERef mono_ee, LLVMValueRef method, int nvars, LLVMValueRef *callee_vars, gpointer *callee_addrs, gpointer *eh_frame)
+mono_llvm_compile_method (MonoEERef mono_ee, MonoCompile *cfg, LLVMValueRef method, int nvars, LLVMValueRef *callee_vars, gpointer *callee_addrs, gpointer *eh_frame)
 {
-	return jit->compile (unwrap<Function> (method), nvars, callee_vars, callee_addrs, eh_frame);
+	mono_native_tls_set_value (current_cfg_tls_id, cfg);
+	auto ret = jit->compile (unwrap<Function> (method), nvars, callee_vars, callee_addrs, eh_frame);
+	mono_native_tls_set_value (current_cfg_tls_id, nullptr);
+	return ret;
 }
 
 void
@@ -319,571 +564,27 @@ mono_llvm_dispose_ee (MonoEERef *eeref)
 {
 }
 
-void
-LLVMAddGlobalMapping(LLVMExecutionEngineRef EE, LLVMValueRef Global,
-					 void* Addr)
-{
-	g_assert_not_reached ();
-}
-
-void*
-LLVMGetPointerToGlobal(LLVMExecutionEngineRef EE, LLVMValueRef Global)
-{
-	g_assert_not_reached ();
-	return NULL;
-}
-
-#elif defined(MONO_ARCH_LLVM_JIT_SUPPORTED) && !defined(MONO_CROSS_COMPILE) && LLVM_API_VERSION < 100
-
-#include <stdint.h>
-
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Support/Host.h>
-#include <llvm/PassManager.h>
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JITMemoryManager.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
-#include <llvm/Target/TargetOptions.h>
-#include <llvm/Target/TargetRegisterInfo.h>
-#include <llvm/IR/Verifier.h>
-#include <llvm/Analysis/Passes.h>
-#include <llvm/Transforms/Scalar.h>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/IR/LegacyPassNameParser.h>
-#include <llvm/Support/PrettyStackTrace.h>
-#include <llvm/CodeGen/Passes.h>
-#include <llvm/CodeGen/MachineFunctionPass.h>
-#include <llvm/CodeGen/MachineFunction.h>
-#include <llvm/CodeGen/MachineFrameInfo.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/Module.h>
-
-using namespace llvm;
-
-static void (*unhandled_exception)() = default_mono_llvm_unhandled_exception;
+#else /* MONO_CROSS_COMPILE or LLVM_API_VERSION < 600 */
 
 void
 mono_llvm_set_unhandled_exception_handler (void)
 {
-	std::set_terminate (unhandled_exception);
-}
-
-class MonoJITMemoryManager : public JITMemoryManager
-{
-private:
-	JITMemoryManager *mm;
-
-public:
-	/* Callbacks installed by mono */
-	AllocCodeMemoryCb *alloc_cb;
-	DlSymCb *dlsym_cb;
-	ExceptionTableCb *exception_cb;
-
-	MonoJITMemoryManager ();
-	~MonoJITMemoryManager ();
-
-	void setMemoryWritable (void);
-
-	void setMemoryExecutable (void);
-
-	void AllocateGOT();
-
-    unsigned char *getGOTBase() const {
-		return mm->getGOTBase ();
-    }
-
-	void setPoisonMemory(bool) {
-	}
-
-	unsigned char *startFunctionBody(const Function *F, 
-									 uintptr_t &ActualSize);
-  
-	unsigned char *allocateStub(const GlobalValue* F, unsigned StubSize,
-								 unsigned Alignment);
-  
-	void endFunctionBody(const Function *F, unsigned char *FunctionStart,
-						 unsigned char *FunctionEnd);
-
-	unsigned char *allocateSpace(intptr_t Size, unsigned Alignment);
-
-	uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment);
-  
-	void deallocateMemForFunction(const Function *F);
-  
-	unsigned char*startExceptionTable(const Function* F,
-									  uintptr_t &ActualSize);
-  
-	void endExceptionTable(const Function *F, unsigned char *TableStart,
-						   unsigned char *TableEnd, 
-						   unsigned char* FrameRegister);
-
-	virtual void deallocateFunctionBody(void*) {
-	}
-
-	virtual void deallocateExceptionTable(void*) {
-	}
-
-	virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment, unsigned SectionID,
-										 StringRef SectionName) {
-		// FIXME:
-		assert(0);
-		return NULL;
-	}
-
-	virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment, unsigned SectionID,
-										 StringRef SectionName, bool IsReadOnly) {
-		// FIXME:
-		assert(0);
-		return NULL;
-	}
-
-	virtual bool applyPermissions(std::string*) {
-		// FIXME:
-		assert(0);
-		return false;
-	}
-
-	virtual bool finalizeMemory(std::string *ErrMsg = 0) {
-		// FIXME:
-		assert(0);
-		return false;
-	}
-
-	virtual void* getPointerToNamedFunction(const std::string &Name, bool AbortOnFailure) {
-		void *res;
-		char *err;
-
-		err = dlsym_cb (Name.c_str (), &res);
-		if (err) {
-			outs () << "Unable to resolve: " << Name << ": " << err << "\n";
-			assert(0);
-			return NULL;
-		}
-		return res;
-	}
-};
-
-MonoJITMemoryManager::MonoJITMemoryManager ()
-{
-	mm = JITMemoryManager::CreateDefaultMemManager ();
-}
-
-MonoJITMemoryManager::~MonoJITMemoryManager ()
-{
-	delete mm;
 }
 
 void
-MonoJITMemoryManager::setMemoryWritable (void)
-{
-}
-
-void
-MonoJITMemoryManager::setMemoryExecutable (void)
-{
-}
-
-void
-MonoJITMemoryManager::AllocateGOT()
-{
-	mm->AllocateGOT ();
-}
-
-unsigned char *
-MonoJITMemoryManager::startFunctionBody(const Function *F, 
-					uintptr_t &ActualSize)
-{
-	// FIXME: This leaks memory
-	if (ActualSize == 0)
-		ActualSize = 128;
-	return alloc_cb (wrap (F), ActualSize);
-}
-  
-unsigned char *
-MonoJITMemoryManager::allocateStub(const GlobalValue* F, unsigned StubSize,
-			   unsigned Alignment)
-{
-	return alloc_cb (wrap (F), StubSize);
-}
-  
-void
-MonoJITMemoryManager::endFunctionBody(const Function *F, unsigned char *FunctionStart,
-				  unsigned char *FunctionEnd)
-{
-}
-
-unsigned char *
-MonoJITMemoryManager::allocateSpace(intptr_t Size, unsigned Alignment)
-{
-	return new unsigned char [Size];
-}
-
-uint8_t *
-MonoJITMemoryManager::allocateGlobal(uintptr_t Size, unsigned Alignment)
-{
-	return new unsigned char [Size];
-}
-
-void
-MonoJITMemoryManager::deallocateMemForFunction(const Function *F)
-{
-}
-  
-unsigned char*
-MonoJITMemoryManager::startExceptionTable(const Function* F,
-					  uintptr_t &ActualSize)
-{
-	return startFunctionBody(F, ActualSize);
-}
-  
-void
-MonoJITMemoryManager::endExceptionTable(const Function *F, unsigned char *TableStart,
-					unsigned char *TableEnd, 
-					unsigned char* FrameRegister)
-{
-	exception_cb (FrameRegister);
-}
-
-class MonoJITEventListener : public JITEventListener {
-
-public:
-	FunctionEmittedCb *emitted_cb;
-
-	MonoJITEventListener (FunctionEmittedCb *cb) {
-		emitted_cb = cb;
-	}
-
-	virtual void NotifyFunctionEmitted(const Function &F,
-									   void *Code, size_t Size,
-									   const EmittedFunctionDetails &Details) {
-		emitted_cb (wrap (&F), Code, (char*)Code + Size);
-	}
-};
-
-class MonoEE {
-public:
-	ExecutionEngine *EE;
-	MonoJITMemoryManager *mm;
-	MonoJITEventListener *listener;
-	FunctionPassManager *fpm;
-};
-
-void
-mono_llvm_optimize_method (MonoEERef eeref, LLVMValueRef method)
-{
-	MonoEE *mono_ee = (MonoEE*)eeref;
-
-	/*
-	 * The verifier does some checks on the whole module, leading to quadratic behavior.
-	 */
-	//verifyFunction (*(unwrap<Function> (method)));
-	mono_ee->fpm->run (*unwrap<Function> (method));
-}
-
-static cl::list<const PassInfo*, bool, PassNameParser>
-PassList(cl::desc("Optimizations available:"));
-
-static void
-force_pass_linking (void)
-{
-	// Make sure the rest is linked in, but never executed
-	char *foo = g_getenv ("FOO");
-	gboolean ret = (foo != (char*)-1);
-	g_free (foo);
-
-	if (ret) 
-		return;
-
-	// This is a subset of the passes in LinkAllPasses.h
-	// The utility passes and the interprocedural passes are commented out
-
-      (void) llvm::createAAEvalPass();
-      (void) llvm::createAggressiveDCEPass();
-      (void) llvm::createAliasAnalysisCounterPass();
-      (void) llvm::createAliasDebugger();
-	  /*
-      (void) llvm::createArgumentPromotionPass();
-      (void) llvm::createStructRetPromotionPass();
-	  */
-      (void) llvm::createBasicAliasAnalysisPass();
-      (void) llvm::createLibCallAliasAnalysisPass(0);
-      (void) llvm::createScalarEvolutionAliasAnalysisPass();
-      //(void) llvm::createBlockPlacementPass();
-      (void) llvm::createBreakCriticalEdgesPass();
-      (void) llvm::createCFGSimplificationPass();
-	  /*
-      (void) llvm::createConstantMergePass();
-      (void) llvm::createConstantPropagationPass();
-	  */
-	  /*
-      (void) llvm::createDeadArgEliminationPass();
-	  */
-      (void) llvm::createDeadCodeEliminationPass();
-      (void) llvm::createDeadInstEliminationPass();
-      (void) llvm::createDeadStoreEliminationPass();
-	  /*
-      (void) llvm::createDeadTypeEliminationPass();
-      (void) llvm::createDomOnlyPrinterPass();
-      (void) llvm::createDomPrinterPass();
-      (void) llvm::createDomOnlyViewerPass();
-      (void) llvm::createDomViewerPass();
-      (void) llvm::createEdgeProfilerPass();
-      (void) llvm::createOptimalEdgeProfilerPass();
-      (void) llvm::createFunctionInliningPass();
-      (void) llvm::createAlwaysInlinerPass();
-      (void) llvm::createGlobalDCEPass();
-      (void) llvm::createGlobalOptimizerPass();
-      (void) llvm::createGlobalsModRefPass();
-      (void) llvm::createIPConstantPropagationPass();
-      (void) llvm::createIPSCCPPass();
-	  */
-      (void) llvm::createIndVarSimplifyPass();
-      (void) llvm::createInstructionCombiningPass();
-	  /*
-      (void) llvm::createInternalizePass(false);
-	  */
-      (void) llvm::createLCSSAPass();
-      (void) llvm::createLICMPass();
-      (void) llvm::createLazyValueInfoPass();
-      //(void) llvm::createLoopDependenceAnalysisPass();
-	  /*
-      (void) llvm::createLoopExtractorPass();
-	  */
-      (void) llvm::createLoopSimplifyPass();
-      (void) llvm::createLoopStrengthReducePass();
-      (void) llvm::createLoopUnrollPass();
-      (void) llvm::createLoopUnswitchPass();
-      (void) llvm::createLoopRotatePass();
-      (void) llvm::createLowerInvokePass();
-	  /*
-      (void) llvm::createLowerSetJmpPass();
-	  */
-      (void) llvm::createLowerSwitchPass();
-      (void) llvm::createNoAAPass();
-	  /*
-      (void) llvm::createNoProfileInfoPass();
-      (void) llvm::createProfileEstimatorPass();
-      (void) llvm::createProfileVerifierPass();
-      (void) llvm::createProfileLoaderPass();
-	  */
-      (void) llvm::createPromoteMemoryToRegisterPass();
-      (void) llvm::createDemoteRegisterToMemoryPass();
-	  /*
-      (void) llvm::createPruneEHPass();
-      (void) llvm::createPostDomOnlyPrinterPass();
-      (void) llvm::createPostDomPrinterPass();
-      (void) llvm::createPostDomOnlyViewerPass();
-      (void) llvm::createPostDomViewerPass();
-	  */
-      (void) llvm::createReassociatePass();
-      (void) llvm::createSCCPPass();
-      (void) llvm::createScalarReplAggregatesPass();
-      //(void) llvm::createSimplifyLibCallsPass();
-	  /*
-      (void) llvm::createSingleLoopExtractorPass();
-      (void) llvm::createStripSymbolsPass();
-      (void) llvm::createStripNonDebugSymbolsPass();
-      (void) llvm::createStripDeadDebugInfoPass();
-      (void) llvm::createStripDeadPrototypesPass();
-      (void) llvm::createTailCallEliminationPass();
-      (void) llvm::createTailDuplicationPass();
-      (void) llvm::createJumpThreadingPass();
-	  */
-	  /*
-      (void) llvm::createUnifyFunctionExitNodesPass();
-	  */
-      (void) llvm::createInstCountPass();
-      (void) llvm::createCodeGenPreparePass();
-      (void) llvm::createGVNPass();
-      (void) llvm::createMemCpyOptPass();
-      (void) llvm::createLoopDeletionPass();
-	  /*
-      (void) llvm::createPostDomTree();
-      (void) llvm::createPostDomFrontier();
-      (void) llvm::createInstructionNamerPass();
-      (void) llvm::createPartialSpecializationPass();
-      (void) llvm::createFunctionAttrsPass();
-      (void) llvm::createMergeFunctionsPass();
-      (void) llvm::createPrintModulePass(0);
-      (void) llvm::createPrintFunctionPass("", 0);
-      (void) llvm::createDbgInfoPrinterPass();
-      (void) llvm::createModuleDebugInfoPrinterPass();
-      (void) llvm::createPartialInliningPass();
-      (void) llvm::createGEPSplitterPass();
-      (void) llvm::createLintPass();
-	  */
-      (void) llvm::createSinkingPass();
-}
-
-static gboolean inited;
-
-static void
-init_llvm (void)
-{
-	if (inited)
-		return;
-
-  force_pass_linking ();
-
-#ifdef TARGET_ARM
-  LLVMInitializeARMTarget ();
-  LLVMInitializeARMTargetInfo ();
-  LLVMInitializeARMTargetMC ();
-#elif defined(TARGET_ARM64)
-  LLVMInitializeAArch64Target ();
-  LLVMInitializeAArch64TargetInfo ();
-  LLVMInitializeAArch64TargetMC ();
-#elif defined(TARGET_X86) || defined(TARGET_AMD64)
-  LLVMInitializeX86Target ();
-  LLVMInitializeX86TargetInfo ();
-  LLVMInitializeX86TargetMC ();
-#elif defined(TARGET_POWERPC)
-  LLVMInitializePowerPCTarget ();
-  LLVMInitializePowerPCTargetInfo ();
-  LLVMInitializePowerPCTargetMC ();
-#else
-  #error Unsupported mono-llvm target
-#endif
-
-  PassRegistry &Registry = *PassRegistry::getPassRegistry();
-  initializeCore(Registry);
-  initializeScalarOpts(Registry);
-  initializeAnalysis(Registry);
-  initializeIPA(Registry);
-  initializeTransformUtils(Registry);
-  initializeInstCombine(Registry);
-  initializeTarget(Registry);
-
-  llvm::cl::ParseEnvironmentOptions("mono", "MONO_LLVM", "");
-
-  inited = true;
-}
-
-MonoEERef
-mono_llvm_create_ee (LLVMModuleProviderRef MP, AllocCodeMemoryCb *alloc_cb, FunctionEmittedCb *emitted_cb, ExceptionTableCb *exception_cb, DlSymCb *dlsym_cb, LLVMExecutionEngineRef *ee)
-{
-  std::string Error;
-  MonoEE *mono_ee;
-
-  init_llvm ();
-
-  mono_ee = new MonoEE ();
-
-  MonoJITMemoryManager *mono_mm = new MonoJITMemoryManager ();
-  mono_mm->alloc_cb = alloc_cb;
-  mono_mm->dlsym_cb = dlsym_cb;
-  mono_mm->exception_cb = exception_cb;
-  mono_ee->mm = mono_mm;
-
-  /*
-   * The Default code model doesn't seem to work on amd64,
-   * test_0_fields_with_big_offsets (among others) crashes, because LLVM tries to call
-   * memset using a normal pcrel code which is in 32bit memory, while memset isn't.
-   */
-
-  TargetOptions opts;
-  opts.JITExceptionHandling = 1;
-
-  StringRef cpu_name = sys::getHostCPUName ();
-
-  // EngineBuilder no longer has a copy assignment operator (?)
-  std::unique_ptr<Module> Owner(unwrap(MP));
-  EngineBuilder b (std::move(Owner));
-  ExecutionEngine *EE = b.setJITMemoryManager (mono_mm).setTargetOptions (opts).setAllocateGVsWithCode (true).setMCPU (cpu_name).create ();
-
-  g_assert (EE);
-  mono_ee->EE = EE;
-
-  MonoJITEventListener *listener = new MonoJITEventListener (emitted_cb);
-  EE->RegisterJITEventListener (listener);
-  mono_ee->listener = listener;
-
-  FunctionPassManager *fpm = new FunctionPassManager (unwrap (MP));
-  mono_ee->fpm = fpm;
-
-  fpm->add(new DataLayoutPass(*EE->getDataLayout()));
-
-  if (PassList.size() > 0) {
-	  /* Use the passes specified by the env variable */
-	  /* Only the passes in force_pass_linking () can be used */
-	  for (unsigned i = 0; i < PassList.size(); ++i) {
-		  const PassInfo *PassInf = PassList[i];
-		  Pass *P = 0;
-
-		  if (PassInf->getNormalCtor())
-			  P = PassInf->getNormalCtor()();
-		  fpm->add (P);
-	  }
-  } else {
-	  /* Use the same passes used by 'opt' by default, without the ipo passes */
-	  const char *opts = "-simplifycfg -domtree -domfrontier -scalarrepl -instcombine -simplifycfg -domtree -domfrontier -scalarrepl -instcombine -simplifycfg -instcombine -simplifycfg -reassociate -domtree -loops -loop-simplify -domfrontier -loop-simplify -lcssa -loop-rotate -licm -lcssa -loop-unswitch -instcombine -scalar-evolution -loop-simplify -lcssa -iv-users -indvars -loop-deletion -loop-simplify -lcssa -loop-unroll -instcombine -memdep -gvn -memdep -memcpyopt -sccp -instcombine -domtree -memdep -dse -adce -gvn -simplifycfg";
-	  char **args;
-	  int i;
-
-	  args = g_strsplit (opts, " ", 1000);
-	  for (i = 0; args [i]; i++)
-		  ;
-	  llvm::cl::ParseCommandLineOptions (i, args, "");
-	  g_strfreev (args);
-
-	  for (unsigned i = 0; i < PassList.size(); ++i) {
-		  const PassInfo *PassInf = PassList[i];
-		  Pass *P = 0;
-
-		  if (PassInf->getNormalCtor())
-			  P = PassInf->getNormalCtor()();
-		  g_assert (P->getPassKind () == llvm::PT_Function || P->getPassKind () == llvm::PT_Loop);
-		  fpm->add (P);
-	  }
-
-	  /*
-	  fpm->add(createInstructionCombiningPass());
-	  fpm->add(createReassociatePass());
-	  fpm->add(createGVNPass());
-	  fpm->add(createCFGSimplificationPass());
-	  */
-  }
-
-  *ee = wrap (EE);
-
-  return mono_ee;
-}
-
-void
-mono_llvm_dispose_ee (MonoEERef *eeref)
-{
-	MonoEE *mono_ee = (MonoEE*)eeref;
-
-	delete mono_ee->EE;
-	delete mono_ee->fpm;
-	//delete mono_ee->mm;
-	delete mono_ee->listener;
-	delete mono_ee;
-}
-
-#else /* MONO_CROSS_COMPILE */
-
-void
-mono_llvm_set_unhandled_exception_handler (void)
+mono_llvm_jit_init ()
 {
 }
 
 MonoEERef
-mono_llvm_create_ee (LLVMModuleProviderRef MP, AllocCodeMemoryCb *alloc_cb, FunctionEmittedCb *emitted_cb, ExceptionTableCb *exception_cb, DlSymCb *dlsym_cb, LLVMExecutionEngineRef *ee)
+mono_llvm_create_ee (LLVMExecutionEngineRef *ee)
 {
 	g_error ("LLVM JIT not supported on this platform.");
 	return NULL;
 }
 
-void
-mono_llvm_optimize_method (MonoEERef eeref, LLVMValueRef method)
-{
-	g_assert_not_reached ();
-}
-
 gpointer
-mono_llvm_compile_method (MonoEERef mono_ee, LLVMValueRef method, int nvars, LLVMValueRef *callee_vars, gpointer *callee_addrs, gpointer *eh_frame)
+mono_llvm_compile_method (MonoEERef mono_ee, MonoCompile *cfg, LLVMValueRef method, int nvars, LLVMValueRef *callee_vars, gpointer *callee_addrs, gpointer *eh_frame)
 {
 	g_assert_not_reached ();
 	return NULL;
@@ -893,21 +594,6 @@ void
 mono_llvm_dispose_ee (MonoEERef *eeref)
 {
 	g_assert_not_reached ();
-}
-
-/* Not linked in */
-void
-LLVMAddGlobalMapping(LLVMExecutionEngineRef EE, LLVMValueRef Global,
-					 void* Addr)
-{
-	g_assert_not_reached ();
-}
-
-void*
-LLVMGetPointerToGlobal(LLVMExecutionEngineRef EE, LLVMValueRef Global)
-{
-	g_assert_not_reached ();
-	return NULL;
 }
 
 #endif /* !MONO_CROSS_COMPILE */

@@ -577,7 +577,6 @@ class Tests
 	}
 
 	[Category ("DYNCALL")]
-	[Category ("!WASM")] //Interp fails	
 	public static int test_0_large_nullable_invoke () {
 		var s = new LargeStruct () { a = 1, b = 2, c = 3, d = 4 };
 
@@ -669,6 +668,13 @@ class Tests
 		return 0;
 	}
 
+	public static int test_0_byte_equality_compater_devirt () {
+		var dict = new Dictionary<byte, Struct1>();
+		dict [1] = new Struct1 ();
+		dict [1] = new Struct1 ();
+		return 0;
+	}
+
 	// Requires c# 7.2
 #if !__MonoCS__
 	public interface GameComponent {
@@ -703,4 +709,17 @@ class Tests
 		return 0;
 	}
 #endif
+
+	struct DummyStruct {
+	}
+
+	[MethodImplAttribute (MethodImplOptions.NoInlining)]
+	static void array_ienumerable<T1, T> (T t) where T: IEnumerable<T1> {
+		var e = t.GetEnumerator ();
+	}
+
+	public static int test_0_array_ienumerable_constrained () {
+		array_ienumerable<DummyStruct, DummyStruct[]> (new DummyStruct [0]);
+		return 0;
+	}
 }

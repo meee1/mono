@@ -39,6 +39,27 @@ mono_dl_get_so_suffixes (void)
 {
 	static const char *suffixes[] = {
 		".so",
+#if defined (_AIX)
+/*
+ * libtool generating sysv style names (.so) still results in an .a archive,
+ * (AIX prefers to put shared objects inside the same ar archive used for
+ * static members, likely as a fat library system) so try common member names
+ * when no suffix is given. The same path with member names can be tried, then
+ * .a and .so extensions with member names. (The suffixless member names are
+ * for when .so names are specified, but the archive is a member - the runtime
+ * should just keep trying with one of these suffixes then.)
+ *
+ * Unfortunately, this strategy won't work for "aix" style libtool sonames -
+ * it tries something awful like like "libfoo.a(libfoo.so.9)" which requires
+ * you to hardcode a version in the member name.
+ */
+		"(shr.o)",
+		"(shr_64.o)",
+		".a(shr.o)",
+		".a(shr_64.o)",
+		".so(shr.o)",
+		".so(shr_64.o)",
+#endif
 		"",
 	};
 	return suffixes;
@@ -69,7 +90,16 @@ mono_dl_open_file (const char *file, int flags)
 	/* Bionic doesn't support NULL filenames */
 	if (!file)
 		return NULL;
-	if (!g_file_test (file, G_FILE_TEST_EXISTS))
+	/* The intention of calling `g_file_test (file, G_FILE_TEST_EXISTS)` is
+	 * to speed up probing for non-existent libraries.  The problem is that
+	 * if file is just a simple "libdl.so" then `dlopen (file)` doesn't just
+	 * look for it in the current working directory, it will probe some
+	 * other paths too.  (For example on desktop linux you'd also look in
+	 * all the directories in LD_LIBRARY_PATH).  So the g_file_test() call
+	 * is not a robust way to avoid calling dlopen if the filename is
+	 * relative.
+	 */
+	if (g_path_is_absolute (file) && !g_file_test (file, G_FILE_TEST_EXISTS))
 		return NULL;
 #endif
 #if defined(_AIX)
@@ -100,14 +130,17 @@ mono_dl_lookup_symbol (MonoDl *module, const char *name)
 }
 
 int
-mono_dl_convert_flags (int flags)
+mono_dl_convert_flags (int mono_flags, int native_flags)
 {
-	int lflags = flags & MONO_DL_LOCAL? 0: RTLD_GLOBAL;
+	int lflags = native_flags;
 
-	if (flags & MONO_DL_LAZY)
+	lflags = mono_flags & MONO_DL_LOCAL ? RTLD_LOCAL : RTLD_GLOBAL;
+
+	if (mono_flags & MONO_DL_LAZY)
 		lflags |= RTLD_LAZY;
 	else
 		lflags |= RTLD_NOW;
+
 	return lflags;
 }
 
@@ -116,5 +149,11 @@ mono_dl_current_error_string (void)
 {
 	return g_strdup (dlerror ());
 }
+
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (mono_dl_posix);
 
 #endif

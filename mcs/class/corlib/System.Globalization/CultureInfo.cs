@@ -154,6 +154,9 @@ namespace System.Globalization
 			if (default_current_culture != null)
 				return default_current_culture;
 
+			if (GlobalizationMode.Invariant)
+				return InvariantCulture;
+
 			var locale_name = get_current_locale_name ();
 			CultureInfo ci = null;
 
@@ -310,9 +313,7 @@ namespace System.Globalization
 			}
 		}
 
-#if !NETCORE
 		[MonoLimitation ("Optional calendars are not supported only default calendar is returned")]
-#endif
 		public virtual Calendar[] OptionalCalendars {
 			get {
 				return new[] { Calendar };
@@ -555,7 +556,11 @@ namespace System.Globalization
 				if (!constructed) Construct ();
 				CheckNeutral ();
 
-				var temp = new DateTimeFormatInfo (m_cultureData, Calendar);
+				DateTimeFormatInfo temp;
+				if (GlobalizationMode.Invariant)
+					temp = new DateTimeFormatInfo();
+				else
+					temp = new DateTimeFormatInfo(m_cultureData, Calendar);
 				temp._isReadOnly = m_isReadOnly;
 				System.Threading.Thread.MemoryBarrier();
 				dateTimeInfo = temp;
@@ -781,9 +786,7 @@ namespace System.Globalization
 			}
 		}
 
-#if !NETCORE
 		[MonoTODO ("Currently it ignores the altName parameter")]
-#endif
 		public static CultureInfo GetCultureInfo (string name, string altName) {
 			if (name == null)
 				throw new ArgumentNullException ("null");

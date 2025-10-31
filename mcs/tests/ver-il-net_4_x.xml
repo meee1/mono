@@ -53205,7 +53205,7 @@
   <test name="test-950.cs">
     <type name="B">
       <method name="Void Main()" attrs="150">
-        <size>26</size>
+        <size>23</size>
       </method>
       <method name="Void .ctor()" attrs="6278">
         <size>7</size>
@@ -73853,8 +73853,13 @@
     </type>
   </test>
   <test name="test-ref-07.cs">
-    <type name="Test">
+    <type name="TestMain">
       <method name="Void Main()" attrs="150">
+        <size>6</size>
+      </method>
+    </type>
+    <type name="Test">
+      <method name="Void MainMethod()" attrs="150">
         <size>18</size>
       </method>
       <method name="Test Method()" attrs="129">
@@ -74496,6 +74501,16 @@
       </method>
       <method name="System.ValueTuple`2[System.String,System.Int32] &lt;Main&gt;m__0(System.Reflection.FieldInfo)" attrs="145">
         <size>21</size>
+      </method>
+      <method name="Void .ctor()" attrs="6278">
+        <size>7</size>
+      </method>
+    </type>
+  </test>
+  <test name="test-tuple-11.cs">
+    <type name="Program">
+      <method name="Int32 Main()" attrs="150">
+        <size>70</size>
       </method>
       <method name="Void .ctor()" attrs="6278">
         <size>7</size>

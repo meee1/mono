@@ -1,4 +1,6 @@
-include $(top_srcdir)/mk/common.mk
+MAKEFLAGS := $(MAKEFLAGS) --no-builtin-rules
+
+if !ENABLE_MSVC_ONLY
 
 noinst_LTLIBRARIES = \
 	libmonomath.la \
@@ -41,12 +43,17 @@ endif
 
 if HOST_WIN32
 win32_sources = \
-	os-event-win32.c \
-	mono-os-wait-win32.c
+	mono-os-semaphore-win32.c \
+	mono-os-wait-win32.c \
+	mono-windows-thread-name.c \
+	os-event-win32.c
 
 platform_sources = $(win32_sources)
 else
 unix_sources = \
+	dlmalloc.h      	\
+	dlmalloc.c      	\
+	mono-cgroup.c		\
 	os-event-unix.c
 
 platform_sources = $(unix_sources)
@@ -59,8 +66,6 @@ monoutils_sources = \
 	mono-logger.c		\
 	mono-logger-internals.h	\
 	mono-codeman.c		\
-	dlmalloc.h      	\
-	dlmalloc.c      	\
 	mono-counters.c		\
 	mono-compiler.h		\
 	mono-complex.h		\
@@ -94,7 +99,6 @@ monoutils_sources = \
 	mono-mmap-wasm.c  		\
 	mono-mmap.h  		\
 	mono-mmap-internals.h	\
-	mono-mmap-windows-internals.h	\
 	mono-os-mutex.h		\
 	mono-os-mutex.c		\
 	mono-flight-recorder.h		\
@@ -114,6 +118,7 @@ monoutils_sources = \
 	mono-string.h		\
 	mono-time.c  		\
 	mono-time.h  		\
+	strenc-internals.h 	\
 	strenc.h		\
 	strenc.c		\
 	mono-uri.c		\
@@ -156,6 +161,8 @@ monoutils_sources = \
 	mono-stack-unwinding.h	\
 	hazard-pointer.c	\
 	hazard-pointer.h	\
+	lifo-semaphore.c	\
+	lifo-semaphore.h	\
 	lock-free-queue.c	\
 	lock-free-queue.h	\
 	lock-free-alloc.c	\
@@ -179,6 +186,7 @@ monoutils_sources = \
 	mono-threads-haiku.c	\
 	mono-threads-aix.c	\
 	mono-threads-wasm.c	\
+	mono-threads-sunos.c	\
 	mono-threads.h	\
 	mono-threads-debug.h	\
 	mono-threads-api.h	\
@@ -187,6 +195,7 @@ monoutils_sources = \
 	mono-utility-thread.c	\
 	mono-utility-thread.h	\
 	mono-tls.h	\
+	mono-tls-inline.h	\
 	mono-tls.c	\
 	mono-utils-debug.c \
 	mono-utils-debug.h \
@@ -200,6 +209,7 @@ monoutils_sources = \
 	bsearch.h	\
 	bsearch.c	\
 	mono-signal-handler.h	\
+	mono-signal-handler.c	\
 	mono-conc-hashtable.h	\
 	mono-conc-hashtable.c	\
 	json.h	\
@@ -222,8 +232,13 @@ monoutils_sources = \
 	os-event.h \
 	refcount.h	\
 	w32api.h	\
+	w32subset.h	\
 	unlocked.h	\
-	ward.h
+	ward.h \
+	options.h \
+	options-def.h \
+	options.c \
+	ftnptr.h
 
 arch_sources = 
 
@@ -297,6 +312,10 @@ if RISCV
 arch_sources += mono-hwcap-riscv.c
 endif
 
+if LOONGARCH64
+arch_sources += mono-hwcap-loongarch64.c
+endif
+
 if HOST_WASM
 arch_sources += mono-hwcap-wasm.c
 endif
@@ -310,11 +329,19 @@ endif
 libmonoutils_la_SOURCES = $(monoutils_sources) $(arch_sources)
 libmonoutils_la_CFLAGS = $(JEMALLOC_CFLAGS) @CXX_ADD_CFLAGS@
 libmonoutils_la_LDFLAGS = $(JEMALLOC_LDFLAGS)
+
+endif # !ENABLE_MSVC_ONLY
+
 libmonoutilsincludedir = $(includedir)/mono-$(API_VER)/mono/utils
+
+if !ENABLE_MSVC_ONLY
+
 libmonoutils_la_LIBADD = mono-math-c.lo
 
 libmonomath_la_SOURCES = mono-math-c.c
 libmonomath_la_CFLAGS = @CXX_REMOVE_CFLAGS@
+
+endif # !ENABLE_MSVC_ONLY
 
 # These are public headers.
 # They should not use glib.h, G_BEGIN_DECLS, guint, etc.
@@ -326,6 +353,7 @@ libmonoutilsinclude_HEADERS = 	\
 	mono-publib.h		\
 	mono-jemalloc.h		\
 	mono-dl-fallback.h	\
+	mono-private-unstable.h	\
 	mono-counters.h
 
 EXTRA_DIST = mono-errno.h mono-embed.h mono-embed.c ../../support/libm/complex.c mono-experiments.def
@@ -337,3 +365,15 @@ SUBDIRS = jemalloc
 endif
 
 CFLAGS := $(filter-out @CXX_REMOVE_CFLAGS@, @CFLAGS@)
+
+if ENABLE_MSVC_ONLY
+
+all-local:
+
+	make -C $(top_srcdir)/msvc libmonoutils
+
+clean-local:
+
+	make -C $(top_srcdir)/msvc clean-libmonoutils
+
+endif # ENABLE_MSVC_ONLY

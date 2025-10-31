@@ -375,6 +375,8 @@ namespace System.Windows.Forms
 			// Recursive hide all child dropdowns
 			foreach (ToolStripItem tsi in this.Items)
 				tsi.Dismiss (reason);
+
+			SetOwnerControl (null);
 			
 			this.OnClosed (new ToolStripDropDownClosedEventArgs (reason));
 		}
@@ -383,26 +385,36 @@ namespace System.Windows.Forms
 		[EditorBrowsable (EditorBrowsableState.Never)]
 		public new void Show ()
 		{
-			Show (Location, DefaultDropDownDirection);
+			Show (Location);
+		}
+
+		public void Show (int x, int y)
+		{
+			Show (new Point (x, y));
 		}
 		
 		public void Show (Point screenLocation)
 		{
+			SetOwnerControl (null);
 			Show (screenLocation, DefaultDropDownDirection);
 		}
-		
+
+		public void Show (Control control, int x, int y)
+		{
+			Show (control, new Point (x, y));
+		}
+
 		public void Show (Control control, Point position)
+		{
+			Show (control, position, DefaultDropDownDirection);
+		}
+		
+		public void Show (Control control, Point position, ToolStripDropDownDirection direction)
 		{
 			if (control == null)
 				throw new ArgumentNullException ("control");
-			
-			XplatUI.SetOwner (Handle, control.Handle);
-			Show (control.PointToScreen (position), DefaultDropDownDirection);
-		}
-		
-		public void Show (int x, int y)
-		{
-			Show (new Point (x, y), DefaultDropDownDirection);
+			SetOwnerControl (control);
+			Show (control.PointToScreen (position), direction);
 		}
 		
 		public void Show (Point position, ToolStripDropDownDirection direction)
@@ -522,26 +534,17 @@ namespace System.Windows.Forms
 
 			this.OnOpened (EventArgs.Empty);
 		}
-		
-		public void Show (Control control, int x, int y)
-		{
-			if (control == null)
-				throw new ArgumentNullException ("control");
 
-			Show (control, new Point (x, y));
-		}
-		
-		public void Show (Control control, Point position, ToolStripDropDownDirection direction)
-		{
-			if (control == null)
-				throw new ArgumentNullException ("control");
-
-			XplatUI.SetOwner (Handle, control.Handle);
-			Show (control.PointToScreen (position), direction);
-		}
 		#endregion
 
 		#region Protected Methods
+
+		protected virtual void SetOwnerControl (Control ownerControl)
+		{
+			var ownerControlHandle = (ownerControl == null) ? IntPtr.Zero : ownerControl.Handle;
+			XplatUI.SetOwner (Handle, ownerControlHandle);
+		}
+
 		protected override AccessibleObject CreateAccessibilityInstance ()
 		{
 			return new ToolStripDropDownAccessibleObject (this);

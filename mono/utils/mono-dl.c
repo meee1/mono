@@ -22,6 +22,11 @@
 #include <string.h>
 #include <glib.h>
 
+// Contains LIBC_SO definition
+#ifdef HAVE_GNU_LIB_NAMES_H
+#include <gnu/lib-names.h>
+#endif
+
 struct MonoDlFallbackHandler {
 	MonoDlFallbackLoad load_func;
 	MonoDlFallbackSymbol symbol_func;
@@ -30,6 +35,34 @@ struct MonoDlFallbackHandler {
 };
 
 static GSList *fallback_handlers;
+
+#if defined (_AIX)
+#include <ar.h>
+#include <fcntl.h>
+
+/**
+ * On AIX/PASE, a shared library can be contained inside of an ar format
+ * archive. Determine if the file is an ar archive or not.
+ */
+static gboolean
+is_library_ar_archive (char *path)
+{
+	int lfd, readret;
+	char magic [SAIAMAG];
+	lfd = open (path, O_RDONLY);
+
+	/* don't assume it's an archive on error */
+	if (lfd == -1)
+		return FALSE;
+
+	readret = read (lfd, magic, SAIAMAG);
+	close (lfd);
+	/* check for equality with either version of header */
+	return readret == SAIAMAG &&
+		(memcmp (magic, AIAMAG, SAIAMAG) == 0 ||
+		 memcmp (magic, AIAMAGBIG, SAIAMAG) == 0);
+}
+#endif
 
 /*
  * read a value string from line with any of the following formats:
@@ -103,16 +136,31 @@ get_dl_name_from_libtool (const char *libtool_file)
 	if (installed && strcmp (installed, "no") == 0) {
 		char *dir = g_path_get_dirname (libtool_file);
 		if (dlname)
-			line = g_strconcat (dir, G_DIR_SEPARATOR_S ".libs" G_DIR_SEPARATOR_S, dlname, NULL);
+			line = g_strconcat (dir, G_DIR_SEPARATOR_S ".libs" G_DIR_SEPARATOR_S, dlname, (const char*)NULL);
 		g_free (dir);
 	} else {
 		if (libdir && dlname)
-			line = g_strconcat (libdir, G_DIR_SEPARATOR_S, dlname, NULL);
+			line = g_strconcat (libdir, G_DIR_SEPARATOR_S, dlname, (const char*)NULL);
 	}
 	g_free (dlname);
 	g_free (libdir);
 	g_free (installed);
 	return line;
+}
+
+
+/**
+ * mono_dl_open_self:
+ * \param error_msg pointer for error message on failure
+ *
+ * Returns a handle to the main program, on android x86 it's not possible to 
+ * call dl_open(null), it returns a null handle, so this function returns RTLD_DEFAULT
+ * handle in this platform.
+ */
+MonoDl*
+mono_dl_open_self (char **error_msg)
+{
+	return mono_dl_open (NULL, MONO_DL_LAZY, error_msg);
 }
 
 /**
@@ -126,7 +174,7 @@ get_dl_name_from_libtool (const char *libtool_file)
  * binary image.
  * \p flags can have the \c MONO_DL_LOCAL bit set to avoid exporting symbols
  * from the module to the shared namespace. The \c MONO_DL_LAZY bit can be set
- * to lazily load the symbols instead of resolving everithing at load time.
+ * to lazily load the symbols instead of resolving everything at load time.
  * \p error_msg points to a string where an error message will be stored in
  * case of failure.   The error must be released with \c g_free.
  * \returns a \c MonoDl pointer on success, NULL on failure.
@@ -134,10 +182,17 @@ get_dl_name_from_libtool (const char *libtool_file)
 MonoDl*
 mono_dl_open (const char *name, int flags, char **error_msg)
 {
+	return mono_dl_open_full (name, flags, 0, error_msg);
+}
+
+MonoDl *
+mono_dl_open_full (const char *name, int mono_flags, int native_flags, char **error_msg)
+{
 	MonoDl *module;
 	void *lib;
 	MonoDlFallbackHandler *dl_fallback = NULL;
-	int lflags = mono_dl_convert_flags (flags);
+	int lflags = mono_dl_convert_flags (mono_flags, native_flags);
+	char *found_name;
 
 	if (error_msg)
 		*error_msg = NULL;
@@ -150,7 +205,11 @@ mono_dl_open (const char *name, int flags, char **error_msg)
 	}
 	module->main_module = name == NULL? TRUE: FALSE;
 
+
+	// No GC safe transition because this is called early in main.c
 	lib = mono_dl_open_file (name, lflags);
+	if (lib)
+		found_name = g_strdup (name);
 
 	if (!lib) {
 		GSList *node;
@@ -165,6 +224,7 @@ mono_dl_open (const char *name, int flags, char **error_msg)
 			
 			if (lib != NULL){
 				dl_fallback = handler;
+				found_name = g_strdup (name);
 				break;
 			}
 		}
@@ -184,11 +244,32 @@ mono_dl_open (const char *name, int flags, char **error_msg)
 		ext = strrchr (name, '.');
 		if (ext && strcmp (ext, ".la") == 0)
 			suff = "";
-		lname = g_strconcat (name, suff, NULL);
+		lname = g_strconcat (name, suff, (const char*)NULL);
 		llname = get_dl_name_from_libtool (lname);
 		g_free (lname);
 		if (llname) {
 			lib = mono_dl_open_file (llname, lflags);
+			if (lib)
+				found_name = g_strdup (llname);
+#if defined (_AIX)
+			/*
+			 * HACK: deal with AIX archive members because libtool
+			 * underspecifies when using --with-aix-soname=svr4 -
+			 * without this check, Mono can't find System.Native
+			 * at build time.
+			 * XXX: Does this also need to be in other places?
+			 */
+			if (!lib && is_library_ar_archive (llname)) {
+				/* try common suffix */
+				char *llaixname;
+				llaixname = g_strconcat (llname, "(shr_64.o)", (const char*)NULL);
+				lib = mono_dl_open_file (llaixname, lflags);
+				if (lib)
+					found_name = g_strdup (llaixname);
+				/* XXX: try another suffix like (shr.o)? */
+				g_free (llaixname);
+			}
+#endif
 			g_free (llname);
 		}
 		if (!lib) {
@@ -199,8 +280,10 @@ mono_dl_open (const char *name, int flags, char **error_msg)
 			return NULL;
 		}
 	}
+	mono_refcount_init (module, NULL);
 	module->handle = lib;
 	module->dl_fallback = dl_fallback;
+	module->full_name = found_name;
 	return module;
 }
 
@@ -224,9 +307,10 @@ mono_dl_symbol (MonoDl *module, const char *name, void **symbol)
 	} else {
 #if MONO_DL_NEED_USCORE
 		{
-			char *usname = g_malloc (strlen (name) + 2);
+			const size_t length = strlen (name);
+			char *usname = g_new (char, length + 2);
 			*usname = '_';
-			strcpy (usname + 1, name);
+			memcpy (usname + 1, name, length + 1);
 			sym = mono_dl_lookup_symbol (module, usname);
 			g_free (usname);
 		}
@@ -262,6 +346,7 @@ mono_dl_close (MonoDl *module)
 	} else
 		mono_dl_close_handle (module);
 	
+	g_free (module->full_name);
 	g_free (module);
 }
 
@@ -311,17 +396,9 @@ mono_dl_build_path (const char *directory, const char *name, void **iter)
 		need_suffix = FALSE;
 		suffix = "";
 	} else if (idx == 1) {
-#ifdef ENABLE_NETCORE
-		/* netcore system libs have a suffix but no prefix */
-		need_prefix = FALSE;
-		need_suffix = TRUE;
-		suffix = mono_dl_get_so_suffixes () [0];
-		suffixlen = strlen (suffix);
-#else
 		suffix = mono_dl_get_so_suffixes () [idx - 1];
 		if (suffix [0] == '\0')
 			return NULL;
-#endif
 	} else {
 		/* Prefix.Name.suffix */
 		suffix = mono_dl_get_so_suffixes () [idx - 2];
@@ -344,9 +421,9 @@ mono_dl_build_path (const char *directory, const char *name, void **iter)
 		suffix = "";
 
 	if (directory && *directory)
-		res = g_strconcat (directory, G_DIR_SEPARATOR_S, prefix, name, suffix, NULL);
+		res = g_strconcat (directory, G_DIR_SEPARATOR_S, prefix, name, suffix, (const char*)NULL);
 	else
-		res = g_strconcat (prefix, name, suffix, NULL);
+		res = g_strconcat (prefix, name, suffix, (const char*)NULL);
 	++iteration;
 	*iter = GUINT_TO_POINTER (iteration);
 	return res;
@@ -356,7 +433,6 @@ MonoDlFallbackHandler *
 mono_dl_fallback_register (MonoDlFallbackLoad load_func, MonoDlFallbackSymbol symbol_func, MonoDlFallbackClose close_func, void *user_data)
 {
 	MonoDlFallbackHandler *handler = NULL;
-	MONO_ENTER_GC_UNSAFE;
 	if (load_func == NULL || symbol_func == NULL)
 		goto leave;
 
@@ -369,7 +445,6 @@ mono_dl_fallback_register (MonoDlFallbackLoad load_func, MonoDlFallbackSymbol sy
 	fallback_handlers = g_slist_prepend (fallback_handlers, handler);
 	
 leave:
-	MONO_EXIT_GC_UNSAFE;
 	return handler;
 }
 
