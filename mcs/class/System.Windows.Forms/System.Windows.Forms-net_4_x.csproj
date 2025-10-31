@@ -532,9 +532,8 @@
     <Compile Include="System.Windows.Forms\StringUtil.cs" />
     <Compile Include="System.Windows.Forms\UIPermissionAttribute.cs" />
     <Compile Include="System.Windows.Forms\UITypeEditorEditStyle.cs" />
-    <Compile Include="System\Drawing\KnownColor.cs" />
+    <Compile Include="System\Drawing\KnownColor.cs" /> 
     <Compile Include="System\Drawing\UITypeEditor.cs" />
-    <None Include="resources\keyboards.resx" />
     <None Include="System.Windows.Forms\HtmlDocument.cs" />
     <None Include="System.Windows.Forms\HtmlElement.cs" />
     <None Include="System.Windows.Forms\HtmlElementCollection.cs" />
@@ -1046,9 +1045,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="resources/DnDMove.cur">
       <LogicalName>System.Windows.Forms.DnDMove.cur</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="resources/keyboards.resources.prebuilt">
-      <LogicalName>keyboards.resources</LogicalName>
     </EmbeddedResource>
     <EmbeddedResource Include="resources/System.Windows.Forms.resources.prebuilt">
       <LogicalName>System.Windows.Forms.resources</LogicalName>
