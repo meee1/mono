@@ -104,7 +104,8 @@ namespace System.Windows.Forms
         private SKCanvas canvas;
         private SKSizeI lastSize;
 
-        public SKDrawable hwndbmp
+        // the client area as last painted, drawn by the compositor (FormsRender)
+        public SKImage hwndbmp
         {
             get
             {
@@ -131,9 +132,38 @@ namespace System.Windows.Forms
         // locks for some operations (used in XplatUIX11.cs)
         internal object configure_lock = new object ();
 		public object expose_lock = new object ();
-        private SKDrawable _hwndbmp;
+        private SKImage _hwndbmp;
         private SKImage _hwndbmpNc;
-        internal SKPictureRecorder pic;
+
+        // Retained client-area surface. Each WM_PAINT draws only its invalid area into it and then
+        // publishes a snapshot as hwndbmp, so unchanged pixels are kept instead of re-recording or
+        // replaying earlier paints.
+        internal SKSurface paintSurface;
+        internal int paintSaveCount;
+
+        internal SKSurface GetPaintSurface(int width, int height)
+        {
+            width = Math.Max(1, width);
+            height = Math.Max(1, height);
+            var surface = paintSurface;
+            if (surface != null && paintSurfaceWidth == width && paintSurfaceHeight == height)
+                return surface;
+
+            surface = SKSurface.Create(new SKImageInfo(width, height, SKImageInfo.PlatformColorType,
+                SKAlphaType.Premul));
+            // keep what is already on screen; after a resize hwndbmp is cleared and everything repaints
+            var current = _hwndbmp;
+            if (current != null)
+                surface.Canvas.DrawImage(current, 0, 0);
+            paintSurface?.Dispose();
+            paintSurface = surface;
+            paintSurfaceWidth = width;
+            paintSurfaceHeight = height;
+            return surface;
+        }
+
+        private int paintSurfaceWidth;
+        private int paintSurfaceHeight;
         public bool inonpaint;
         public string Text;
 
@@ -188,8 +218,16 @@ namespace System.Windows.Forms
             client_window = IntPtr.Zero;
 			whole_window = IntPtr.Zero;
 			zombie = true;
-            _hwndbmp?.Dispose();
-            _hwndbmpNc?.Dispose();
+            // the compositor draws these under paintlock
+            lock (XplatUIMine.paintlock)
+            {
+                _hwndbmp?.Dispose();
+                _hwndbmp = null;
+                _hwndbmpNc?.Dispose();
+                _hwndbmpNc = null;
+            }
+            paintSurface?.Dispose();
+            paintSurface = null;
         }
 		#endregion
 

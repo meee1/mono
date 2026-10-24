@@ -1552,8 +1552,8 @@ public class XplatUIMine : XplatUIDriver
             paint_hwnd = Hwnd.ObjectFromHandle(handle);
         }
 
-        // paintlock is no longer held across the paint: the compositor keeps drawing the previous
-        // recording, and PaintEventEnd swaps the new one in under the lock
+        // paintlock is not held across the paint: the compositor keeps drawing the previous image,
+        // and PaintEventEnd swaps the new one in under the lock
         hwnd.inonpaint = true;
 
         //Console.WriteLine("PaintEventStart " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name);
@@ -1579,15 +1579,11 @@ public class XplatUIMine : XplatUIDriver
                 clip_region.Intersect(hwnd.UserClip);
             }
 
-            if(hwnd.pic == null)
-                hwnd.pic = new SKPictureRecorder();
-            var newcanvas = hwnd.pic.BeginRecording(SKRect.Empty);
-            if (paint_hwnd.hwndbmp != null)
-                if (!hwnd.Invalid.Contains(hwnd.ClientRect) )// && (hwnd.ClientRect.Width != hwnd.Invalid.Width && hwnd.ClientRect.Height != hwnd.Invalid.Height))
-                {
-                    var raster = paint_hwnd.hwndbmp.Snapshot();
-                    newcanvas.DrawPicture(raster, 0, 0);                    
-                }
+            // draw into the window's retained surface, clipped to the invalid area; what is outside it
+            // stays as last painted (this used to re-record the whole previous paint inside each new one)
+            var surface = paint_hwnd.GetPaintSurface(hwnd.ClientRect.Width, hwnd.ClientRect.Height);
+            var newcanvas = surface.Canvas;
+            paint_hwnd.paintSaveCount = newcanvas.Save();
 
             newcanvas.ClipRegion(clip_region);
 
@@ -1599,11 +1595,10 @@ public class XplatUIMine : XplatUIDriver
                 if (frm != null)
                 {
                     var borders = Hwnd.GetBorders(frm.GetCreateParams(), null);
-                    newcanvas.Discard();
                     newcanvas.ClipRect(new SKRect(0, 0, hwnd.width - borders.left - borders.right, hwnd.height - borders.bottom - borders.top), (SKClipOperation) 5);
                 }
             }
-            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = hwnd.pic };
+            paint_event = new PaintEventArgs(dc, hwnd.Invalid) { Tag = paint_hwnd };
             hwnd.expose_pending = false;
 
             hwnd.ClearInvalidArea();
@@ -1649,18 +1644,18 @@ public class XplatUIMine : XplatUIDriver
 
         if (client)
         {
-            var pic = ((SKPictureRecorder)pevent.Tag).EndRecordingAsDrawable();
+            var surface = hwnd.paintSurface;
+            surface.Canvas.RestoreToCount(hwnd.paintSaveCount);
+            var image = surface.Snapshot();
 
+            SKImage previous;
             lock (paintlock)
-                hwnd.hwndbmp = pic;
-            
-            //hwnd.hwndbmp = pic;
-
-            //using (var st = File.OpenWrite(hwnd.Handle.ToString() + DateTime.Now.ToString("s") + ".skp"))
-            //pic.Serialize(st);
-
-            //using (var st = File.OpenWrite(hwnd.Handle.ToString() /*+ DateTime.Now.ToString("s").Replace(":","-")*/ + ".jpg"))
-                //SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height)).Encode().SaveTo(st);
+            {
+                previous = hwnd.hwndbmp;
+                hwnd.hwndbmp = image;
+            }
+            // the compositor only draws hwndbmp under paintlock, so the old image is no longer in use
+            previous?.Dispose();
         }
         else
         {
