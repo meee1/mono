@@ -2273,6 +2273,22 @@ public class XplatUIMine : XplatUIDriver
     }
 
 
+    const int IdleWaitMilliseconds = 30;
+
+    // time until the earliest enabled timer is due, capped at IdleWaitMilliseconds
+    static int MillisecondsToNextTimer(ArrayList timers)
+    {
+        long wait = IdleWaitMilliseconds;
+        var now = Timer.StopWatchNowMilliseconds;
+        for (int i = 0; i < timers.Count; i++)
+        {
+            var timer = (Timer)timers[i];
+            if (timer.Enabled && !timer.Busy)
+                wait = Math.Min(wait, timer.Expires - now);
+        }
+        return (int)Math.Max(0, wait);
+    }
+
     void CheckTimers(ArrayList timers, long now)
     {
         int count;
@@ -2350,11 +2366,19 @@ public class XplatUIMine : XplatUIDriver
             {
                 msg.hwnd = IntPtr.Zero;
                 msg.message = Msg.WM_ENTERIDLE;
-                var s = DateTime.Now;
-                RaiseIdle(new EventArgs());
-                var delta = DateTime.Now - s;
-                if (delta.TotalMilliseconds < 30)
-                    Thread.Sleep(30);
+                var queue = (XEventQueue)queue_id;
+                var s = Timer.StopWatchNowMilliseconds;
+                RaiseIdle(EventArgs.Empty);
+                var idleTime = Timer.StopWatchNowMilliseconds - s;
+                // Idle keeps firing about every 30 ms while nothing happens, as before, but a posted
+                // message, an invalidate or a due timer now ends the wait straight away instead of
+                // after a fixed Thread.Sleep(30).
+                if (idleTime < IdleWaitMilliseconds && queue.Count == 0 && queue.Paint.Count == 0)
+                {
+                    var wait = Math.Min(IdleWaitMilliseconds, MillisecondsToNextTimer(queue.timer_list));
+                    if (wait > 0)
+                        queue.WaitForEvent(wait);
+                }
                 return true;
             }
         }

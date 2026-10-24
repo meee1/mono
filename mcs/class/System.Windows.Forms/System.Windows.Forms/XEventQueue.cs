@@ -43,6 +43,8 @@ namespace System.Windows.Forms {
 		private bool            dispatch_idle;
 		private bool		has_quit;
 		private int			exit_code;
+		// signalled when an event or paint is queued, so an idle GetMessage can wait instead of sleeping
+		private readonly AutoResetEvent	wake = new AutoResetEvent (false);
 
 		private static readonly int InitialXEventSize = 100;
 		private static readonly int InitialLXEventSize = 10;
@@ -51,7 +53,7 @@ namespace System.Windows.Forms {
 		public XEventQueue (Thread thread) {
 			xqueue = new Queue<XEvent> (InitialXEventSize);
 			lqueue = new Queue<XEvent> (InitialLXEventSize);
-			paint = new PaintQueue(InitialPaintSize);
+			paint = new PaintQueue(InitialPaintSize, this);
 			timer_list = new ArrayList ();
 			this.thread = thread;
 			this.dispatch_idle = true;
@@ -109,6 +111,19 @@ namespace System.Windows.Forms {
 			lock (lqueue) {
 				lqueue.Enqueue (xevent);
 			}
+			wake.Set ();
+		}
+
+		// wake a thread blocked in WaitForEvent
+		public void Wake ()
+		{
+			wake.Set ();
+		}
+
+		// block until something is queued or the timeout passes; true if woken
+		public bool WaitForEvent (int milliseconds)
+		{
+			return wake.WaitOne (milliseconds);
 		}
 
 		public XEvent Dequeue ()
@@ -154,11 +169,16 @@ namespace System.Windows.Forms {
 
 			private ArrayList	hwnds;
 			private XEvent		xevent;
+			private XEventQueue	owner;
 			
 			public PaintQueue (int size) {
 				hwnds = new ArrayList (size);
 				xevent = new XEvent ();
 				xevent.AnyEvent.type = XEventName.Expose;
+			}
+
+			public PaintQueue (int size, XEventQueue owner) : this (size) {
+				this.owner = owner;
 			}
 
 			public int Count {
@@ -173,6 +193,7 @@ namespace System.Windows.Forms {
 				lock (hwnds) {
 					hwnds.Add (hwnd);
 				}
+				owner?.Wake ();
 			}
 
 			public void Remove(Hwnd hwnd) {
