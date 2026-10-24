@@ -1628,10 +1628,6 @@ public class XplatUIMine : XplatUIDriver
         if (client)
         {
             var pic = ((SKPictureRecorder)pevent.Tag).EndRecordingAsDrawable();
-            var img = SKImage.FromPicture(pic.Snapshot(), new SKSizeI(hwnd.width, hwnd.height));
-            var bmp = SKBitmap.FromImage(img);
-            //pic.Dispose();
-            //img.Dispose();
 
             hwnd.hwndbmp = pic;
             
