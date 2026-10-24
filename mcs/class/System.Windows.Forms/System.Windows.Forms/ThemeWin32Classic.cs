@@ -101,7 +101,10 @@ namespace System.Windows.Forms
 		}
 
 		public override bool DoubleBufferingSupported {
-			get {return true; }
+			// XplatUIMine paints each window into its own retained surface and only shows it once the
+			// paint has finished, so a control-level back buffer is a second full-size bitmap and an
+			// extra copy per paint for nothing
+			get {return !(XplatUI.driver is XplatUIMine); }
 		}
 
 		public override int HorizontalScrollBarHeight {
