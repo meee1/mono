@@ -155,7 +155,6 @@ public class XplatUIMine : XplatUIDriver
 
         MessageQueues = Hashtable.Synchronized(new Hashtable(7));
         unattached_timer_list = ArrayList.Synchronized(new ArrayList(3));
-        messageHold = Hashtable.Synchronized(new Hashtable(3));
 
         ModalWindows = new Stack(3);
     }
@@ -609,8 +608,24 @@ public class XplatUIMine : XplatUIDriver
         WaitForHwndMessage(hwnd, message, false);
 
     }
-    // messages WaitForHwndMwssage is waiting on
-    static Hashtable messageHold;
+    // messages WaitForHwndMwssage is waiting on, counted per window and message. Every SendMessage
+    // and DoEvents dispatch checks it, usually while it is empty, so that case skips the lock.
+    static readonly Dictionary<(IntPtr, Msg), int> messageHold = new Dictionary<(IntPtr, Msg), int>();
+    static volatile int messageHoldCount;
+
+    // a message WaitForHwndMessage may be waiting on was handled
+    static void ReleaseHeldMessage(IntPtr hwnd, Msg message)
+    {
+        if (messageHoldCount == 0)
+            return;
+        lock (messageHold)
+        {
+            var key = (hwnd, message);
+            if (messageHold.TryGetValue(key, out var count))
+                messageHold[key] = count - 1;
+        }
+    }
+
     void WaitForHwndMessage(Hwnd hwnd, Msg message, bool process)
     {
         MSG msg = new MSG();
@@ -621,11 +636,13 @@ public class XplatUIMine : XplatUIDriver
         queue.DispatchIdle = false;
 
         bool done = false;
-        string key = hwnd.Handle + ":" + message;
-        if (!messageHold.ContainsKey(key))
-            messageHold.Add(key, 1);
-        else
-            messageHold[key] = ((int)messageHold[key]) + 1;
+        var key = (hwnd.Handle, message);
+        lock (messageHold)
+        {
+            messageHold.TryGetValue(key, out var held);
+            messageHold[key] = held + 1;
+            messageHoldCount = messageHold.Count;
+        }
 
 
         do
@@ -666,10 +683,15 @@ public class XplatUIMine : XplatUIDriver
                 }
             }
 
-            done = !messageHold.ContainsKey(key) || ((int)messageHold[key] < 1) || done;
+            lock (messageHold)
+                done = !messageHold.TryGetValue(key, out var remaining) || remaining < 1 || done;
         } while (!done);
 
-        messageHold.Remove(key);
+        lock (messageHold)
+        {
+            messageHold.Remove(key);
+            messageHoldCount = messageHold.Count;
+        }
 
         DebugHelper.Unindent();
         DebugHelper.WriteLine("Finished waiting for " + key);
@@ -2222,12 +2244,7 @@ public class XplatUIMine : XplatUIDriver
             TranslateMessage(ref msg);
             DispatchMessage(ref msg);
 
-            string key = msg.hwnd + ":" + msg.message;
-            if (messageHold[key] != null)
-            {
-                messageHold[key] = ((int)messageHold[key]) - 1;
-                DebugHelper.WriteLine("Got " + msg + " for " + key);
-            }
+            ReleaseHeldMessage(msg.hwnd, msg.message);
         }
 
         in_doevents = false;
@@ -3796,9 +3813,7 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
 
             return IntPtr.Zero;
         }
-        string key = hwnd + ":" + message;
-        if (messageHold[key] != null)
-            messageHold[key] = ((int)messageHold[key]) - 1;
+        ReleaseHeldMessage(hwnd, message);
         return NativeWindow.WndProc(hwnd, message, wParam, lParam);
     }
 
