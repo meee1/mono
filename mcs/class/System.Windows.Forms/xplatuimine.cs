@@ -1530,8 +1530,8 @@ public class XplatUIMine : XplatUIDriver
             paint_hwnd = Hwnd.ObjectFromHandle(handle);
         }
 
-        Monitor.Enter(paintlock);
-
+        // paintlock is no longer held across the paint: the compositor keeps drawing the previous
+        // recording, and PaintEventEnd swaps the new one in under the lock
         hwnd.inonpaint = true;
 
         //Console.WriteLine("PaintEventStart " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name);
@@ -1629,7 +1629,8 @@ public class XplatUIMine : XplatUIDriver
         {
             var pic = ((SKPictureRecorder)pevent.Tag).EndRecordingAsDrawable();
 
-            hwnd.hwndbmp = pic;
+            lock (paintlock)
+                hwnd.hwndbmp = pic;
             
             //hwnd.hwndbmp = pic;
 
@@ -1641,7 +1642,9 @@ public class XplatUIMine : XplatUIDriver
         }
         else
         {
-            hwnd.hwndbmpNC = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),                new SKSizeI(hwnd.width, hwnd.height));
+            var nc = SKImage.FromPicture(((SKPictureRecorder) pevent.Tag).EndRecording(),                new SKSizeI(hwnd.width, hwnd.height));
+            lock (paintlock)
+                hwnd.hwndbmpNC = nc;
         }
 
         //Console.WriteLine("PaintEventEnd " + XplatUI.Window(handle) + " th: " + Thread.CurrentThread.Name + " " + hwnd.hwndbmp);
@@ -1650,12 +1653,13 @@ public class XplatUIMine : XplatUIDriver
 
         hwnd.inonpaint = false;
 
-        PaintPending = true;
+        lock (paintlock)
+        {
+            PaintPending = true;
 
-        // this needs to be drawn
-        hwnd.DrawNeeded = true;
-
-        Monitor.Exit(paintlock);
+            // this needs to be drawn
+            hwnd.DrawNeeded = true;
+        }
 
         //driver.PaintEventEnd(ref msg, handle, client, pevent);
         //throw new NotImplementedException();
