@@ -2289,6 +2289,62 @@ public class XplatUIMine : XplatUIDriver
     }
 
 
+    /// <summary>
+    /// Draws a window's Fixed3D / FixedSingle border into a whole-window image and publishes it as
+    /// hwndbmpNC, which the compositor draws behind the client area. Forms (and the few controls that
+    /// handle WM_NCPAINT, such as MdiClient) paint their own non-client area, which replaces this. The
+    /// border used to be drawn onto a temporary copy of an existing NC image and lost, and plain
+    /// controls had no NC image at all, so their borders were never shown.
+    /// </summary>
+    void DrawWindowBorder(Hwnd hwnd)
+    {
+        if (Control.FromHandle(hwnd.client_window) is Form)
+            return;
+
+        var border = hwnd.border_style;
+        if (border != FormBorderStyle.Fixed3D && border != FormBorderStyle.FixedSingle)
+        {
+            // no border (any more): drop an image left from an earlier style
+            SKImage stale;
+            lock (paintlock)
+            {
+                stale = hwnd.hwndbmpNC;
+                hwnd.hwndbmpNC = null;
+            }
+            stale?.Dispose();
+            return;
+        }
+
+        var width = Math.Max(1, hwnd.Width);
+        var height = Math.Max(1, hwnd.Height);
+        SKImage image;
+        using (var surface = SKSurface.Create(new SKImageInfo(width, height, SKImageInfo.PlatformColorType,
+                   SKAlphaType.Premul)))
+        {
+            surface.Canvas.Clear(SKColors.Transparent);
+            using (var g = Graphics.FromCanvas(surface.Canvas))
+            {
+                var rect = new Rectangle(0, 0, hwnd.Width, hwnd.Height);
+                if (border == FormBorderStyle.Fixed3D)
+                    ControlPaint.DrawBorder3D(g, rect,
+                        hwnd.border_static ? Border3DStyle.SunkenOuter : Border3DStyle.Sunken);
+                else
+                    ControlPaint.DrawBorder(g, rect, Color.Black, ButtonBorderStyle.Solid);
+            }
+            image = surface.Snapshot();
+        }
+
+        SKImage previous;
+        lock (paintlock)
+        {
+            previous = hwnd.hwndbmpNC;
+            hwnd.hwndbmpNC = image;
+            PaintPending = true;
+            hwnd.DrawNeeded = true;
+        }
+        previous?.Dispose();
+    }
+
     const int IdleWaitMilliseconds = 30;
 
     // time until the earliest enabled timer is due, capped at IdleWaitMilliseconds
@@ -2551,48 +2607,14 @@ public class XplatUIMine : XplatUIDriver
                             goto ProcessNextMessage;
                         }
 
-                        Monitor.Enter(paintlock);
+                        hwnd.nc_expose_pending = false;
                         try
                         {
-                            hwnd.nc_expose_pending = false;
-                            if (hwnd.hwndbmpNC != null)
-                                switch (hwnd.border_style)
-                                {
-                                    case FormBorderStyle.Fixed3D:
-                                    {
-                                        Graphics g;
-
-                                        g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                                        if (hwnd.border_static)
-                                            ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                                Border3DStyle.SunkenOuter);
-                                        else
-                                            ControlPaint.DrawBorder3D(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                                Border3DStyle.Sunken);
-                                        g.Dispose();
-                                        break;
-                                    }
-
-                                    case FormBorderStyle.FixedSingle:
-                                    {
-                                        Graphics g;
-
-                                        g = Graphics.FromSKImage(hwnd.hwndbmpNC);
-                                        ControlPaint.DrawBorder(g, new Rectangle(0, 0, hwnd.Width, hwnd.Height),
-                                            Color.Black,
-                                            ButtonBorderStyle.Solid);
-                                        g.Dispose();
-                                        break;
-                                    }
-                                }
+                            DrawWindowBorder(hwnd);
                         }
                         catch (Exception e)
                         {
                             Console.WriteLine(e);
-                        }
-                        finally
-                        {
-                            Monitor.Exit(paintlock);
                         }
 
                         DriverDebug("GetMessage(): Window {0:X} Exposed non-client area {1},{2} {3}x{4}",
