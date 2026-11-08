@@ -1052,6 +1052,8 @@ namespace System.Windows.Forms
 		WM_INITMENU               = 0x0116,
 		WM_INITMENUPOPUP          = 0x0117,
 		//              public const uint WM_SYSTIMER       = 0x0118;
+		WM_GESTURE                = 0x0119,
+		WM_GESTURENOTIFY          = 0x011A,
 		WM_MENUSELECT             = 0x011F,
 		WM_MENUCHAR               = 0x0120,
 		WM_ENTERIDLE              = 0x0121,

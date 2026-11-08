@@ -2143,6 +2143,44 @@ public class XplatUIMine : XplatUIDriver
                     return IntPtr.Zero;
                 }
 
+            case Msg.WM_GESTURE:
+                {
+                    // as DefWindowProc does on Windows: offer an unhandled gesture to the parent, and at the
+                    // top level turn a zoom into the legacy Ctrl+mouse wheel on the window it began over, one
+                    // notch each time the distance between the fingers doubles or halves
+                    var hwnd = Hwnd.GetObjectFromWindow(msg.HWnd);
+                    if (hwnd != null && hwnd.parent != null)
+                    {
+                        SendMessage(hwnd.parent.client_window, Msg.WM_GESTURE, msg.WParam, msg.LParam);
+                        return IntPtr.Zero;
+                    }
+
+                    var info = (GESTUREINFO)Marshal.PtrToStructure(msg.LParam, typeof(GESTUREINFO));
+                    Marshal.FreeHGlobal(msg.LParam);
+
+                    if (info.dwID == GID_ZOOM)
+                    {
+                        if ((info.dwFlags & GF_BEGIN) != 0)
+                        {
+                            legacyZoomDistance = info.ullArguments;
+                        }
+                        else if (legacyZoomDistance > 0)
+                        {
+                            var notches = info.ullArguments >= legacyZoomDistance * 2 ? 1 :
+                                info.ullArguments * 2 <= legacyZoomDistance ? -1 : 0;
+                            if (notches != 0)
+                            {
+                                legacyZoomDistance = info.ullArguments;
+                                SendMessage(info.hwndTarget, Msg.WM_MOUSEWHEEL,
+                                    (IntPtr)((notches * 120) << 16 | (int)MsgButtons.MK_CONTROL),
+                                    (IntPtr)(info.ptsLocationY << 16 | (info.ptsLocationX & 0xffff)));
+                            }
+                        }
+                    }
+
+                    return IntPtr.Zero;
+                }
+
             case Msg.WM_SETCURSOR:
                 {
                     Hwnd hwnd;
@@ -3504,6 +3542,93 @@ public override void ScreenToClient(IntPtr handle, ref int x, ref int y)
                 else return child;
             }
         }
+        return null;
+    }
+
+    // Simulated Windows touch gestures. As on Windows, WM_GESTURE carries the gesture id in wParam and an
+    // HGESTUREINFO in lParam; here that handle is an HGLOBAL holding a GESTUREINFO with the Windows layout,
+    // so a handler reads it as GetGestureInfo would and frees it (CloseGestureInfoHandle) when it handles
+    // the gesture. DefWndProc frees it otherwise.
+    public const int GID_BEGIN = 1;
+    public const int GID_END = 2;
+    public const int GID_ZOOM = 3;
+    public const int GF_BEGIN = 0x1;
+    public const int GF_END = 0x4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct GESTUREINFO
+    {
+        public int cbSize;
+        public int dwFlags;
+        public int dwID;
+        public IntPtr hwndTarget;
+        public short ptsLocationX;
+        public short ptsLocationY;
+        public int dwInstanceID;
+        public int dwSequenceID;
+        public long ullArguments;
+        public int cbExtraArgs;
+    }
+
+    static IntPtr gestureTarget;
+    static int gestureInstance;
+    static int gestureSequence;
+    static long legacyZoomDistance;
+
+    /// <summary>
+    /// Posts WM_GESTURE the way Windows sends it: every message of a gesture goes to the window under the
+    /// point where it began (GID_BEGIN). x and y are screen coordinates; for GID_ZOOM, arguments is the
+    /// distance between the fingers.
+    /// </summary>
+    public static void SendGesture(int id, int flags, int x, int y, long arguments)
+    {
+        if (id == GID_BEGIN)
+        {
+            gestureInstance++;
+            gestureTarget = ControlAtScreenPoint(x, y)?.Handle ?? IntPtr.Zero;
+        }
+
+        var target = gestureTarget;
+        if (id == GID_END)
+            gestureTarget = IntPtr.Zero;
+        if (target == IntPtr.Zero || Hwnd.ObjectFromHandle(target) == null)
+            return;
+
+        var info = new GESTUREINFO
+        {
+            cbSize = Marshal.SizeOf(typeof(GESTUREINFO)),
+            dwFlags = flags,
+            dwID = id,
+            hwndTarget = target,
+            ptsLocationX = (short)x,
+            ptsLocationY = (short)y,
+            dwInstanceID = gestureInstance,
+            dwSequenceID = ++gestureSequence,
+            ullArguments = arguments
+        };
+        var handle = Marshal.AllocHGlobal(info.cbSize);
+        Marshal.StructureToPtr(info, handle, false);
+        XplatUI.driver.PostMessage(target, Msg.WM_GESTURE, (IntPtr)id, handle);
+    }
+
+    // the control under a screen point, choosing the form the same way the mouse messages do
+    static Control ControlAtScreenPoint(int x, int y)
+    {
+        for (var i = Application.OpenForms.Count - 1; i >= 0; i--)
+        {
+            var form = Application.OpenForms[i];
+            if (form.IsDisposed)
+                continue;
+            var hwnd = Hwnd.ObjectFromHandle(form.Handle);
+            if (hwnd == null || x < hwnd.X || y < hwnd.Y || x > hwnd.X + hwnd.Width || y > hwnd.Y + hwnd.Height)
+                continue;
+
+            var cx = x;
+            var cy = y;
+            XplatUI.driver.ScreenToClient(form.Handle, ref cx, ref cy);
+            return FindControlAtPoint(form, new Point(cx, cy)) ?? form;
+        }
+
         return null;
     }
 
